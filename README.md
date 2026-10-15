@@ -8,6 +8,17 @@ Status: the game-play core and its game loop, video94, sound94 (68k half) and th
 of the front-end modules are ported to `src/` and pass 8616 recorded function-level
 tests with 0 mismatches. The game does not run natively yet (see the plan's phases 3-4).
 
+## Play (no sound or menus yet)
+
+```
+make nhl94
+python3 tools/oracle/snapshot.py "NHL 94 (UE) [!].gen" --state out/states/faceoff.state --out out/states/faceoff.snap
+./build/nhl94
+```
+
+Arrows, Z / X / C, Enter (or a game controller). It starts at a faceoff of a game in progress;
+the menus and title screen are not ported yet. See `docs/HANDOFF.md` section 9.
+
 ## Setup
 
 ```

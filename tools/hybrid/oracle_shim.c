@@ -333,3 +333,21 @@ void oracle_coverage_get(uint32_t *dst) { if (coverage) memcpy(dst, coverage, RO
 void oracle_coverage_reset(void) { if (coverage) memset(coverage, 0, ROM_SIZE * sizeof *coverage); }
 void oracle_ram_get(uint8_t *dst) { ram_copy_be(dst); }
 void oracle_regs_get(uint32_t *dst) { regs_get(dst); }
+
+/* ---- snapshot for the native runtime's bring-up ------------------------------------------ */
+/* VRAM in VDP byte order, CRAM / VSRAM as big-endian bus words (0BBB0GGG0RRR0, 11-bit), the 32
+ * VDP registers, Z80 RAM */
+void oracle_vdp_get(uint8_t *out_vram, uint8_t *out_cram, uint8_t *out_vsram, uint8_t *out_reg, uint8_t *out_zram) {
+  for (uint32_t i = 0; i < 0x10000; i++) out_vram[i] = READ_BYTE(vram, i);
+  for (int i = 0; i < 64; i++) {
+    uint16_t v = *(uint16_t *)&cram[i * 2];
+    uint16_t bus = (uint16_t)(((v & 0x1C0) << 3) | ((v & 0x038) << 2) | ((v & 0x007) << 1));
+    out_cram[2 * i] = (uint8_t)(bus >> 8); out_cram[2 * i + 1] = (uint8_t)bus;
+  }
+  for (int i = 0; i < 40; i++) {
+    uint16_t v = *(uint16_t *)&vsram[i * 2] & 0x7FF;
+    out_vsram[2 * i] = (uint8_t)(v >> 8); out_vsram[2 * i + 1] = (uint8_t)v;
+  }
+  memcpy(out_reg, reg, 32);
+  memcpy(out_zram, zram, 0x2000);
+}

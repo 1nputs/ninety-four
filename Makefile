@@ -48,6 +48,13 @@ src/symbols_gen.h: tools/gen_symbols.py out/callgraph.json out/ramwidths.json
 out/callgraph.json: tools/callgraph.py
 	python3 -I tools/callgraph.py > /dev/null
 
+# the native game (SDL2): build/nhl94
+NATIVE := $(wildcard native/*.c)
+nhl94: build/nhl94
+build/nhl94: $(SRC) $(NATIVE) native/vdp.h native/native.h src/game.h src/ram.h src/hal.h build/captest
+	@mkdir -p build
+	$(CC) $(CFLAGS) -O2 -Isrc -Inative $(shell pkg-config --cflags sdl2) -o $@ $(SRC) $(NATIVE) $(shell pkg-config --libs sdl2)
+
 oracle: build/nhl_oracle.so
 build/nhl_oracle.so: tools/hybrid/oracle_shim.c
 	$(MAKE) -s -f tools/hybrid/Makefile
@@ -56,5 +63,5 @@ test: build/captest
 	@for c in $(CAPS); do echo "== $$c"; ./build/captest $$c || true; done
 
 clean:
-	rm -rf build/captest build/oracle_shim.o
-.PHONY: test oracle clean
+	rm -rf build/captest build/oracle_shim.o build/nhl94
+.PHONY: test oracle clean nhl94
