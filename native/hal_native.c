@@ -1,81 +1,98 @@
-/* hal.h for the native build: the VDP model, two 3-button pads, save RAM in a file, and the Z80's
- * side of the command handshake. Sound is not produced yet: the Z80 program is not run, so a
- * command the 68k uploads is taken at once (Z80 RAM $96 back to $7D) and the PSG is ignored. */
+/* hal.h on md-runtime: the VDP, pads and save RAM are the runtime's; the Z80 is src/z80.c, the
+ * sound relay ported to C, whose YM2612 writes go to the runtime's FM chip at their time.
+ *
+ * Time: the runtime makes each frame's sound at the handshake, every write at its master clock in
+ * the frame. The game's own code has no clock natively, so each access it makes to the Z80's bus
+ * or the PSG counts as a few 68k cycles: when the game waits on the Z80 (polling Z80 RAM for the
+ * end of a command) the relay runs on meanwhile, as it would beside a real 68k. The vblank
+ * interrupt starts each frame; the relay runs the rest of it through the runtime's sound tick. */
 #include <stdio.h>
 #include <string.h>
+#include "game.h"
 #include "hal.h"
-#include "vdp.h"
 #include "native.h"
+#include "z80.h"
 
-uint8_t zram[0x2000];
-static uint8_t sram[0x2000];
-static uint16_t hv;
-static uint8_t pad_th[2] = { 0x40, 0x40 };
-static int sram_dirty;
+mdrt *native_m;
+static uint64_t frame_base;             /* the relay's master clock at this frame's start */
+static uint32_t t68k;                   /* master clocks the game has spent in this frame */
+static long frames;
 
-uint16_t native_pads[2];                                  /* held buttons: NATIVE_UP ... */
+#define BUS_ACCESS 56                   /* a 68k byte access through the Z80's bus, with its instruction */
+#define PORT_ACCESS 28                  /* a write to the PSG */
 
-uint8_t vdp_hv8(void) { hv = (uint16_t)(hv * 0x6255 + 0x3619); return (uint8_t)(hv >> 8); }
-uint16_t vdp_hv16(void) { hv = (uint16_t)(hv * 0x6255 + 0x3619); return hv; }
-uint16_t vdp_status(void) { return vdp_status_read(); }
-uint16_t vdp_read(void) { return vdp_data_read(); }
-void vdp_ctrl(uint32_t v) { vdp_ctrl_write((uint16_t)(v >> 16)); vdp_ctrl_write((uint16_t)v); }
-void vdp_ctrl16(uint16_t v) { vdp_ctrl_write(v); }
-void vdp_data(uint16_t v) { vdp_data_write(v); }
-void vdp_data32(uint32_t v) { vdp_data_write((uint16_t)(v >> 16)); vdp_data_write((uint16_t)v); }
-void psg_write(uint8_t v) { (void)v; }
-
-void z80_busreq(uint16_t v)
+/* the relay catches up with the game */
+static void relay_now(void)
 {
-    if (v == 0 && zram[0x96] != 0x7D) {                   /* released after a command: done at once */
-        zram[0x96] = 0x7D;
-        zram[0x97] = 0;
+    uint64_t now = frame_base + t68k;
+    while (now > z80.now) {
+        uint64_t step = now - z80.now > 1u << 30 ? 1u << 30 : now - z80.now;
+        z80_relay_run((uint32_t)step);
     }
 }
-uint8_t z80_busack(void) { return 0; }
-void z80_reset(uint16_t v) { (void)v; }
-uint8_t z80_ram_read8(uint16_t off) { return zram[off & 0x1FFF]; }
-void z80_ram_write8(uint16_t off, uint8_t v) { zram[off & 0x1FFF] = v; }
-/* the relay's chip (src/z80.c): not run here yet, until md-runtime's FM chip and frame handshake */
-void z80_ym_port(int port, uint8_t value) { (void)port; (void)value; }
-void z80_ym_reset(void) {}
 
-/* a 3-button pad: with TH high the data port reads 0 1 C B R L D U, with TH low 0 0 St A 0 0 D U
- * (active low) */
-uint8_t pad_read(uint32_t port)
+/* the relay's YM2612 writes and its reset, to the runtime's chip at their time in the frame */
+void z80_ym_port(int port, uint8_t value)
 {
-    int n = port == 0xA10005u;
-    uint16_t b = native_pads[n];
-    if (pad_th[n] & 0x40)
-        return (uint8_t)(0x40 | (~((b & NATIVE_C ? 0x20 : 0) | (b & NATIVE_B ? 0x10 : 0) | (b & NATIVE_RIGHT ? 8 : 0) |
-                                   (b & NATIVE_LEFT ? 4 : 0) | (b & NATIVE_DOWN ? 2 : 0) | (b & NATIVE_UP ? 1 : 0)) & 0x3F));
-    return (uint8_t)(~((b & NATIVE_START ? 0x20 : 0) | (b & NATIVE_A ? 0x10 : 0) | (b & NATIVE_DOWN ? 2 : 0) | (b & NATIVE_UP ? 1 : 0)) & 0x33);
+    mdrt_ym_write(native_m, z80.zc > frame_base ? (uint32_t)(z80.zc - frame_base) : 0, port, value);
 }
-void pad_write(uint32_t port, uint8_t v)
+void z80_ym_reset(void)
 {
-    if (port == 0xA10003u) pad_th[0] = v;
-    else if (port == 0xA10005u) pad_th[1] = v;
+    mdrt_ym_reset(native_m, z80.now > frame_base ? (uint32_t)(z80.now - frame_base) : 0);
 }
 
-uint8_t sram_read8(uint32_t off) { return sram[(off >> 1) & 0x1FFF]; }
-void sram_write16(uint32_t off, uint16_t v) { sram[(off >> 1) & 0x1FFF] = (uint8_t)v; sram_dirty = 1; }
-
-void native_sram_load(const char *path)
+/* the runtime's sound tick: the relay through the frame */
+static void sound_tick(void *user, uint32_t until)
 {
-    FILE *f = fopen(path, "rb");
-    if (!f) return;
-    if (fread(sram, 1, sizeof sram, f) != sizeof sram) memset(sram, 0, sizeof sram);
-    fclose(f);
+    (void)user;
+    uint64_t target = frame_base + until;
+    while (target > z80.now) {
+        uint64_t step = target - z80.now > 1u << 30 ? 1u << 30 : target - z80.now;
+        z80_relay_run((uint32_t)step);
+    }
 }
 
-void native_sram_save(const char *path)
+void native_hal_start(mdrt *m, uint64_t start)
 {
-    if (!sram_dirty) return;
-    FILE *f = fopen(path, "wb");
-    if (!f) return;
-    fwrite(sram, 1, sizeof sram, f);
-    fclose(f);
-    sram_dirty = 0;
+    native_m = m;
+    frame_base = start;
+    t68k = 0;
+    mdrt_set_sound_tick(m, sound_tick, NULL);
 }
 
-void hal_wait_vblank(void) { native_frame(); }
+static mdrt_vdp *vdp(void) { return mdrt_get_vdp(native_m); }
+uint8_t vdp_hv8(void) { return mdrt_vdp_hv8(vdp(), 0); }
+uint16_t vdp_hv16(void) { return mdrt_vdp_hv16(vdp()); }
+uint16_t vdp_status(void) { return mdrt_vdp_status(vdp()); }
+uint16_t vdp_read(void) { return mdrt_vdp_read16(vdp()); }
+void vdp_ctrl(uint32_t v) { mdrt_vdp_ctrl32(vdp(), v); }
+void vdp_ctrl16(uint16_t v) { mdrt_vdp_ctrl16(vdp(), v); }
+void vdp_data(uint16_t v) { mdrt_vdp_data16(vdp(), v); }
+void vdp_data32(uint32_t v) { mdrt_vdp_data32(vdp(), v); }
+
+void psg_write(uint8_t v) { t68k += PORT_ACCESS; mdrt_psg_port(native_m, t68k, v); }
+
+void z80_busreq(uint16_t v) { t68k += BUS_ACCESS; relay_now(); z80_relay_busreq(v); }
+uint8_t z80_busack(void) { t68k += BUS_ACCESS; relay_now(); return 0; }   /* granted at once */
+void z80_reset(uint16_t v) { t68k += BUS_ACCESS; relay_now(); z80_relay_reset(v); }
+uint8_t z80_ram_read8(uint16_t off) { t68k += BUS_ACCESS; relay_now(); return z80_ram[off & 0x1FFF]; }
+void z80_ram_write8(uint16_t off, uint8_t v) { t68k += BUS_ACCESS; relay_now(); z80_ram[off & 0x1FFF] = v; }
+
+uint8_t pad_read(uint32_t port) { return mdrt_pad_read(mdrt_get_pads(native_m), port); }
+void pad_write(uint32_t port, uint8_t v) { mdrt_pad_write(mdrt_get_pads(native_m), port, v); }
+
+/* save RAM: the bytes on the odd addresses */
+uint8_t sram_read8(uint32_t off) { return mdrt_sram_read8(mdrt_get_sram(native_m), off | 1); }
+void sram_write16(uint32_t off, uint16_t v) { mdrt_sram_write8(mdrt_get_sram(native_m), off | 1, (uint8_t)v); }
+
+/* the frame's end: the handshake, then the next frame begins with the vblank interrupt */
+void hal_wait_vblank(void)
+{
+    native_frame_done(++frames);
+    if (mdrt_wait_vblank(native_m)) native_quit();
+    frame_base += mdrt_frame_mclks(native_m);
+    t68k = 0;
+    z80_relay_frame();                                    /* (the YM2612's busy grid) */
+    if (vdp()->s.reg[1] & 0x20) call68k(g.vbint);         /* the vblank interrupt */
+    mdrt_vblank_end(native_m);
+}

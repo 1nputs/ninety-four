@@ -1,13 +1,16 @@
-/* The native runtime: the window, the frame loop and the pads. */
+/* The native game: NHL '94 on md-runtime (../md-runtime), with the Z80's sound relay (src/z80.c)
+ * feeding its FM chip. */
 #pragma once
 #include <stdint.h>
+#include "mdrt/mdrt.h"
 
-enum { NATIVE_UP = 1, NATIVE_DOWN = 2, NATIVE_LEFT = 4, NATIVE_RIGHT = 8,
-       NATIVE_A = 0x10, NATIVE_B = 0x20, NATIVE_C = 0x40, NATIVE_START = 0x80 };
-extern uint16_t native_pads[2];
-extern uint8_t zram[0x2000];
+extern mdrt *native_m;                  /* the console */
 
-/* the end of a frame: show it, read the pads, keep 60 frames a second, then the vblank interrupt */
-void native_frame(void);
-void native_sram_load(const char *path);
-void native_sram_save(const char *path);
+/* the game's session: from the snapshot into the game loop, until it stops */
+void native_game(mdrt *m, void *user);
+/* stop the session (the window closed, the front end is not ported): back out of the game */
+void native_quit(void);
+/* after each frame: the frame count, for shots and the stop (main.c) */
+void native_frame_done(long frame);
+/* the HAL from master clock `start` of the relay's time (hal_native.c) */
+void native_hal_start(mdrt *m, uint64_t start);

@@ -48,12 +48,16 @@ src/symbols_gen.h: tools/gen_symbols.py out/callgraph.json out/ramwidths.json
 out/callgraph.json: tools/callgraph.py
 	python3 -I tools/callgraph.py > /dev/null
 
-# the native game (SDL2): build/nhl94
+# the native game: build/nhl94, on md-runtime (MDRT, its release build with the SDL2 platform)
+MDRT   ?= ../md-runtime
 NATIVE := $(wildcard native/*.c)
+MDRTLIBS := $(MDRT)/build/release/libmdrt_sdl2.a $(MDRT)/build/release/libmdrt.a
 nhl94: build/nhl94
-build/nhl94: $(SRC) $(NATIVE) native/vdp.h native/native.h src/game.h src/ram.h src/hal.h build/captest
+build/nhl94: $(SRC) $(NATIVE) native/native.h src/game.h src/ram.h src/hal.h src/z80.h build/captest mdrt
 	@mkdir -p build
-	$(CC) $(CFLAGS) -O2 -Isrc -Inative $(shell pkg-config --cflags sdl2) -o $@ $(SRC) $(NATIVE) $(shell pkg-config --libs sdl2)
+	$(CC) $(CFLAGS) -O2 -Isrc -Inative -I$(MDRT)/include $(shell pkg-config --cflags sdl2) -o $@ $(SRC) $(NATIVE) $(MDRTLIBS) $(shell pkg-config --libs sdl2) -lm
+mdrt:
+	$(MAKE) -C $(MDRT) MODE=release sdl
 
 # the Z80 relay port against sound traces: make relaytest
 relaytest: build/relaytest
@@ -71,4 +75,4 @@ test: build/captest
 
 clean:
 	rm -rf build/captest build/oracle_shim.o build/nhl94
-.PHONY: test oracle clean nhl94 relaytest
+.PHONY: test oracle clean nhl94 relaytest mdrt

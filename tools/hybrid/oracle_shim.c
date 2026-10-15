@@ -269,7 +269,55 @@ static void padtrace_access(int write, int width, uint32_t a, uint32_t value);
 static FILE *st;
 static void sndtrace_access(uint32_t a, uint32_t value);
 
+/* ---- the sound chips' registers as written since the shim was installed (at power on, for a
+ * snapshot): the YM2612's two parts and the PSG's eight registers, for the native runtime ------ */
+static uint8_t ym_shadow[2][256], ym_latch[2], psg_latch;
+static uint16_t psg_shadow[8];
+static void (*chip_fm_orig)(unsigned int, unsigned int, unsigned int);
+
+static void ym_shadow_reset(void) {                       /* the chip's reset (GPGX: MAME's values) */
+  memset(ym_shadow, 0, sizeof ym_shadow);
+  for (int i = 0; i < 3; i++) ym_shadow[0][0xB4 + i] = ym_shadow[1][0xB4 + i] = 0xC0;
+}
+
+static void chip_fm(unsigned int cycles, unsigned int address, unsigned int data) {
+  int part = (address >> 1) & 1;
+  if (address & 1) ym_shadow[part][ym_latch[part]] = (uint8_t)data;
+  else ym_latch[part] = (uint8_t)data;
+  chip_fm_orig(cycles, address, data);
+}
+
+static void psg_shadow_write(uint8_t v) {                 /* the latch / data protocol */
+  int r;
+  if (v & 0x80) {
+    r = psg_latch = (v >> 4) & 7;
+    psg_shadow[r] = (r & 1) || r == 6 ? (uint16_t)(v & (r == 6 ? 7 : 15)) : (uint16_t)((psg_shadow[r] & 0x3F0) | (v & 15));
+  } else {
+    r = psg_latch;
+    psg_shadow[r] = (r & 1) || r == 6 ? (uint16_t)(v & (r == 6 ? 7 : 15)) : (uint16_t)((psg_shadow[r] & 15) | (v & 0x3F) << 4);
+  }
+}
+
+/* ym: 512 bytes (part I's registers, then part II's); psg: the eight registers (u16 le) and the
+ * latch: 17 bytes */
+void oracle_chips_get(uint8_t *ym, uint8_t *psg) {
+  memcpy(ym, ym_shadow, 512);
+  for (int i = 0; i < 8; i++) { psg[2 * i] = (uint8_t)psg_shadow[i]; psg[2 * i + 1] = (uint8_t)(psg_shadow[i] >> 8); }
+  psg[16] = psg_latch;
+}
+
+static void st_fm(unsigned int cycles, unsigned int address, unsigned int data);
+
 static void hook(hook_type_t type, int width, unsigned int address, unsigned int value) {
+  if (fm_write != chip_fm && fm_write != st_fm) {          /* GPGX set its chip up again: follow it */
+    chip_fm_orig = fm_write;
+    fm_write = chip_fm;
+  }
+  if (type == HOOK_M68K_W) {
+    uint32_t a = address & 0xFFFFFF;
+    if (a >= 0xC00010 && a < 0xC00018 && (a & 1)) psg_shadow_write((uint8_t)value);
+    else if ((a & ~1u) == 0xA11200) ym_shadow_reset(); /* GPGX resets the FM chip with the Z80, both ways */
+  }
   if (st && type == HOOK_M68K_W) {
     uint32_t a = address & 0xFFFFFF;
     if ((a >= 0xC00010 && a < 0xC00018) || (a >= 0xA00000 && a < 0xA02000) || (a & ~1u) == 0xA11100 || (a & ~1u) == 0xA11200)
@@ -331,7 +379,17 @@ static void hook(hook_type_t type, int width, unsigned int address, unsigned int
 }
 
 /* ---- exported API ---------------------------------------------------------------------- */
-int oracle_install(void) { if (!installed) { set_cpu_hook(hook); installed = 1; } return 1; }
+int oracle_install(void) {
+  if (!installed) {
+    set_cpu_hook(hook);
+    ym_shadow_reset();
+    for (int i = 1; i < 8; i += 2) psg_shadow[i] = 15;       /* the PSG starts silent */
+    chip_fm_orig = fm_write;
+    fm_write = chip_fm;
+    installed = 1;
+  }
+  return 1;
+}
 void oracle_bp_set(uint32_t pc, int on) { map_set(bp_map, pc, on); }
 void oracle_bp_clear_all(void) { memset(bp_map, 0, sizeof bp_map); memset(bptab, 0, sizeof bptab); }
 void oracle_fn_set(uint32_t pc, int on) { map_set(fn_map, pc, on); }
@@ -576,6 +634,15 @@ static void sndtrace_access(uint32_t a, uint32_t value) {
   else if (a < 0xA02000) { st_u8(3); st_u32(t); st_u16((uint16_t)(a & 0x1FFF)); st_u8((uint8_t)value); }
   else if ((a & ~1u) == 0xA11100) { st_u8(4); st_u32(t); st_u16((uint16_t)value); }
   else { st_u8(5); st_u32(t); st_u16((uint16_t)value); }
+}
+
+/* the Z80 as a sound trace's header has it: PC u16, HL u16, C u8, bank u16, state u8 */
+void oracle_z80_get(uint8_t *out) {
+  out[0] = (uint8_t)Z80.pc.w.l; out[1] = (uint8_t)(Z80.pc.w.l >> 8);
+  out[2] = (uint8_t)Z80.hl.w.l; out[3] = (uint8_t)(Z80.hl.w.l >> 8);
+  out[4] = (uint8_t)Z80.bc.b.l;
+  out[5] = (uint8_t)(zbank >> 15); out[6] = (uint8_t)(zbank >> 23);
+  out[7] = zstate;
 }
 
 int oracle_sndtrace_open(const char *path, uint32_t rate, uint32_t fm_preamp, uint32_t psg_preamp, uint32_t flags) {
