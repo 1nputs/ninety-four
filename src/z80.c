@@ -11,8 +11,8 @@
  *   $00D1 a command: key off, patches, frequencies, carrier volumes, key on (in the order the
  *         bits of $02-$06 say), then $96 back to $7D, which is what the 68k waits for
  *
- * Writes to the YM2612 go through z80_ym_write (the runtime's FM chip natively, a recorder in the
- * tests). Timing is the program's, instruction by instruction, so the writes come out when the
+ * The YM2612's port writes (address and data, each at its time) go through z80_ym_port (the
+ * runtime's FM chip natively, a recorder in the tests). Timing is the program's, instruction by instruction, so the writes come out when the
  * Z80's would: the cycle counts are the Z80's (Zilog UM0080), plus 3 cycles a read through the
  * bank window (the 68k bus access), plus the YM2612's busy flag, which the program polls before
  * each write: set after a data write until 32 of the chip's cycles (42 master clocks each, on a
@@ -48,12 +48,15 @@ static uint8_t z80_read(uint16_t a)
     return 0xFF;
 }
 
-/* a YM2612 data write at the end of the instruction: it sets the busy flag */
-static void ym_write(int part, uint8_t reg, uint8_t val)
+/* a YM2612 port write at the end of the instruction (0 / 1 part I's address / data, 2 / 3 part
+ * II's): a data write sets the busy flag */
+static void ym_port(int port, uint8_t value)
 {
-    uint64_t t = z80.zc - z80.frame;
-    z80.ym_free = z80.frame + ((t + YM_GRID - 1) / YM_GRID + YM_BUSY) * YM_GRID;
-    z80_ym_write(part, reg, val);
+    if (port & 1) {
+        uint64_t t = z80.zc - z80.frame;
+        z80.ym_free = z80.frame + ((t + YM_GRID - 1) / YM_GRID + YM_BUSY) * YM_GRID;
+    }
+    z80_ym_port(port, value);
 }
 
 /* ---- a routine's steps ---------------------------------------------------------------------- */
@@ -70,9 +73,9 @@ static void op_list(const uint8_t *list, size_t n) { for (size_t i = 0; i < n; i
 /* BIT 7,(IX) / JR NZ back until the chip is free */
 static void poll(void) { step(OP_POLL, (uint8_t)ix_part, 0, 0, 0); }
 /* the address write after the wait: LD (IX),r or LD (IX),n */
-static void ym_address(void) { poll(); op(19); }
+static void ym_address(uint8_t reg) { poll(); step(OP_YM, (uint8_t)(ix_part * 2), 0, reg, 19); }
 /* the data write after the wait: LD (IX+1),r or LD (IX+1),n */
-static void ym_data(uint8_t reg, uint8_t val) { poll(); step(OP_YM, (uint8_t)ix_part, reg, val, 19); }
+static void ym_data(uint8_t val) { poll(); step(OP_YM, (uint8_t)(ix_part * 2 + 1), 0, val, 19); }
 /* a store to Z80 RAM at the end of the instruction before */
 static void ram_store(uint8_t a, uint8_t v) { step(OP_RAM, 0, a, v, 0); }
 
@@ -115,7 +118,7 @@ static void command(void)
     bits = z80_ram[0x02];
     for (int e = 0;; e++) {
         int bit = bits & 1; bits = next_bit(bits);
-        if (bit) { op(7); ym_address(); ym_data(0x28, (uint8_t)e); op(4); }
+        if (bit) { op(7); ym_address(0x28); ym_data((uint8_t)e); op(4); }
         else op(12);
         if (!bits) { op(7); break; }
         op(12);
@@ -132,10 +135,10 @@ static void command(void)
             op(7); op(4); op(7);                          /* ADD A,$30, LD D,A, LD B,30 */
             uint8_t r = (uint8_t)(0x30 + ch);
             for (int n = 30; n > 0; n--) {
-                ym_address();
+                ym_address(r);
                 uint8_t v = z80_read(p++);
                 op(7 + BANK_READ); op(6);                 /* LD C,(HL), INC HL */
-                ym_data(r, v);
+                ym_data(v);
                 r = (uint8_t)(r + 4);
                 op(4); op(4); op(4); op(4); op(4); op(7); /* INC D x 4, LD A,B, CP 3 */
                 if (n == 3) { r = (uint8_t)(r + 0x10); op(7); op(4); op(7); op(4); }   /* after $9C: $B0, $B4 */
@@ -159,13 +162,13 @@ static void command(void)
             op(7); op(11); op(10); op(4); op(8); op(4); op(4);   /* JR NC, PUSH AF, HL = $0E + 2 e */
             int ch = channel(e);
             op(7);                                        /* ADD A,$A4 */
-            ym_address();
+            ym_address((uint8_t)(0xA4 + ch));
             op(7);                                        /* LD D,(HL) */
-            ym_data((uint8_t)(0xA4 + ch), z80_ram[0x0E + 2 * e]);
+            ym_data(z80_ram[0x0E + 2 * e]);
             op(7);                                        /* SUB 4 */
-            ym_address();
+            ym_address((uint8_t)(0xA0 + ch));
             op(6); op(7);                                 /* INC HL, LD D,(HL) */
-            ym_data((uint8_t)(0xA0 + ch), z80_ram[0x0F + 2 * e]);
+            ym_data(z80_ram[0x0F + 2 * e]);
             op(14); op(10);                               /* LD IX,$4000, POP AF */
             ix_part = 0;
         } else {
@@ -198,9 +201,9 @@ static void command(void)
             uint8_t att = z80_ram[0x07 + e];
             for (int n = 0; n < carriers; n++) {
                 if (n) op(7);                             /* SUB 4 */
-                ym_address();
+                ym_address((uint8_t)(0x4C - 4 * n + ch));
                 if (!n) op(7);                            /* LD D,(HL) */
-                ym_data((uint8_t)(0x4C - 4 * n + ch), att);
+                ym_data(att);
                 if (n < 3) { op(4); op(n == carriers - 1 ? 12 : 7); }   /* DEC C, JR Z */
             }
             op(14); op(10);                               /* LD IX,$4000, POP AF */
@@ -212,11 +215,11 @@ static void command(void)
     /* key on ($03): bit 6 (channel 6 as FM) turns the DAC off first; YM $28 = $F0 + channel */
     op(7); op(13); op(8);
     bits = z80_ram[0x03];
-    if (bits & 0x40) { op(7); ym_address(); ym_data(0x2B, 0x00); }
+    if (bits & 0x40) { op(7); ym_address(0x2B); ym_data(0x00); }
     else op(12);
     for (int e = 0;; e++) {
         int bit = bits & 1; bits = next_bit(bits);
-        if (bit) { op(7); ym_address(); ym_data(0x28, (uint8_t)(0xF0 + e)); op(4); }
+        if (bit) { op(7); ym_address(0x28); ym_data((uint8_t)(0xF0 + e)); op(4); }
         else op(12);
         if (!bits) { op(7); break; }
         op(12);
@@ -240,8 +243,8 @@ static void init(void)
     ram_store(0x96, 0x7D);
     ram_store(0x97, 0x00);
     op(14);                                               /* LD IX,$4000 */
-    ym_address(); ym_data(0x2B, 0x80);                    /* DAC on */
-    ym_address(); ym_data(0x22, 0x0C);                    /* LFO */
+    ym_address(0x2B); ym_data(0x80);                      /* DAC on */
+    ym_address(0x22); ym_data(0x0C);                      /* LFO */
     z80.ret = 0x0061;
 }
 
@@ -262,7 +265,7 @@ static void routine_step(void)
         break;
     case OP_YM:
         z80.zc += o->cycles * CYCLE;
-        ym_write(o->part, o->reg, o->val);
+        ym_port(o->part, o->val);
         break;
     case OP_RAM:
         z80_ram[o->reg] = o->val;
@@ -296,13 +299,13 @@ static unsigned instruction(void)
     case 0x0077: z80_ram[0x9D] = z80.a; z80.pc = 0x007A; return 13;                   /* LD ($9D),A */
     case 0x007A: z80.pc = 0x0098; return 10;                                          /* JP $0098 */
 
-    case 0x007D: z80.pc = 0x0081; return 19;                                          /* LD (IX),$2A */
+    case 0x007D: z80.zc += 19 * CYCLE; ym_port(0, 0x2A); z80.pc = 0x0081; return 0;      /* LD (IX),$2A */
     case 0x0081: z80.e = z80_read(z80.hl); z80.pc = 0x0082; return 7 + BANK_READ;     /* LD E,(HL) */
     case 0x0082: z80.d = z80_ram[0x83]; z80.pc = 0x0084; return 7;                    /* LD D,page */
     case 0x0084: z80.a = z80_ram[(z80.d << 8 | z80.e) & 0x1FFF]; z80.pc = 0x0085; return 7;   /* LD A,(DE) */
     case 0x0085: z80.pc = 0x0086; return 4;                                           /* OR A */
     case 0x0086: z80.pc = z80.a ? 0x0089 : 0x0067; return 10;                         /* JP Z: the sample ended */
-    case 0x0089: z80.zc += 13 * CYCLE; ym_write(0, 0x2A, z80.a); z80.pc = 0x008C; return 0;   /* LD ($4001),A */
+    case 0x0089: z80.zc += 13 * CYCLE; ym_port(1, z80.a); z80.pc = 0x008C; return 0;         /* LD ($4001),A */
     case 0x008C: z80.a = z80.c; z80.pc = 0x008D; return 4;                            /* LD A,C */
     case 0x008D:                                                                      /* ADD A,rate */
         sum = (unsigned)z80.a + z80_ram[0x8E];

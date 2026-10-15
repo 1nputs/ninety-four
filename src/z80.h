@@ -30,9 +30,9 @@ struct Z80Relay {
 extern uint8_t z80_ram[0x2000];
 extern struct Z80Relay z80;
 
-/* a YM2612 register write (part 0: $4000 / $4001, part 1: $4002 / $4003): the platform's chip;
- * z80.zc is its time */
-void z80_ym_write(int part, uint8_t reg, uint8_t val);
+/* a YM2612 port write (0 / 1: part I's address / data at $4000 / $4001, 2 / 3: part II's at
+ * $4002 / $4003): the platform's chip; z80.zc is its time */
+void z80_ym_port(int port, uint8_t value);
 void z80_ym_reset(void);                    /* the Z80 reset released: it resets the YM2612 too */
 
 void z80_relay_run(uint32_t mclk);          /* time went by (master clocks; 15 a Z80 cycle) */

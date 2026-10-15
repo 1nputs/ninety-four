@@ -37,7 +37,7 @@ void z80_reset(uint16_t v) { (void)v; }
 uint8_t z80_ram_read8(uint16_t off) { return zram[off & 0x1FFF]; }
 void z80_ram_write8(uint16_t off, uint8_t v) { zram[off & 0x1FFF] = v; }
 /* the relay's chip (src/z80.c): not run here yet, until md-runtime's FM chip and frame handshake */
-void z80_ym_write(int part, uint8_t reg, uint8_t val) { (void)part; (void)reg; (void)val; }
+void z80_ym_port(int port, uint8_t value) { (void)port; (void)value; }
 void z80_ym_reset(void) {}
 
 /* a 3-button pad: with TH high the data port reads 0 1 C B R L D U, with TH low 0 0 St A 0 0 D U

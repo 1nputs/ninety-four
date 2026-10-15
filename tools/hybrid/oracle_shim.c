@@ -543,8 +543,10 @@ void oracle_padtrace_close(void) { if (pt) { pt_u8(4); fclose(pt); pt = NULL; } 
  * "MDST", version u32 = 3, the oracle's audio rate u32 (Hz), its FM and PSG preamps u16 each (in
  * percent: GPGX's defaults are 100 and 150; 0 leaves that chip out of the audio), flags u32 (bit 0:
  * recorded from power on, so every write the chips had is in the trace; otherwise they start in a
- * state the trace does not hold), Z80 RAM at the start [8192], the Z80 at the start: PC u16, HL u16, C u8, bank u16 (68k address >> 15), state u8
- * (bit 0 running, bit 1 bus taken by the 68k);
+ * state the trace does not hold), Z80 RAM at the start [8192], the Z80 at the start: PC u16, HL u16,
+ * C u8, bank u16 (68k address >> 15), state u8 (bit 0 running, bit 1 bus taken by the 68k), time
+ * u32 (master clocks from the trace's start to where the Z80 is: the oracle runs it whole
+ * instructions at a time, so it can be a little ahead);
  * then events: tag u8, time u32 (master clocks since the trace started, modulo 2^32: 3420 a line,
  * 262 lines a frame, so it wraps after 4793 frames; events come in time order give or take a few
  * hundred clocks, so a reader unwraps it), and
@@ -583,7 +585,7 @@ int oracle_sndtrace_open(const char *path, uint32_t rate, uint32_t fm_preamp, ui
   fwrite("MDST", 1, 4, st); st_u32(3); st_u32(rate); st_u16((uint16_t)fm_preamp); st_u16((uint16_t)psg_preamp); st_u32(flags);
   fwrite(zram, 1, 0x2000, st);
   st_u16((uint16_t)Z80.pc.w.l); st_u16((uint16_t)Z80.hl.w.l); st_u8((uint8_t)Z80.bc.b.l);
-  st_u16((uint16_t)(zbank >> 15)); st_u8(zstate);
+  st_u16((uint16_t)(zbank >> 15)); st_u8(zstate); st_u32(Z80.cycles);
   st_base = 0;
   st_fm_orig = fm_write;
   fm_write = st_fm;
