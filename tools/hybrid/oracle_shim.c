@@ -120,7 +120,18 @@ static int bp_slot(uint32_t pc) {
   return -1;
 }
 
+/* A capture over a long stretch (a highlight game inside the intermission) logs every call of
+ * thousands of frames; past this many bytes its log is dropped and the record is not written. */
+static size_t log_limit = 128u << 20;
+static uint32_t cap_dropped;
+
 static void log_append(Frame *f, const void *p, size_t n) {
+  if (f->flags & 8) return;
+  if (f->log_len + n > log_limit) {
+    f->flags |= 8;
+    free(f->log); f->log = NULL; f->log_cap = 0; f->log_len = 0;
+    return;
+  }
   if (f->log_len + n > f->log_cap) {
     size_t nc = f->log_cap ? f->log_cap * 2 : 65536;
     while (nc < f->log_len + n) nc *= 2;
@@ -212,7 +223,8 @@ static void finish_frame(void) {
   /* nested calls opened inside this frame that are still open (abnormal exits) are dropped */
   while (n_open && open_calls[n_open - 1].frame >= depth - 1) n_open--;
   depth--;
-  if (cap) {
+  if (cap && (f->flags & 8)) cap_dropped++;
+  if (cap && !(f->flags & 8)) {
     uint32_t regs_out[NREGS];
     regs_get(regs_out);
     uint32_t total = REC_HDR_WORDS * 4 + 2 * NREGS * 4 + 2 * RAM_SIZE + (uint32_t)f->log_len;
@@ -228,6 +240,7 @@ static void finish_frame(void) {
     if (f->log_len) fwrite(f->log, 1, f->log_len, cap);
     cap_records++;
   }
+  if (f->log_cap > (16u << 20)) { free(f->log); f->log = NULL; f->log_cap = 0; }   /* give a big log back */
   f->log_len = 0; f->n_calls = 0; f->n_closed = 0;
 }
 
@@ -310,6 +323,8 @@ int oracle_capture_open(const char *path, uint32_t max_per_bp, uint32_t stride) 
   for (int i = 0; i < BPTAB; i++) bptab[i].captured = 0;
   return cap != NULL;
 }
+void oracle_capture_log_limit(uint32_t mb) { log_limit = (size_t)mb << 20; }
+uint32_t oracle_capture_dropped(void) { return cap_dropped; }
 uint32_t oracle_capture_close(void) { if (cap) { fclose(cap); cap = NULL; } depth = 0; n_open = 0; return cap_records; }
 void oracle_capture_spread(int on) { cap_spread = on; }
 uint32_t oracle_capture_records(void) { return cap_records; }

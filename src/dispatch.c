@@ -10,6 +10,9 @@ static const struct { uint32_t addr; void (*fn)(void); } routines[] = {
     { SYM_SetupPauseScreen, SetupPauseScreen },
     { SYM_VBlank, VBlank },
     { SYM_vb2, vb2 },
+    { SYM_ReplayMode, ReplayMode },
+    { SYM_PeriodStatsScreen, PeriodStatsScreen },
+    { SYM_GameStatisticsScreen, GameStatisticsScreen },
 };
 
 /* a target that is not ported yet: the tests replay its recorded call instead */

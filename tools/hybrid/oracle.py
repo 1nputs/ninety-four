@@ -39,6 +39,7 @@ class Oracle(Core):
         lib.oracle_fn_set_many.argtypes = [C.POINTER(C.c_uint32), C.c_int]
         lib.oracle_set_irq_pcs.argtypes = [C.POINTER(C.c_uint32), C.c_int]
         lib.oracle_capture_open.argtypes = [C.c_char_p, C.c_uint32, C.c_uint32]; lib.oracle_capture_open.restype = C.c_int
+        lib.oracle_capture_log_limit.argtypes = [C.c_uint32]; lib.oracle_capture_dropped.restype = C.c_uint32
         lib.oracle_capture_spread.argtypes = [C.c_int]
         lib.oracle_capture_close.restype = C.c_uint32
         lib.oracle_capture_records.restype = C.c_uint32
@@ -182,3 +183,17 @@ def read_captures(path):
         assert magic == CAP_MAGIC, f'bad magic at {o}'
         recs.append(Record(data[o:o + total])); o += total
     return recs
+
+
+def read_capture_at(path, index):
+    """Record number index of a capture file, reading only the headers before it."""
+    with open(path, 'rb') as f:
+        for i in range(index + 1):
+            hdr = f.read(8)
+            if len(hdr) < 8:
+                raise IndexError(f'{path} has {i} records')
+            magic, total = struct.unpack('<2I', hdr)
+            assert magic == CAP_MAGIC, f'bad magic in record {i}'
+            if i == index:
+                return Record(hdr + f.read(total - 8))
+            f.seek(total - 8, 1)

@@ -20,3 +20,16 @@ void WriteSRAM(uint32_t at, uint32_t count, uint32_t src)
     uint16_t n = (uint16_t)(count - 1);
     do { sram_write16((uint32_t)(int16_t)off, *p++); off += 2; } while (n-- != 0);
 }
+
+/* sram94.asm:MakeSRAMChecksum. Read all of save RAM to M68K_RAM, put the byte sum of bytes
+ * 0-$1FFD in byte $1FFF and its complement in $1FFE, and write those two back. */
+void MakeSRAMChecksum(void)
+{
+    ReadSRAM(0, 0x2000, RAM_BASE);
+    uint8_t *ram = (uint8_t *)&g;
+    uint8_t sum = 0;
+    for (int i = 0; i < 0x1FFE; i++) sum = (uint8_t)(sum + ram[i]);
+    ram[0x1FFF] = sum;
+    ram[0x1FFE] = (uint8_t)~sum;
+    WriteSRAM(0x1FFE, 2, RAM_BASE + 0x1FFE);
+}

@@ -497,6 +497,29 @@ static void run_InitMenuState(const Record *r) { expect_reg16(r, R_D1, InitMenuS
 static void run_never(const Record *r) { replay_fail("this routine does not return; its record cannot be run"); }
 V(DoGameFrame) V(Pausemode) V(setupice) V(setSlotBit)
 
+
+/* ---- the intermission, the highlights, the replay, the stats screens, the save records ---- */
+static void run_StartHL(const Record *r) { StartHL(TEAM(R_A0), D16(R_D1)); }
+static void run_StartHL2(const Record *r) { StartHL2(TEAM(R_A0), D16(R_D1)); }
+static void run_InitTeamStructure(const Record *r) { InitTeamStructure(R16(R_D0), TEAM(R_A2)); }
+static void run_ReloadRefTiles(const Record *r) { expect_reg16(r, R_D4, ReloadRefTiles(), "d4"); }
+static void run_ReloadFaceOffTiles(const Record *r) { expect_reg16(r, R_D4, ReloadFaceOffTiles(), "d4"); }
+static void run_ReloadFaceOffMap(const Record *r) { expect_reg16(r, R_D4, ReloadFaceOffMap(), "d4"); }
+static void run_SetupScreen(const Record *r) { expect_reg16(r, R_D4, SetupScreen(R16(R_D0), R16(R_D1)), "d4"); }
+static void run_WaitVSyncAndReadInput(const Record *r) { uint16_t d0, d2, d3; expect_reg16(r, R_D1, WaitVSyncAndReadInput(&d0, &d2, &d3), "d1"); }
+static void run_PlayerRecordIO(const Record *r) { PlayerRecordIO(r->regs_in[R_D0], R16(R_D1), r->regs_in[R_A0]); }
+static void run_ReadPlayerRecord(const Record *r) { ReadPlayerRecord(r->regs_in[R_D0], R16(R_D1), r->regs_in[R_A0]); }
+static void run_WritePlayerRecord(const Record *r) { WritePlayerRecord(r->regs_in[R_D0], R16(R_D1), r->regs_in[R_A0]); }
+static void run_TeamRecordIO(const Record *r) { TeamRecordIO(r->regs_in[R_D1], r->regs_in[R_A0]); }
+static void run_ReadTeamRecord(const Record *r) { ReadTeamRecord(r->regs_in[R_D1], r->regs_in[R_A0]); }
+static void run_WriteTeamRecord(const Record *r) { WriteTeamRecord(r->regs_in[R_D1], r->regs_in[R_A0]); }
+static void run_WriteCrowdRecord(const Record *r) { WriteCrowdRecord(r->regs_in[R_D1], r->regs_in[R_A0]); }
+static void run_UpdatePlayerRecords(const Record *r) { UpdatePlayerRecords(r->regs_in[R_D1], r->regs_in[R_A0], TEAM(R_A2), R16(R_D5), R16(R_D6)); }
+static void run_UpdateTeamRecord(const Record *r) { UpdateTeamRecord(r->regs_in[R_A0], r->regs_in[R_D1], R16(R_D2), R16(R_D3), R16(R_D4), TEAM(R_A1), TEAM(R_A2)); }
+static void run_UpdateCrowdRecord(const Record *r) { UpdateCrowdRecord(r->regs_in[R_A0], r->regs_in[R_D1], R16(R_D2), R16(R_D4), R16(R_D5), R16(R_D6), TEAM(R_A1)); }
+V(Intermission) V(DoHiLights) V(setupice_highlight) V(clearTeamStats) V(setteams) V(ReplayMode) V(PeriodStatsScreen) V(GameStatisticsScreen)
+V(rtsStatTables) V(ExitStatsScreen) V(AddPlayoffTeamStats) V(ReadTeamStats) V(CountPlayers) V(UpdateRecords) V(MakeSRAMChecksum)
+
 const Port ports[] = {
     { SYM_checkwallcoll, "checkwallcoll", run_checkwallcoll },
     { SYM_checkgoal, "checkgoal", run_checkgoal },
@@ -1029,5 +1052,38 @@ const Port ports[] = {
     { SYM_Gameloop, "Gameloop", run_never },
     { SYM_StartPer, "StartPer", run_never },
     { SYM_IntermissionStart, "IntermissionStart", run_never },
+    { SYM_StartHL, "StartHL", run_StartHL },
+    { SYM_StartHL2, "StartHL2", run_StartHL2 },
+    { SYM_InitTeamStructure, "InitTeamStructure", run_InitTeamStructure },
+    { SYM_ReloadRefTiles, "ReloadRefTiles", run_ReloadRefTiles },
+    { SYM_ReloadFaceOffTiles, "ReloadFaceOffTiles", run_ReloadFaceOffTiles },
+    { SYM_ReloadFaceOffMap, "ReloadFaceOffMap", run_ReloadFaceOffMap },
+    { SYM_SetupScreen, "SetupScreen", run_SetupScreen },
+    { SYM_WaitVSyncAndReadInput, "WaitVSyncAndReadInput", run_WaitVSyncAndReadInput },
+    { SYM_PlayerRecordIO, "PlayerRecordIO", run_PlayerRecordIO },
+    { SYM_ReadPlayerRecord, "ReadPlayerRecord", run_ReadPlayerRecord },
+    { SYM_WritePlayerRecord, "WritePlayerRecord", run_WritePlayerRecord },
+    { SYM_TeamRecordIO, "TeamRecordIO", run_TeamRecordIO },
+    { SYM_ReadTeamRecord, "ReadTeamRecord", run_ReadTeamRecord },
+    { SYM_WriteTeamRecord, "WriteTeamRecord", run_WriteTeamRecord },
+    { SYM_WriteCrowdRecord, "WriteCrowdRecord", run_WriteCrowdRecord },
+    { SYM_UpdatePlayerRecords, "UpdatePlayerRecords", run_UpdatePlayerRecords },
+    { SYM_UpdateTeamRecord, "UpdateTeamRecord", run_UpdateTeamRecord },
+    { SYM_UpdateCrowdRecord, "UpdateCrowdRecord", run_UpdateCrowdRecord },
+    { SYM_Intermission, "Intermission", run_Intermission },
+    { SYM_DoHiLights, "DoHiLights", run_DoHiLights },
+    { SYM_setupice_highlight, "setupice_highlight", run_setupice_highlight },
+    { SYM_clearTeamStats, "clearTeamStats", run_clearTeamStats },
+    { SYM_setteams, "setteams", run_setteams },
+    { SYM_ReplayMode, "ReplayMode", run_ReplayMode },
+    { SYM_PeriodStatsScreen, "PeriodStatsScreen", run_PeriodStatsScreen },
+    { SYM_GameStatisticsScreen, "GameStatisticsScreen", run_GameStatisticsScreen },
+    { SYM_rtsStatTables, "rtsStatTables", run_rtsStatTables },
+    { SYM_ExitStatsScreen, "ExitStatsScreen", run_ExitStatsScreen },
+    { SYM_AddPlayoffTeamStats, "AddPlayoffTeamStats", run_AddPlayoffTeamStats },
+    { SYM_ReadTeamStats, "ReadTeamStats", run_ReadTeamStats },
+    { SYM_CountPlayers, "CountPlayers", run_CountPlayers },
+    { SYM_UpdateRecords, "UpdateRecords", run_UpdateRecords },
+    { SYM_MakeSRAMChecksum, "MakeSRAMChecksum", run_MakeSRAMChecksum },
     { 0, NULL, NULL }
 };

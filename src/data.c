@@ -303,3 +303,52 @@ uint16_t GetShifter(uint16_t *first_bit)
     if (first_bit) *first_bit = d2;
     return (uint16_t)(d1 - 1);
 }
+
+/* the playoff stat bit stream runs down in words from outputbuffer + $DE: the long holding bit
+ * pos of it */
+static uint8_t *stat_long(uint16_t pos) { return RAM_W(RAM_OFF_outputbuffer + 0x100 - 0x22 - (uint16_t)((pos >> 4) << 1)); }
+
+/* data94.asm:ReadTeamStats. Unpack the $68 playoff stat totals of the bit stream (widths from
+ * BitWidthTable by stat & 3) into statsbuffer words. */
+void ReadTeamStats(void)
+{
+    uint8_t *out = RAM_W(RAM_OFF_statsbuffer);
+    const uint8_t *widths = rom_ptr(SYM_BitWidthTable);
+    uint16_t pos = 0;
+    for (int16_t n = 0x67; n >= 0; n--, out += 2) {
+        uint32_t v = rd32(stat_long(pos)) >> (pos & 0xF);
+        uint8_t w = widths[n & 3];
+        pos += w;
+        wr16(out, (uint16_t)(v & (uint16_t)((1u << (w & 31)) - 1)));
+    }
+}
+
+/* data94.asm:AddPlayoffTeamStats. In the playoffs: add the playoff team's game stats (the $68
+ * bytes from team struct + $B4) to its unpacked totals and pack them back, each clamped to its
+ * bit width. */
+void AddPlayoffTeamStats(void)
+{
+    if ((int16_t)g.OptPlayMode < 1) return;
+    ReadTeamStats();
+    uint16_t team = RAM_W(RAM_OFF_potree)[(int16_t)g.potreeteam];
+    const uint8_t *tm = team_struct(0);
+    if (rd16(tm + 0x28) != team) tm = team_struct(1);
+    tm += 0xB4;
+    uint8_t *tot = RAM_W(RAM_OFF_statsbuffer);
+    for (int i = 0; i < 0x68; i++) wr16(tot + 2 * i, (uint16_t)(rd16(tot + 2 * i) + tm[i]));
+    const uint8_t *widths = rom_ptr(SYM_BitWidthTable);
+    uint16_t pos = 0;
+    for (int16_t n = 0x67; n >= 0; n--, tot += 2) {
+        uint32_t v = rd16(tot);
+        uint8_t w = widths[n & 3];
+        uint32_t max = (uint16_t)((1u << (w & 31)) - 1);
+        if ((int16_t)v > (int16_t)max) v = max;
+        uint32_t keep = ~max;
+        unsigned r = pos & 0xF;
+        keep = r ? (keep << r | keep >> (32 - r)) : keep;   /* rol.l */
+        v = r ? (v << r | v >> (32 - r)) : v;
+        uint8_t *p = stat_long(pos);
+        wr32(p, (rd32(p) & keep) | v);
+        pos += w;
+    }
+}

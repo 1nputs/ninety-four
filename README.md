@@ -5,7 +5,7 @@ community's byte-matching assembly rebuild. See `docs/PLAN.md` for the approach 
 `docs/HANDOFF.md` for the working guide (setup, porting recipe, status, quirks, next steps).
 
 Status: the game-play core and its game loop, video94, sound94 (68k half) and the game-play helpers
-of the front-end modules are ported to `src/` and pass 8603 recorded function-level
+of the front-end modules are ported to `src/` and pass 8616 recorded function-level
 tests with 0 mismatches. The game does not run natively yet (see the plan's phases 3-4).
 
 ## Setup

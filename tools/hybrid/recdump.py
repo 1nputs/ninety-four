@@ -3,7 +3,7 @@
 usage: recdump.py FILE.cap INDEX [--ram ADDR[,ADDR...]] [--obj N] [--team home|away]"""
 import argparse, json, os, sys
 sys.path.insert(0, os.path.dirname(__file__))
-from oracle import read_captures, ROOT  # noqa: E402
+from oracle import read_capture_at, ROOT  # noqa: E402
 
 def main():
     ap = argparse.ArgumentParser()
@@ -17,7 +17,7 @@ def main():
     for k, v in syms.items():
         ad = v if isinstance(v, int) else v.get('addr')
         inv.setdefault(ad, k)
-    r = read_captures(a.file)[a.index]
+    r = read_capture_at(a.file, a.index)
     print(f'record {a.index}: {inv.get(r.pc, "?")} pc={r.pc:x} frame={r.frame} flags={r.flags} calls={len(r.calls)}')
     print('in :', ' '.join(f'{n}={v:08x}' for n, v in r.regs_in.items()))
     print('out:', ' '.join(f'{n}={v:08x}' for n, v in r.regs_out.items()))

@@ -2,6 +2,7 @@
  * shots on breakaways, sends players to the penalty box, runs power plays, shows the referee's
  * messages and switches the rink between its horizontal and vertical views. Intermission,
  * DoHiLights, StartHL and StartHL2 run whole frames themselves and come with the game loop. */
+#include <string.h>
 #include "game.h"
 #include "anim_gen.h"
 #include "hal.h"
@@ -9,6 +10,8 @@
 #include "symbols_gen.h"
 #include "penalty_tables_gen.h"
 #include "penalty_strings_gen.h"
+
+#define RAM_W(off) ram_ptr(RAM_BASE + (off))
 
 #define PFLAG(o, b) ((o)->pflags & (1 << (b)))
 static inline int16_t puckx(void) { return (int16_t)g.puckx[0]; }
@@ -1162,4 +1165,230 @@ uint32_t AdvanceStringPtr(uint32_t list, uint16_t n)
 {
     for (; n != 0; n--) list += rd16(rom_ptr(list));
     return list;
+}
+
+/* ---- the intermission and the highlights of the other games ---- */
+
+#define GS_SAVE_WORDS 0x5BE                               /* StartHL2's .sv: gmode on, to M68K_RAM */
+
+/* StartHL2's .sv / .lo: keep the game's RAM from gmode on (and ScoreSumbytes) at M68K_RAM while
+ * a highlight game uses it */
+static void hl_save(void)
+{
+    uint8_t *ram = (uint8_t *)&g;
+    memcpy(ram, ram + RAM_OFF_gmode, 2 * GS_SAVE_WORDS);
+    wr16(ram + 2 * GS_SAVE_WORDS, g.ScoreSumbytes);
+}
+static void hl_restore(void)
+{
+    uint8_t *ram = (uint8_t *)&g;
+    memcpy(ram + RAM_OFF_gmode, ram, 2 * GS_SAVE_WORDS);
+    g.ScoreSumbytes = rd16(ram + 2 * GS_SAVE_WORDS);
+}
+
+/* StartHL2's .ranres: settle highlight game a0 at random when tied, and mark it final */
+static void hl_random_result(uint8_t *gs)
+{
+    if (rd16(gs + 0xA) == rd16(gs + 0xC)) {
+        uint16_t d0 = vdp_hv16() & 1;
+        wr16(gs + 0xA, (uint16_t)(rd16(gs + 0xA) + d0));
+        wr16(gs + 0xC, (uint16_t)(rd16(gs + 0xC) + (d0 ^ 1)));
+    }
+    wr16(gs + 8, 5);                                      /* gsper: final */
+}
+
+/* StartHL2's .setteam: refill the energy, personnel and player data of team a2 */
+static void hl_set_team(uint8_t *tm)
+{
+    reenergizeteam(tm);
+    setpersonel(tm);
+    forcepldata(tm);
+    tm[0x18] = 0xFF;
+    g.sflags8 &= (uint8_t)~0x80;
+    tm[0x1A] = 0xFF;
+    tm[0x1C] = 0xFF;
+}
+
+/* penalty94.asm:StartHL2. Play the highlight of game a0 (d1 = its number): its ticker score,
+ * "Highlight from game:", then the two teams on the rink with a random 60-180 seconds left, the
+ * computer playing until 180 frames after the clock stops or C / start (a tie is settled at
+ * random); the game's RAM is kept aside meanwhile. Still tied: another highlight. Start skips
+ * it with a random result (sf3sbut). */
+void StartHL2(uint8_t *gs, int16_t game)
+{
+    for (;;) {
+        uint8_t *a0 = gs;
+        if (g.sflags3 & (1 << sf3sbut)) { hl_random_result(a0); return; }
+        hl_save();
+        const uint8_t *t = a0;
+        int16_t d3 = CheckGameTickerStatus(game, &t);
+        a0 = (uint8_t *)t;
+        NewTicker3(d3, a0);
+        if (g.sflags3 & (1 << sf3sbut)) { hl_restore(); hl_random_result(a0); g.sflags3 |= 1 << sf3sbut; return; }
+        g.printx = 4;
+        g.printy -= 6;
+        Framer(0x18, 3);
+        g.printx += 1;
+        g.printy -= 2;
+        printz(str_StartHL2_1, sizeof str_StartHL2_1);
+        if (waitxsr(0xB4) & 0x80) { hl_restore(); hl_random_result(a0); g.sflags3 |= 1 << sf3sbut; return; }
+        ST_W(g.zamx);
+        g.CwdExciteLvl = 0;
+        g.HomeTeam = rd16(a0);
+        g.VisTeam = rd16(a0 + 2);
+        uint8_t *home = team_struct(0), *away = team_struct(1);
+        wr16(home + tmgoalie, 0);
+        wr16(away + tmgoalie, 0);
+        clearTeamStats();
+        restoreteams();
+        ST_W(g.c1playernum);
+        ST_W(g.c2playernum);
+        g.cont1team = 0;
+        g.cont2team = 0;
+        g.gameclock = (uint16_t)(randomd0(0x78) + 0x3C);
+        g.gsp = (uint16_t)(rd16(a0 + 8) - 1);
+        wr16(home + tmscore, rd16(a0 + 0xA));
+        wr16(away + tmscore, rd16(a0 + 0xC));
+        g.gmode = 1 << gmhl;
+        if (g.gsp & 1) g.gmode |= 1 << gmdir;
+        g.sflags &= 0x00FF;                               /* clr.b: the high byte */
+        g.sflags2 = (uint16_t)(HI(sf2drec) | (g.sflags2 & 0xFF));
+        g.sflags3 = 0;
+        g.disflags &= (uint16_t)~HI(4);
+        g.disflags |= HI(dfclock);
+        g.glovecords = 0;
+        g.iflags = 0;
+        ST_W(g.RefCnt);
+        g.puckcross2 = 0xFF;
+        g.puckcross6 = 0xFF;
+        p_turnoff();
+        setupice_highlight();
+        ClrHor();
+        vdp_ctrl16(SYM_VDPR_WINX);
+        vdp_ctrl16(SYM_VDPR_WINY);
+        DecompressGraphicsPlain(SYM_RefsMap + 8, g.ExtraChars);   /* the ref cam */
+        g.Vpos = 0;
+        g.Hpos = 0;
+        ResetBench();
+        hl_set_team(home);
+        hl_set_team(away);
+        resetplstuff();
+        for (int i = 0; i < 12; i++) {
+            struct SortObj *o = sortobj(i);
+            int16_t p = o->position;
+            if (!PFLAG(o, pfgoal)) p += 6;
+            o->Xpos = (int16_t)hl_postab[2 * p];
+            o->Ypos = (int16_t)hl_postab[2 * p + 1];
+            o->Xvel = 0;
+            o->Yvel = 0;
+        }
+        SprSort();
+        g.palcount = 0x18;
+        g.oldvcount = g.vcount;
+        int16_t after = 0xB4;                             /* frames after the clock stops */
+        for (;;) {
+            DoGameFrame();
+            if ((g.gmode & (1 << gmclock)) && --after < 0) break;
+            uint16_t d1 = orjoy();
+            if ((d1 & 0x20) || (d1 & 0x80)) {
+                if (rd16(home + tmscore) == rd16(away + tmscore)) {     /* tied: a random winner */
+                    uint16_t d0 = vdp_hv16() & 1;
+                    wr16(home + tmscore, (uint16_t)(rd16(home + tmscore) + d0));
+                    wr16(away + tmscore, (uint16_t)(rd16(away + tmscore) + (d0 ^ 1)));
+                }
+                break;
+            }
+        }
+        KillCrowd();                                      /* the scores go to a0 as pushed: CheckGameTickerStatus's */
+        p_turnoff();
+        wr16(a0 + 0xA, rd16(home + tmscore));
+        wr16(a0 + 0xC, rd16(away + tmscore));
+        forceblack();
+        for (int i = 0; i < 0x10; i++) sortobj(i)->Xpos = 0;
+        hl_restore();
+        setplayercolors();
+        SetHor();
+        setvideo();
+        SetupPauseScreen();
+        DrawMenuScreen();
+        g.palcount = 0x18;
+        song(SYM_SngEOG);
+        wr16(gs + 8, 4);                                  /* gsper: overtime */
+        if (rd16(gs + 0xA) == rd16(gs + 0xC)) continue;   /* still tied: another highlight */
+        wr16(gs + 8, 5);                                  /* final */
+        t = gs;
+        d3 = CheckGameTickerStatus(game, &t);
+        NewTicker3(d3, t);
+        if (waitxsr(0xB4) & 0x80) { g.sflags3 |= 1 << sf3sbut; return; }
+        ClearTickerArea();
+        if (waitxsr(0x3C) & 0x80) g.sflags3 |= 1 << sf3sbut;
+        return;
+    }
+}
+
+/* penalty94.asm:StartHL. Play the highlight of game a0 (d1 = its number): StartHL2. */
+void StartHL(uint8_t *gs, int16_t game) { StartHL2(gs, game); }
+
+/* penalty94.asm:DoHiLights. The highlights: each game of the round (GetShifter, last first)
+ * whose highlight flag is set (gsfhl, cleared here), unless the series is over (gsfso). */
+void DoHiLights(void)
+{
+    int16_t n = (int16_t)GetShifter(NULL);
+    uint8_t *gs = RAM_W(RAM_OFF_gsstruct) + (uint16_t)(n * 0x10);
+    do {
+        if (!(gs[0xE] & 4)) {
+            int hl = gs[0xE] & 2;
+            gs[0xE] &= (uint8_t)~2;
+            if (hl) StartHL(gs, n);
+        }
+        gs -= 0x10;
+    } while (n-- != 0);
+}
+
+/* penalty94.asm:Intermission. Between periods (and after the game, which first updates the
+ * records): the zamboni crosses under the period's menu (the playoff and shootout lists in
+ * their modes), the ticker shows the other games' scores, then the highlights; start cuts it
+ * short. Waits while a pad is on a team. */
+void Intermission(void)
+{
+    static const uint32_t sslist[10] = {
+        SYM_StartGameText, SYM_IntermissionText, SYM_IntermissionText, SYM_IntermissionText, SYM_ExitGameText,
+        SYM_StartGameTextPO, SYM_IntermissionText, SYM_IntermissionText, SYM_IntermissionText, SYM_ExitGameTextPO,
+    };
+    if (g.gsp == 4) {
+        g.gameclock = 0;
+        UpdateRecords();
+    }
+    SetupTeamForIntermission();
+    for (int i = 0; i < 0x10; i++) sortobj(i)->Xpos = 0;
+    DecompressGraphicsPlain(SYM_ZamFrameList + 8, g.ExtraChars);
+    g.zamx = 0x140;
+    uint16_t list = g.gsp;
+    if (g.OptPlayMode != 0) list += 5;
+    uint32_t items = sslist[list];
+    if (g.gmode2 & HI(0)) items = SYM_ShootoutIntermissionMenu;
+    g.sflags |= HI(sfpz);
+    InitMenuState(items, SYM_SetupPauseScreen);
+    uint16_t d1;
+    g.TickerNum = GetShifter(NULL);
+    int skip = 0;
+    while ((int16_t)g.TickerNum >= 0) {
+        const uint8_t *gs = NULL;
+        int16_t d3 = NewTicker2(&gs);
+        NewTicker3(d3, gs);
+        if (waitxsr(0x96) & 0x80) { skip = 1; break; }
+        ClearTickerArea();
+        if (waitxsr(0x3C) & 0x80) { skip = 1; break; }
+    }
+    if (skip) g.sflags3 |= 1 << sf3sbut;
+    DoHiLights();
+    int cut = (g.sflags3 & (1 << sf3sbut)) != 0;
+    g.sflags3 &= (uint8_t)~(1 << sf3sbut);
+    if (!cut) {
+        do {
+            d1 = waitxsr(0x1E0);
+            if (d1 & 0x80) break;
+        } while (g.cont1team != 0 || g.cont2team != 0);
+    }
+    ST_W(g.zamx);
 }

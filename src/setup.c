@@ -291,3 +291,91 @@ void setupice(void)
     g.vbint = SYM_VBlank;
     g.disflags &= (uint16_t)~(HI(dfok) | HI(dfng));
 }
+
+/* setup94.asm:InitTeamStructure. Team struct a2 for team d0: the team number ($28), its data
+ * (tmdata, from TeamList) and its line sets at $16A (the layout by OptLine). */
+void InitTeamStructure(uint16_t team, uint8_t *tm)
+{
+    wr16(tm + 0x28, team);
+    uint32_t data = rd32(rom_ptr(SYM_TeamList + (uint16_t)(team << 2)));
+    wr32(tm + tmdata, data);
+    const uint8_t *src = rom_ptr(rd32(tm + tmdata) + (int16_t)rd16(rom_ptr(data + 6)));
+    uint8_t *dst = tm + 0x16A;
+    if (g.OptLine != 0) {
+        memcpy(dst, src, 8);
+        memcpy(dst + 8, src + 16, 12 * 4);
+    } else {
+        memcpy(dst, src + 8, 14 * 4);
+    }
+}
+
+/* setup94.asm:setteams. Both team structs from HomeTeam / VisTeam, with their sort objects. */
+void setteams(void)
+{
+    wr16(team_struct(0) + tmsort, RAM_OFF_SortCords);
+    InitTeamStructure(g.HomeTeam, team_struct(0));
+    wr16(team_struct(1) + tmsort, RAM_OFF_SortCords + 6 * 0x80);
+    InitTeamStructure(g.VisTeam, team_struct(1));
+}
+
+/* setup94.asm:clearTeamStats. Clear both team structs, keeping the first $1A0 bytes of each
+ * hot / cold table (+$1A2, through homehotcoldsave / awayhotcoldsave) and the goalie words; the
+ * last roster slot's place is -1. Falls into setteams. */
+void clearTeamStats(void)
+{
+    uint8_t *home = team_struct(0), *away = team_struct(1);
+    uint16_t hg = rd16(home + tmgoalie), ag = rd16(away + tmgoalie);
+    memcpy(RAM_W(RAM_OFF_homehotcoldsave), home + 0x1A2, 0x1A0);
+    memcpy(RAM_W(RAM_OFF_awayhotcoldsave), away + 0x1A2, 0x1A0);
+    memset(home, 0, tmsize);
+    memset(away, 0, tmsize);
+    memcpy(home + 0x1A2, RAM_W(RAM_OFF_homehotcoldsave), 0x1A0);
+    memcpy(away + 0x1A2, RAM_W(RAM_OFF_awayhotcoldsave), 0x1A0);
+    wr16(away + tmgoalie, ag);
+    wr16(home + tmgoalie, hg);
+    home[tmpdst + 0x34] = 0xFF;
+    away[tmpdst + 0x34] = 0xFF;
+    setteams();
+}
+
+/* setup94.asm:ReloadRefTiles. The referee tiles (RefsMap) at ExtraChars -> d4. */
+uint16_t ReloadRefTiles(void) { return DecompressGraphicsPlain(SYM_RefsMap + 8, g.ExtraChars); }
+/* setup94.asm:ReloadFaceOffTiles. The faceoff sprite tiles at faceoffvrcset -> d4. */
+uint16_t ReloadFaceOffTiles(void) { return DecompressGraphicsPlain(SYM_FaceOffSprites + 8, g.faceoffvrcset); }
+/* setup94.asm:ReloadFaceOffMap. The faceoff map tiles at ExtraChars -> d4. */
+uint16_t ReloadFaceOffMap(void) { return DecompressGraphicsPlain(SYM_FaceOffMap + 8, g.ExtraChars); }
+
+/* setup94.asm:setupice_highlight. Rebuild the rink objects for a highlight without reloading
+ * the tiles (the sprite chars setupice kept in spritechars), then the game vblank and a fade
+ * in. */
+void setupice_highlight(void)
+{
+    forceblack();
+    g.sflags &= (uint16_t)~HI(sfpz);
+    uint16_t saved = g.disflags;
+    g.disflags |= HI(dfng);
+    g.Hpos = 0;
+    g.Vpos = 0;
+    g.Oldrow = 0x7D0;
+    ST_W(g.zamx);
+    defaultsprites(g.spritechars);
+    setupIceRinkPal();
+    if (g.gmode & (1 << gmdir))
+        for (int i = 0; i < 12; i++) sortobj(i)->pflags ^= 1 << pfgoal;
+    setplayercolors();
+    g.PadControlBits = 0xFFFF;
+    g.PadControlBits34 = 0xFFFF;
+    memset(RAM_W(RAM_OFF_padcont), 0, 12);
+    ST_W(g.c1playernum);
+    ST_W(g.c2playernum);
+    setupEASNmap();
+    struct Vid v = { RAM_W(RAM_OFF_DMAList), RAM_W(RAM_OFF_Satt), 1 };
+    uint8_t *a3 = RAM_W(RAM_OFF_pads);
+    for (int i = 0; i < 6; i++, a3 += 0x1C) addframe2(0, 0, (struct SortObj *)a3, &v);
+    g.DMAlistend = ram_addr(v.dma);
+    DoDMAList();
+    g.palcount = 0x1C;
+    g.disflags = saved;
+    g.vbint = SYM_VBlank;
+    g.disflags &= (uint16_t)~(HI(dfok) | HI(dfng));
+}

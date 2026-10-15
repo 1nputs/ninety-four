@@ -635,9 +635,41 @@ uint8_t *CopyTeamBlockMapData(uint32_t map, uint16_t team, uint16_t vram, uint8_
 uint16_t ReloadRefHorTiles(void);                       /* -> d4 */
 void setSlotBit(void);
 uint16_t InitMenuState(uint32_t items, uint32_t draw);  /* a0, a1 (falls into DrawMenuScreen) -> d1 */
-/* not ported yet: intermission and game over (frame drivers / front end) */
+/* the intermission, the highlights, the replay and the stats screens of the pause menu */
 void Intermission(void);                                /* penalty94 */
+void DoHiLights(void);
+void StartHL(uint8_t *gs, int16_t game);                /* a0 = the game's gsstruct, d1 = its number */
+void StartHL2(uint8_t *gs, int16_t game);
+void setupice_highlight(void);                          /* setup94 */
+void clearTeamStats(void);                              /* setup94, falls into setteams */
+void setteams(void);
+void InitTeamStructure(uint16_t team, uint8_t *tm);     /* d0, a2 */
+uint16_t ReloadRefTiles(void);                          /* -> d4 */
+uint16_t ReloadFaceOffTiles(void);                      /* -> d4 */
+uint16_t ReloadFaceOffMap(void);                        /* -> d4 */
+void ReplayMode(void);                                  /* replay94 */
+void PeriodStatsScreen(void);                           /* period94 */
+void GameStatisticsScreen(void);
+void rtsStatTables(void);
+uint16_t SetupScreen(uint16_t row, uint16_t rows);      /* stats94: d0, d1 -> d4 */
+void ExitStatsScreen(void);                             /* falls into ReloadRinkGraphics */
+uint16_t WaitVSyncAndReadInput(uint16_t *d0, uint16_t *d2, uint16_t *d3);   /* -> d1 */
 void AddPlayoffTeamStats(void);                         /* data94 */
+void ReadTeamStats(void);
+void CountPlayers(void);                                /* cards94 and sram94: the save records */
+void PlayerRecordIO(uint32_t slot, uint16_t team, uint32_t buf);   /* d0, d1, a0 */
+void ReadPlayerRecord(uint32_t slot, uint16_t team, uint32_t buf);
+void WritePlayerRecord(uint32_t slot, uint16_t team, uint32_t buf);
+void TeamRecordIO(uint32_t team, uint32_t buf);        /* d1, a0 */
+void ReadTeamRecord(uint32_t team, uint32_t buf);
+void WriteTeamRecord(uint32_t team, uint32_t buf);
+void WriteCrowdRecord(uint32_t team, uint32_t buf);
+void UpdatePlayerRecords(uint32_t team, uint32_t buf, const uint8_t *tm, uint16_t goalies, uint16_t opponent);   /* d1, a0, a2, d5, d6 */
+void UpdateTeamRecord(uint32_t buf, uint32_t rec_no, uint16_t other, uint16_t team, uint16_t vs, const uint8_t *a1, const uint8_t *a2);   /* a0, d1, d2, d3, d4, a1, a2 */
+void UpdateCrowdRecord(uint32_t buf, uint32_t team, uint16_t opp, uint16_t user, uint16_t opp_user, uint16_t goalies, const uint8_t *tm);   /* a0, d1, d2, d4, d5, d6, a1 */
+void UpdateRecords(void);
+void MakeSRAMChecksum(void);
+/* not ported yet (front end) */
 void GameOver(void);                                    /* setup94: passwords, playoff screens, back to the front end */
 /* jsr (a0) to a 68k routine address kept in RAM (dispatch.c) */
 void call68k(uint32_t addr);

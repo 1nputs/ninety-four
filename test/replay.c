@@ -109,7 +109,7 @@ int replay_irq(void)
     return 0;
 }
 
-/* A wait loop: a short backward Bcc.s (beq, bne, bpl, bmi) within 12 bytes after pc that jumps
+/* A wait loop: a short backward conditional Bcc.s within 12 bytes after pc that jumps
  * to pc or before, over code that reads vcount, palcount or disflags (their absolute short
  * addresses appear in it). An interrupt there is the vblank the loop waits for. */
 static int in_wait_loop(uint32_t pc)
@@ -117,7 +117,7 @@ static int in_wait_loop(uint32_t pc)
     extern const uint8_t *rom_image;
     for (uint32_t b = pc; b <= pc + 12; b += 2) {
         uint8_t op = rom_image[b], disp = rom_image[b + 1];
-        if ((op != 0x66 && op != 0x67 && op != 0x6A && op != 0x6B) || !(disp & 0x80) || disp == 0xFF) continue;
+        if (op < 0x62 || op > 0x6F || !(disp & 0x80) || disp == 0xFF) continue;   /* a conditional Bcc.s back */
         uint32_t target = b + 2 - (uint32_t)(0x100 - disp);
         if (target > pc || pc - target > 16) continue;
         for (uint32_t a = target; a < b; a += 2) {

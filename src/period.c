@@ -2,6 +2,7 @@
  * the arena sprites and shows the Period Stats and Game Statistics screens, with the power play
  * time and team ratings they report. The two screens themselves wait for the pad every frame
  * and come with the front end. */
+#include <string.h>
 #include "game.h"
 #include "hal.h"
 #include "rom.h"
@@ -247,4 +248,169 @@ void ShortenMsgTimer(struct SortObj *o)
 {
     if (g.cont2team != 0 && (uint16_t)o->SCnum != g.puckc) return;
     if ((int16_t)g.msgtimer > 2) g.msgtimer = 2;
+}
+
+/* PeriodStatsScreen: team's logo bitmap (TeamLogoBitmaps; its palette is TeamLogoPalettes +
+ * team * 32, loaded as palette 2) at printx / printy -> the next char */
+static uint16_t team_logo(uint16_t team, uint16_t chars)
+{
+    uint32_t bmp = rd32(rom_ptr(SYM_TeamLogoBitmaps + (uint16_t)(team << 2)));
+    uint32_t pal = SYM_TeamLogoPalettes + (int16_t)((uint16_t)(team << 5) - 0x40);
+    uint32_t map = bmp + rd32(rom_ptr(bmp + 4));
+    return dobitmap(pal, map, bmp + 8, 0, 0, 6, 6, chars, 4);
+}
+
+/* PeriodStatsScreen's .num: the next period total of a0, added to matchuptimer, in 2 or 3
+ * columns */
+static const uint8_t *period_num(const uint8_t *a0)
+{
+    uint16_t v = rd16(a0);
+    g.matchuptimer += v;
+    printz(str_PeriodStatsScreen_15, sizeof str_PeriodStatsScreen_15);
+    g.printx -= 3;
+    print(PushNumberWidth(v, (int16_t)v < 0x64 ? 2 : 3));
+    return a0 + 2;
+}
+
+/* PeriodStatsScreen's .team: team a2's goals (or shots, matchup) by period, then the total */
+static void period_team(const uint8_t *tm)
+{
+    const uint8_t *a0 = tm + (g.matchup ? 0x34A : 0x342);
+    g.matchuptimer = 0;
+    g.printx = 0xB;
+    a0 = period_num(a0);
+    if ((int16_t)g.gsp >= 1) {
+        g.printx = 0x10;
+        a0 = period_num(a0);
+        if ((int16_t)g.gsp >= 2) {
+            g.printx = 0x15;
+            a0 = period_num(a0);
+            if ((int16_t)g.gsp >= 3 && (g.sflags7 & 2)) {
+                g.printx = 0x1A;
+                period_num(a0);
+            }
+        }
+    }
+    g.printx = 0x21;
+    printz(str_PeriodStatsScreen_14, sizeof str_PeriodStatsScreen_14);
+    g.printx -= 3;
+    print(PushNumberWidth(g.matchuptimer, (int16_t)g.matchuptimer < 0x64 ? 2 : 3));
+}
+
+/* PeriodStatsScreen's .title and .lines */
+static void period_title(void)
+{
+    if (g.matchup) printz(str_PeriodStatsScreen_11, sizeof str_PeriodStatsScreen_11);
+    else printz(str_PeriodStatsScreen_12, sizeof str_PeriodStatsScreen_12);
+}
+static void period_lines(void)
+{
+    printz(str_PeriodStatsScreen_13, sizeof str_PeriodStatsScreen_13);
+    g.printy = 0xE;
+    period_team(team_struct(1));
+    g.printy = 0x16;
+    period_team(team_struct(0));
+}
+
+/* period94.asm:PeriodStatsScreen. The "Period Stats" menu item: both team logos, then each
+ * team's goals (or shots) by period with the overtime column when there was one, and the
+ * total. Left shows goals, right shots, start leaves. */
+void PeriodStatsScreen(void)
+{
+    g.matchup = 0;
+    uint16_t c = SetupScreen(0, 0x1C);
+    printz(str_PeriodStatsScreen_1, sizeof str_PeriodStatsScreen_1);
+    Framer(8, 8);
+    printz(str_PeriodStatsScreen_2, sizeof str_PeriodStatsScreen_2);
+    Framer(8, 8);
+    printz(str_PeriodStatsScreen_3, sizeof str_PeriodStatsScreen_3);
+    c = team_logo(g.VisTeam, c);
+    uint8_t *pal = ram_ptr(RAM_BASE + RAM_OFF_palfadenew);
+    memcpy(pal + 0x60, pal + 0x40, 0x20);
+    printz(str_PeriodStatsScreen_4, sizeof str_PeriodStatsScreen_4);
+    team_logo(g.HomeTeam, c);
+    printz(str_PeriodStatsScreen_5, sizeof str_PeriodStatsScreen_5);
+    Framer(0x20, 6);
+    printbigz(str_PeriodStatsScreen_6, sizeof str_PeriodStatsScreen_6);
+    if (g.sflags7 & 2) {
+        printz(str_PeriodStatsScreen_7, sizeof str_PeriodStatsScreen_7);
+        printz(str_PeriodStatsScreen_8, sizeof str_PeriodStatsScreen_8);
+    } else {
+        printz(str_PeriodStatsScreen_9, sizeof str_PeriodStatsScreen_9);
+        printz(str_PeriodStatsScreen_10, sizeof str_PeriodStatsScreen_10);
+    }
+    period_title();
+    period_lines();
+    g.palcount = 0x18;
+    for (;;) {
+        uint16_t d0, d2, d3;
+        uint16_t d1 = WaitVSyncAndReadInput(&d0, &d2, &d3);
+        if (d1 & 0x80) break;
+        if (d1 & 4) {
+            if (!g.matchup) continue;
+            g.matchup = 0;
+        } else if (d1 & 8) {
+            if (g.matchup) continue;
+            ST_W(g.matchup);
+        } else {
+            continue;
+        }
+        period_title();
+        period_lines();
+    }
+    ExitStatsScreen();
+}
+
+/* period94.asm:rtsStatTables. The scroll step's rts. */
+void rtsStatTables(void) {}
+
+/* GameStatisticsScreen's .scroll: move the rows by PlayerScrollCtr within 0..matchupvis,
+ * stopping at a row boundary; at the boundaries print the row that scrolls in */
+static void stats_scroll(void)
+{
+    int16_t step = (int16_t)g.PlayerScrollCtr;
+    if (step == 0) { rtsStatTables(); return; }
+    int16_t to = (int16_t)(step + (int16_t)g.VertLineScrolling);
+    if (to < 0 || to > (int16_t)g.matchupvis) { rtsStatTables(); return; }
+    uint16_t from = g.VertLineScrolling;
+    g.VertLineScrolling = (uint16_t)to;
+    uint16_t sub = (uint16_t)to & 0xF;
+    if (sub == 0) g.PlayerScrollCtr = 0;
+    if ((from & 0xF) == 0) {
+        if (sub == 0xE) StatScrollRow();
+        if (sub == 2) StatScrollRowEnd();
+    }
+    SetStatScroll();
+}
+
+/* period94.asm:GameStatisticsScreen. The "Game Statistics" menu item: both teams' totals
+ * (DisplayTeamStatsScreen) under the team blocks; up / down scroll the rows (to $70, or $30
+ * without penalties), start leaves. */
+void GameStatisticsScreen(void)
+{
+    SetupScreen(9, 0x1A);
+    printz(str_GameStatisticsScreen_1, sizeof str_GameStatisticsScreen_1);
+    Framer(0x20, 6);
+    printbigz(str_GameStatisticsScreen_2, sizeof str_GameStatisticsScreen_2);
+    PutTeamBlock(0x2C);
+    g.printx += 4;
+    PutTeamBlock(0);
+    g.DispAttribCtr = 0;
+    g.VertLineScrolling = 0;
+    g.PlayerScrollCtr = 0;
+    g.matchupvis = 0x70;
+    if (g.OptPen == 0) g.matchupvis = 0x30;
+    DisplayTeamStatsScreen();
+    PrintStatScrollArrows();
+    for (;;) {
+        vcountwait();
+        uint16_t d0, d1, d2, d3;
+        getpzjoy(&d0, &d1, &d2, &d3);
+        if (d3 & 0x80) { ExitStatsScreen(); return; }
+        nodiag(&d1, d3);
+        if (d3 & 1) g.PlayerScrollCtr = 0xFFFE;
+        else if (d3 & 2) g.PlayerScrollCtr = 2;
+        stats_scroll();
+        PrintStatScrollArrows();
+    }
 }

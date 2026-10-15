@@ -57,6 +57,4 @@ void call68k_missing(uint32_t addr)
     replay_apply(c);
 }
 /* the intermission and the game over: frame drivers / front end, not ported yet */
-STUB(Intermission) void Intermission(void) { TAKE(Intermission); replay_apply(c); }
-STUB(AddPlayoffTeamStats) void AddPlayoffTeamStats(void) { TAKE(AddPlayoffTeamStats); replay_apply(c); }
 STUB(GameOver) void GameOver(void) { TAKE(GameOver); replay_apply(c); }

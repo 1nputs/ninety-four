@@ -6,7 +6,7 @@ usage: capture.py ROM --fn NAME[,NAME...] --out FILE [--state STATE] [--frames N
 """
 import argparse, os, sys
 sys.path.insert(0, os.path.dirname(__file__))
-from oracle import Oracle, read_captures, ROOT  # noqa: E402
+from oracle import Oracle, ROOT  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'oracle'))
 from run import parse_script, parse_pokes  # noqa: E402
 
@@ -24,6 +24,7 @@ def main():
     ap.add_argument('--coverage', default='', help='write per-PC execution counts (raw uint32[1M]) here')
     ap.add_argument('--no-calls', action='store_true', help='do not log nested calls')
     ap.add_argument('--poke', default='', help='RAM words to write: "FRAME:ADDR=VAL,...;FRAME:..." (hex)')
+    ap.add_argument('--max-log', type=int, default=128, help='MB of call log per record; a longer capture is dropped (memory)')
     ap.add_argument('--spread', action='store_true', help='capture call numbers 1,2,3,4,6,8,12,16,... of each routine instead of the first N')
     a = ap.parse_args()
 
@@ -42,6 +43,7 @@ def main():
     if a.coverage:
         o.coverage(True)
     o.capture_spread(a.spread)
+    o.lib.oracle_capture_log_limit(a.max_log)
     o.capture_open(a.out, a.max, a.stride)
     script = parse_script(a.script); si = 0
     pokes = parse_pokes(a.poke)
@@ -54,18 +56,26 @@ def main():
     n = o.capture_close()
     for f in fns:
         print(f'{f:<24} {hex(o.addr(f))}: {o.hits(f)} calls, {o.captured(f)} captured')
-    print(f'{n} records -> {a.out} ({os.path.getsize(a.out) // 1024} KB)')
+    print(f'{n} records -> {a.out} ({os.path.getsize(a.out) // 1024} KB), {o.lib.oracle_capture_dropped()} dropped over {a.max_log} MB of log')
     if a.coverage:
         cov = o.coverage_get()
         open(a.coverage, 'wb').write(bytes(cov))
         executed = sum(1 for v in cov if v)
         print(f'coverage: {executed} distinct PCs executed -> {a.coverage}')
-    recs = read_captures(a.out)
-    bad = [r for r in recs if r.interrupted]
-    print(f'records: {len(recs)}, interrupted by hblank/vblank: {len(bad)}')
-    if recs:
-        r = recs[0]
-        print(f'first: pc={r.pc:#x} frame={r.frame} regs_in a7={r.regs_in["a7"]:#x} sp_out={r.regs_out["a7"]:#x} pc_out={r.regs_out["pc"]:#x} changed_bytes={len(r.changed())} nested_calls={len(r.calls)}')
+    # the summary reads only the record headers: parsing every call of a big capture in Python
+    # takes gigabytes
+    import struct
+    n_rec = n_irq = 0
+    with open(a.out, 'rb') as f:
+        while True:
+            hdr = f.read(24)
+            if len(hdr) < 24:
+                break
+            _magic, total, _pc, _frame, flags, _calls = struct.unpack('<6I', hdr)
+            n_rec += 1
+            n_irq += bool(flags & 1)
+            f.seek(total - 24, 1)
+    print(f'records: {n_rec}, interrupted by hblank/vblank: {n_irq}')
 
 
 if __name__ == '__main__':
