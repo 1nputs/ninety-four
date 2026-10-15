@@ -55,6 +55,13 @@ build/nhl94: $(SRC) $(NATIVE) native/vdp.h native/native.h src/game.h src/ram.h 
 	@mkdir -p build
 	$(CC) $(CFLAGS) -O2 -Isrc -Inative $(shell pkg-config --cflags sdl2) -o $@ $(SRC) $(NATIVE) $(shell pkg-config --libs sdl2)
 
+# the Z80 relay port against sound traces: make relaytest
+relaytest: build/relaytest
+	./build/relaytest $(wildcard out/vectors/*.sndtrace)
+build/relaytest: test/relaytest.c src/z80.c src/z80.h src/rom.c src/rom.h
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc -o $@ test/relaytest.c src/z80.c src/rom.c
+
 oracle: build/nhl_oracle.so
 build/nhl_oracle.so: tools/hybrid/oracle_shim.c
 	$(MAKE) -s -f tools/hybrid/Makefile
@@ -64,4 +71,4 @@ test: build/captest
 
 clean:
 	rm -rf build/captest build/oracle_shim.o build/nhl94
-.PHONY: test oracle clean nhl94
+.PHONY: test oracle clean nhl94 relaytest
