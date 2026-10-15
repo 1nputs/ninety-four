@@ -5,7 +5,7 @@ SRC     := $(wildcard src/*.c)
 TESTSRC := test/captest.c test/replay.c test/stubs.c test/ports.c test/hal_replay.c
 CAPS    := $(wildcard out/captures/*.cap)
 
-build/captest: $(SRC) $(TESTSRC) src/ram.h src/game.h src/symbols_gen.h src/anim_gen.h src/collide_tables_gen.h src/checks_tables_gen.h src/input_tables_gen.h src/penalty_tables_gen.h src/hockey_tables_gen.h src/display_tables_gen.h src/checks_strings_gen.h src/period_strings_gen.h src/hockey_strings_gen.h src/input_strings_gen.h src/penalty_strings_gen.h src/display_strings_gen.h src/replay_strings_gen.h src/title_strings_gen.h src/data_strings_gen.h src/shootout_strings_gen.h src/menu_strings_gen.h test/replay.h test/ports.h
+build/captest: $(SRC) $(TESTSRC) src/ram.h src/game.h src/symbols_gen.h src/anim_gen.h src/collide_tables_gen.h src/checks_tables_gen.h src/input_tables_gen.h src/penalty_tables_gen.h src/hockey_tables_gen.h src/display_tables_gen.h src/setup_tables_gen.h src/checks_strings_gen.h src/period_strings_gen.h src/hockey_strings_gen.h src/input_strings_gen.h src/penalty_strings_gen.h src/display_strings_gen.h src/replay_strings_gen.h src/title_strings_gen.h src/data_strings_gen.h src/shootout_strings_gen.h src/menu_strings_gen.h test/replay.h test/ports.h
 	@mkdir -p build
 	$(CC) $(CFLAGS) -Isrc -Itest -o $@ $(SRC) $(TESTSRC)
 
@@ -29,6 +29,9 @@ src/hockey_tables_gen.h: tools/gen_tables.py
 
 src/display_tables_gen.h: tools/gen_tables.py
 	python3 -I tools/gen_tables.py ref/NHL94Genesis/src/display94.asm "showzam/.ftab:zam_ftab" "checksso/.tab:sso_tab" -o $@
+
+src/setup_tables_gen.h: tools/gen_tables.py
+	python3 -I tools/gen_tables.py ref/NHL94Genesis/src/setup94.asm "defaultsprites/.listsso:listsso" "defaultsprites/.listffo:listffo" "defaultsprites2/.list:dslist" -o $@
 
 src/penalty_tables_gen.h: tools/gen_tables.py
 	python3 -I tools/gen_tables.py ref/NHL94Genesis/src/penalty94.asm sctab -o $@

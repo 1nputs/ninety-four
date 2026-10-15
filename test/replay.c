@@ -94,6 +94,52 @@ uint32_t replay_io_read(uint32_t addr, int width)
     return 0;
 }
 
+int replay_irq(void)
+{
+    for (uint32_t i = cursor; i < cur->n_calls; i++) {
+        Call *c = &cur->calls[i];
+        if (c->consumed || !(c->pc & IRQ_FLAG)) continue;
+        c->consumed = 1;
+        uint32_t j = i + 1;
+        while (j < cur->n_calls && cur->calls[j].depth > c->depth) cur->calls[j++].consumed = 1;
+        cursor = j;
+        replay_apply(c);
+        return 1;
+    }
+    return 0;
+}
+
+/* A wait loop: a short backward Bcc.s (beq, bne, bpl, bmi) within 12 bytes after pc that jumps
+ * to pc or before, over code that reads vcount, palcount or disflags (their absolute short
+ * addresses appear in it). An interrupt there is the vblank the loop waits for. */
+static int in_wait_loop(uint32_t pc)
+{
+    extern const uint8_t *rom_image;
+    for (uint32_t b = pc; b <= pc + 12; b += 2) {
+        uint8_t op = rom_image[b], disp = rom_image[b + 1];
+        if ((op != 0x66 && op != 0x67 && op != 0x6A && op != 0x6B) || !(disp & 0x80) || disp == 0xFF) continue;
+        uint32_t target = b + 2 - (uint32_t)(0x100 - disp);
+        if (target > pc || pc - target > 16) continue;
+        for (uint32_t a = target; a < b; a += 2) {
+            uint16_t w = (uint16_t)(rom_image[a] << 8 | rom_image[a + 1]);
+            if (w == (uint16_t)RAM_OFF_vcount || w == (uint16_t)RAM_OFF_palcount || w == (uint16_t)RAM_OFF_disflags) return 1;
+        }
+    }
+    return 0;
+}
+
+int record_irqs_clean(const Record *r)
+{
+    if (!(r->flags & 4) || (r->flags & 2)) return 0;
+    for (uint32_t i = 0; i < r->n_calls; i++) {
+        const Call *c = &r->calls[i];
+        if (!(c->pc & IRQ_FLAG)) continue;
+        uint32_t at = (uint32_t)c->stack[2] << 24 | c->stack[3] << 16 | c->stack[4] << 8 | c->stack[5];
+        if (!in_wait_loop(at & 0xFFFFFF)) return 0;
+    }
+    return 1;
+}
+
 void replay_io_write(uint32_t addr, int width, uint32_t value)
 {
     uint32_t mask = width == 4 ? 0xFFFFFFFFu : width == 2 ? 0xFFFFu : 0xFFu;
@@ -122,7 +168,7 @@ int replay_unconsumed(const Record *r, int (*is_ported)(uint32_t))
 {
     int n = 0;
     for (uint32_t i = 0; i < r->n_calls; i++)
-        if (!r->calls[i].consumed && ((r->calls[i].pc & IO_WRITE_FLAG) ||
+        if (!r->calls[i].consumed && ((r->calls[i].pc & (IO_WRITE_FLAG | IRQ_FLAG)) ||
             (!is_ported(r->calls[i].pc) && !(r->calls[i].pc & IO_READ_FLAG) && !sym_trivial(r->calls[i].pc)))) n++;
     return n;
 }

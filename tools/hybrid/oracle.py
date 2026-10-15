@@ -120,6 +120,7 @@ class Oracle(Core):
 
 IO_READ_FLAG = 0x80000000
 IO_WRITE_FLAG = 0x40000000
+IRQ_FLAG = 0x20000000
 
 
 class Call:

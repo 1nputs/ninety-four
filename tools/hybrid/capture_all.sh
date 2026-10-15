@@ -37,4 +37,9 @@ run helpers      --state $S2 --max 24 --frames 80000 --fn "$HELPERS" &
 # sound94: the sequencer runs every vblank (p_music_vblank); songs at faceoffs, goals and period ends
 run sound        --state $S2 --max 32 --frames 40000 --fn "$(fns sound94)" &
 run sound1p      --state $S1 --script "$SCRIPT" --max 32 --frames 40000 --fn "$(fns sound94)" &
+# whole frames and the routines that wait for the vblank: the shim logs each interrupt, and the
+# tests replay it where the C waits (records whose interrupts all landed in wait loops)
+FRAME="$(tr -s ' \n' ',' < tools/hybrid/frame_fns.txt)"
+run frame1p      --state $S1 --script "$SCRIPT" --max 24 --frames 40000 --fn "$FRAME" &
+run frame        --state $S2 --max 24 --frames 40000 --fn "$FRAME" &
 wait

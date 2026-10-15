@@ -35,6 +35,9 @@ void replay_apply(const Call *c);             /* write the call's RAM changes in
 int replay_unconsumed(const Record *r, int (*is_ported)(uint32_t));  /* count of leftover stub calls */
 #define IO_READ_FLAG 0x80000000u
 #define IO_WRITE_FLAG 0x40000000u
+#define IRQ_FLAG 0x20000000u
+int replay_irq(void);                         /* apply the next recorded interrupt (a vblank wait); 0 = none */
+int record_irqs_clean(const Record *r);       /* every interrupt landed in a vblank wait loop */
 uint32_t replay_io_read(uint32_t addr, int width);   /* next recorded hardware read of addr */
 void replay_io_write(uint32_t addr, int width, uint32_t value);  /* check against the next recorded hardware write */
 const uint8_t *cur_ram_in(void);

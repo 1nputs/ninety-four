@@ -565,7 +565,7 @@ void ReloadRinkGraphics(void);
 void PeriodOver(void);                                  /* does not return on the 68k */
 void resetplstuff(void);
 void SprSort(void);
-void setupEASNmap(void);
+uint16_t setupEASNmap(void);                            /* -> d4 */
 void setupIceRinkPal(void);
 uint16_t ReloadEnergyBarTiles(void);                    /* -> d4 */
 uint16_t ReloadCrowdTiles(void);                        /* -> d4 */
@@ -617,11 +617,33 @@ void UpdateChannelFrequencyAndVolume(uint8_t *ch, const uint8_t *voices);   /* a
 void SetChannelVolume(uint8_t *ch, const uint8_t *voices);                  /* a2, a3 */
 void p_initialZ80(void);
 void ClearAllTrackAndSFXSlots(void);
+/* the stack resets (movea.w #Stack,sp) and the game's entry (dispatch.c) */
+void run68k(void (*entry)(void));                       /* call entry, and whatever restart_at names after it */
+void restart_at(void (*entry)(void));                   /* drop the C stack and continue at entry */
+/* hockey94 frame drivers */
+void DoGameFrame(void);
+void Gameloop(void);                                    /* does not return */
+void StartPer(void);                                    /* does not return: resets the stack */
+void Pausemode(void);
+void VBjsr(void);                                       /* the vblank interrupt: the vbint handler */
+/* setup94, cards94, menu94 parts of the period start */
+void setupice(void);
+uint16_t defaultsprites(uint16_t chars);                /* d4 -> d4 */
+uint16_t defaultsprites2(uint16_t chars);               /* d4 -> d4 */
+uint16_t setupTeamBlocksMap(uint16_t chars);            /* d4 -> d4 */
+uint8_t *CopyTeamBlockMapData(uint32_t map, uint16_t team, uint16_t vram, uint8_t *dst);  /* a0, d0, d1, a1 -> a1 */
+uint16_t ReloadRefHorTiles(void);                       /* -> d4 */
+void setSlotBit(void);
+uint16_t InitMenuState(uint32_t items, uint32_t draw);  /* a0, a1 (falls into DrawMenuScreen) -> d1 */
+/* not ported yet: intermission and game over (frame drivers / front end) */
+void Intermission(void);                                /* penalty94 */
+void AddPlayoffTeamStats(void);                         /* data94 */
+void GameOver(void);                                    /* setup94: passwords, playoff screens, back to the front end */
 /* jsr (a0) to a 68k routine address kept in RAM (dispatch.c) */
 void call68k(uint32_t addr);
 void call68k_missing(uint32_t addr);
 /* other modules, not ported yet (stubs in test/stubs.c) */
-void IntermissionStart(void);                           /* setup94: the intermission, then StartPer (frame driver) */
+void IntermissionStart(void);                           /* setup94: the intermission, then StartPer or GameOver */
 
 
 

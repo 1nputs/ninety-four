@@ -1,10 +1,12 @@
 /* setup94.asm: setting up the rink, the teams and the period. Only the parts the game play
  * calls are here so far; the screens come with the front end and the game loop. */
+#include <string.h>
 #include "game.h"
 #include "hal.h"
 #include "rom.h"
 #include "symbols_gen.h"
 #include "anim_gen.h"
+#include "setup_tables_gen.h"
 
 #define RAM_W(off) ram_ptr(RAM_BASE + (off))
 
@@ -79,11 +81,11 @@ void SprSort(void)
     } while (moved);
 }
 
-/* setup94.asm:setupEASNmap. Load the EASN logo tiles at EASNcset, colours remapped. */
-void setupEASNmap(void)
+/* setup94.asm:setupEASNmap. Load the EASN logo tiles at EASNcset, colours remapped -> d4. */
+uint16_t setupEASNmap(void)
 {
     static const uint8_t table[8] = { 0x71, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
-    DecompressGraphicsWithCallback(SYM_EASNmap + 8, g.EASNcset, inline_table(SYM_setupEASNmap, SYM_setupEASNmap + 0x20, table));
+    return DecompressGraphicsWithCallback(SYM_EASNmap + 8, g.EASNcset, inline_table(SYM_setupEASNmap, SYM_setupEASNmap + 0x20, table));
 }
 
 /* setup94.asm:setupIceRinkPal. The ice rink palettes 0 and 1 (Rinktilelist) to palfadenew. */
@@ -109,4 +111,183 @@ void setplayercolors(void)
         uint8_t *dst = RAM_W(RAM_OFF_palfadenew + 0x40 + 0x20 * away);
         for (int i = 0; i < 0x20; i++) dst[i] = src[i];
     }
+}
+
+/* setup94.asm:IntermissionStart. Between periods: reset the clock, two vblanks with the sound
+ * off between, the end of period song, the ticker scores (and the playoff team stats at the end
+ * of the game), the intermission, then the next period or the game over. Does not return. */
+void IntermissionStart(void)
+{
+    ResetClock();
+    uint16_t v = g.vcount;
+    while (g.vcount == v) hal_wait_vblank();
+    p_turnoff();
+    v = g.vcount;
+    while (g.vcount == v) hal_wait_vblank();
+    song(SYM_SngEOG);
+    UpdateScores();
+    if (g.gsp == 4) AddPlayoffTeamStats();
+    Intermission();
+    if (g.gsp == 4) GameOver();
+    else StartPer();
+}
+
+/* setup94.asm:ReloadRefHorTiles. The horizontal referee tiles at ExtraChars -> d4. */
+uint16_t ReloadRefHorTiles(void) { return DecompressGraphicsPlain(SYM_RefMap2 + 8, g.ExtraChars); }
+
+/* setup94.asm:defaultsprites. d4 = first char: the 4 screen objects (sso, 0x14 bytes) and the 7
+ * objects tied to the rink scrolling (pads, 0x1C bytes) from their tables, each given its
+ * chars, then defaultsprites2 -> d4. */
+uint16_t defaultsprites(uint16_t chars)
+{
+    uint8_t *a3 = RAM_W(RAM_OFF_sso);
+    const uint16_t *t = listsso;
+    for (int i = 0; i < 4; i++, a3 += 0x14) {
+        struct SortObj *o = (struct SortObj *)a3;
+        o->oldframe = 0xFFFF;                             /* not locked to the rink scroll */
+        o->Xpos = (int16_t)*t++;
+        o->Xfrac = *t++;
+        o->frame = *t++;
+        o->attribute = *t++;
+        o->VRchar = chars;
+        chars += *t++;
+    }
+    a3 = RAM_W(RAM_OFF_pads);
+    t = listffo;
+    for (int i = 0; i < 7; i++, a3 += 0x1C) {
+        struct SortObj *o = (struct SortObj *)a3;
+        ST_W(o->oldframe);                                /* tied to the rink scroll */
+        o->Xpos = (int16_t)*t++;
+        o->Ypos = (int16_t)*t++;
+        o->Zpos = (int16_t)*t++;
+        o->frame = *t++;
+        o->attribute = *t++;
+        o->VRchar = chars;
+        chars += *t++;
+    }
+    return defaultsprites2(chars);
+}
+
+/* setup94.asm:defaultsprites2. The 16 sort objects (players, nets, puck, shadow) cleared and set
+ * from the table (position, frame, attribute, chars, radius, first assignment, flags), with
+ * the sort order lists, then SprSort -> d4. */
+uint16_t defaultsprites2(uint16_t chars)
+{
+    uint8_t *oo = RAM_W(RAM_OFF_OOlist), *pos = RAM_W(RAM_OFF_OOlistpos);
+    const uint16_t *t = dslist;
+    for (uint16_t n = 0; n < 0x10; n++) {
+        struct SortObj *o = sortobj(n);
+        memset(o, 0, 0x80);
+        o->SCnum = (int16_t)n;
+        ST_W(o->oldframe);
+        o->pnum = 0xFF;
+        o->Xpos = (int16_t)*t++;
+        o->Ypos = (int16_t)*t++;
+        o->Zpos = (int16_t)*t++;
+        o->frame = *t++;
+        o->attribute = *t++;
+        o->VRchar = chars;
+        chars += *t++;
+        o->radiusx = (int16_t)*t++;
+        o->radiusy = (int16_t)*t++;
+        o->asslist[0] = (uint8_t)*t++;
+        o->pflags = (uint8_t)*t++;
+        *oo++ = (uint8_t)(n << 1);
+        wr16(pos, n); pos += 2;
+    }
+    SprSort();
+    return chars;
+}
+
+/* setup94.asm:CopyTeamBlockMapData. a0 = the TeamBlocks map, d0 = team, d1 = VRAM address,
+ * a1 = map word buffer: copy the team's 22 block chars from the loaded tiles to d1 on (VRAM to
+ * VRAM DMA) and store their map words (priority, palette of the map word, the char) -> a1. */
+uint8_t *CopyTeamBlockMapData(uint32_t map, uint16_t team, uint16_t vram, uint8_t *dst)
+{
+    const uint8_t *src = rom_ptr(map + 4 + (uint16_t)(team * 0x2C));
+    for (int i = 0; i < 0x16; i++, src += 2, dst += 2) {
+        dst[0] = src[0];
+        dst[1] = 0;
+        wr16(dst, (uint16_t)((rd16(dst) & 0xF800) | (vram >> 5) | 0x8000));
+        uint16_t from = (uint16_t)((((rd16(src) & 0x7FF) + g.basetileoffset + 0x2C)) << 5);
+        DoDMA_nd2(0x20, vram, from);
+        vram += 0x20;
+    }
+    return dst;
+}
+
+/* setup94.asm:setupTeamBlocksMap. d4 = first char: the TeamBlocks tiles at d4 + $2C, then the
+ * home and visitor blocks copied to basetileoffset and basetileoffset + $16 -> d4 =
+ * basetileoffset + $2C. */
+uint16_t setupTeamBlocksMap(uint16_t chars)
+{
+    g.basetileoffset = chars;
+    uint8_t *buf = RAM_W(RAM_OFF_TeamBlockMap);
+    DecompressGraphicsPlain(SYM_Teamblocksmap + 8, (uint16_t)(chars + 0x2C));
+    uint32_t map = SYM_Teamblocksmap + rd32(rom_ptr(SYM_Teamblocksmap + 4));
+    buf = CopyTeamBlockMapData(map, g.HomeTeam, (uint16_t)(g.basetileoffset << 5), buf);
+    CopyTeamBlockMapData(map, g.VisTeam, (uint16_t)((g.basetileoffset + 0x16) << 5), buf);
+    return (uint16_t)(g.basetileoffset + 0x2C);
+}
+
+/* setup94.asm:setupice. Set up the rink: the VDP layout (32 columns, maps at $C000 / $E000 /
+ * $F000, sprites at $DC00, scroll at $FC00), clear VRAM, then load the rink, team, EASN, energy
+ * bar, crowd, sprite, framer, font and team block tiles, the default objects and palettes, flip
+ * the goals for the second period's ends, the pad and logo sprites, and the game vblank. */
+void setupice(void)
+{
+    static const uint8_t small[8] = { 0x43, 0x43, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
+    static const uint8_t big[8] = { 0x71, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
+    g.disflags |= HI(df32c);
+    g.VmMap2 = 0xC000; g.Map2col1 = 6;
+    g.VSPRITES = 0xDC00;
+    g.VmMap1 = 0xE000; g.Map1col1 = 6;
+    g.VmMap3 = 0xF000; g.Map3col1 = 5;
+    g.VSCRLPM = 0xFC00;
+    setVram(0);
+    g.sflags &= (uint16_t)~HI(sfpz);
+    uint16_t saved = g.disflags;
+    g.disflags |= HI(dfng);
+    g.Hpos = 0;
+    g.Vpos = 0;
+    g.Oldrow = 0x7D0;
+    ST_W(g.zamx);
+    DoFill(0x800, g.VmMap1, 0x7FF);
+    g.rinkvrcset = 0;
+    uint16_t c = DecompressGraphicsPlain(g.sflags4 & HI(4) ? SYM_RevRinkTiles : SYM_Rinktiles, 0);
+    c = LoadHomeTeamGfx(c);
+    g.EASNcset = c;
+    c = setupEASNmap();
+    g.energybarchars = c;
+    c = DecompressGraphicsPlain(SYM_EnergyBarMap + 8, c);
+    g.animchars = c;
+    c = DecompressGraphicsPlain(SYM_CrowdFrameList + 8, c);
+    g.arenaanimchars = c;
+    c += 0x32;
+    g.spritechars = c;
+    c = defaultsprites(c);
+    setupIceRinkPal();
+    c = AddFramer(c);
+    g.smallfontchars = c;
+    c = DecompressGraphicsWithCallback(SYM_SmallFontMap + 8, c, inline_table(SYM_setupice, SYM_setupice + 0x200, small));
+    g.BigFontChars = c;
+    c = DecompressGraphicsWithCallback(SYM_BigFontMap + 8, c, inline_table(SYM_setupice + 1, SYM_setupice + 0x200, big));
+    c = setupTeamBlocksMap(c);
+    g.ExtraChars = c;
+    if (g.gmode & (1 << gmdir))
+        for (int i = 0; i < 12; i++) sortobj(i)->pflags ^= 1 << pfgoal;
+    setplayercolors();
+    g.PadControlBits = 0xFFFF;
+    g.PadControlBits34 = 0xFFFF;
+    memset(RAM_W(RAM_OFF_padcont), 0, 12);
+    ST_W(g.c1playernum);
+    ST_W(g.c2playernum);
+    struct Vid v = { RAM_W(RAM_OFF_DMAList), RAM_W(RAM_OFF_Satt), 1 };
+    uint8_t *a3 = RAM_W(RAM_OFF_pads);
+    for (int i = 0; i < 6; i++, a3 += 0x1C) addframe2(0, 0, (struct SortObj *)a3, &v);   /* pads, logo, gloves */
+    g.DMAlistend = ram_addr(v.dma);
+    DoDMAList();
+    g.disflags = saved;
+    g.vbint = SYM_VBlank;
+    g.disflags &= (uint16_t)~(HI(dfok) | HI(dfng));
 }

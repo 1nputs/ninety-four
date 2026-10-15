@@ -70,7 +70,8 @@ int main(int argc, char **argv)
         int tested = 0, passed = 0, skipped = 0;
         for (size_t i = 0; i < n; i++) {
             if (recs[i].pc != p->pc) continue;
-            if (recs[i].flags & 3) { skipped++; continue; }   /* interrupted or left by unwinding */
+            /* interrupted or left by unwinding; an interrupt logged in a vblank wait loop is replayed */
+            if ((recs[i].flags & 3) && !record_irqs_clean(&recs[i])) { skipped++; continue; }
             tested++;
             if (verbose) printf("  %s record %zu (frame %u, %u nested calls)\n", p->name, i, recs[i].frame, recs[i].n_calls);
             if (run_record(&recs[i], p)) passed++;

@@ -1267,7 +1267,7 @@ void puckpenshot(uint8_t *tm, struct SortObj *o)
     }
     o->pflags &= (uint8_t)~(1 << pfna);
     forceblack();
-    hal_wait_vblank();                                    /* dfok clear */
+    while (g.disflags & HI(dfok)) hal_wait_vblank();      /* wait for dfok clear */
     if (g.crowdlevel > 0x258) {
         g.crowdlevel = 0x258;
         g.CwdExciteLvl += 0x14;
@@ -1656,7 +1656,7 @@ void puckfaceoff2(uint8_t *tm, struct SortObj *o)
     g.sflags4 &= (uint16_t)~(HI(0) | HI(1));
     g.DelayedPen &= (uint8_t)~7;
     forceblack();
-    hal_wait_vblank();                                    /* dfok clear */
+    while (g.disflags & HI(dfok)) hal_wait_vblank();      /* wait for dfok clear */
     g.holdreset = 0x3C;
     if (g.fox == 0 && g.foy == 0) g.faceoffanim[0] = 0xFFFF;   /* center ice: no arena animation */
     /* (else interrupts are masked until the end of the setup) */

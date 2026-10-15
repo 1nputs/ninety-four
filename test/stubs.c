@@ -49,8 +49,6 @@ static uint32_t stk32(const Call *c, int off) { return (uint32_t)c->stack[off] <
     if (memcmp(rom_ptr(ret), s, n) != 0) replay_fail(#name ": inline string differs from the ROM at %06x", ret); } while (0)
 STUB(ExitToOpening) void ExitToOpening(void) { TAKE(ExitToOpening); replay_apply(c); }
 /* video94 / sound94 / title94 / setup94 / menu94 helpers of the display and replay modules */
-/* frame drivers of setup94 (ported with the game loop) */
-STUB(IntermissionStart) void IntermissionStart(void) { TAKE(IntermissionStart); replay_apply(c); }
 /* call68k to a routine that is not ported yet: its recorded call */
 void call68k_missing(uint32_t addr)
 {
@@ -58,3 +56,7 @@ void call68k_missing(uint32_t addr)
     if (!c) { replay_fail("no recorded call of %06x (call68k)", addr); return; }
     replay_apply(c);
 }
+/* the intermission and the game over: frame drivers / front end, not ported yet */
+STUB(Intermission) void Intermission(void) { TAKE(Intermission); replay_apply(c); }
+STUB(AddPlayoffTeamStats) void AddPlayoffTeamStats(void) { TAKE(AddPlayoffTeamStats); replay_apply(c); }
+STUB(GameOver) void GameOver(void) { TAKE(GameOver); replay_apply(c); }

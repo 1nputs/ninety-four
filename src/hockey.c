@@ -271,3 +271,127 @@ uint8_t *seta2(void)
     uint16_t t = (g.sflags & HI(sfpj)) ? g.cont2team : g.cont1team;
     return team_struct(t != 1);
 }
+
+/* hockey94.asm:VBjsr. The vblank interrupt: jump to the handler in vbint. */
+void VBjsr(void) { call68k(g.vbint); }
+
+/* hockey94.asm:DoGameFrame. Wait for a vblank, then one frame of game logic: d7 (elapsed) =
+ * the frames since the last pass. The clock and periodic events, the players, a delayed song,
+ * the slot bit, the view, the replay recording, and the lists for the next vblank. */
+void DoGameFrame(void)
+{
+    int16_t d7;
+    while ((d7 = (int16_t)(g.vcount - g.oldvcount)) == 0) hal_wait_vblank();
+    g.oldvcount = g.vcount;
+    elapsed = d7;
+    periodicevents();
+    updateplayers();
+    if ((int16_t)g.songdelay > 0 && --g.songdelay == 0) {
+        stop_current_song(0);                             /* updateplayers' d0 is not followed (HANDOFF: register leaks) */
+        song((int16_t)g.delayedsong);
+    }
+    setSlotBit();
+    checkwindow();
+    updatereplay();
+    setvideo();
+}
+
+/* hockey94.asm:Gameloop. The game: a frame, the demo check, the pause when it is asked for. */
+void Gameloop(void)
+{
+    for (;;) {
+        DoGameFrame();
+        demoread();
+        if (g.sflags & HI(sfpz)) Pausemode();
+    }
+}
+
+/* StartPer after the stack reset */
+static void start_period(void)
+{
+    p_turnoff();
+    setupice();
+    ResetClock();
+    g.PadControlBits |= 0xF000;
+    ST_W(g.c1playernum);                                  /* no controlled player yet */
+    ST_W(g.c2playernum);
+    struct SortObj *puck = sortobj(puckscnum);
+    g.fox = 0;                                            /* face off at center ice */
+    g.foy = 0;
+    uint16_t ass = 0x1B;                                  /* pfaceoff */
+    if (g.gmode2 & HI(0)) {                               /* shootout */
+        ass = 0x1E;
+        g.BA_Skater_Offset = 8;
+        g.BA_Goalie_SCnum = 0xB;
+    }
+    assreplace(ass, puck);
+    g.sflags2 |= HI(sf2drec);                             /* don't record */
+    g.sflags &= (uint16_t)~HI(sfwrap);                    /* reset the replay */
+    g.lastsfx = 0xFFFF;
+    g.recbpr = RAM_BASE;                                  /* the replay starts at M68K_RAM */
+    g.oldvcount = g.vcount;
+    DoGameFrame();                                        /* two frames before the loop */
+    g.palcount = 0xFFFF;
+    DoGameFrame();
+    g.CwdExciteLvl = (uint16_t)(g.gamelevel << 4);
+    g.CurCrowdMeter = 0;
+    g.HmTeam = g.HomeTeam;
+    g.SongIndex = 0;
+    ChooseSong();
+    song((int16_t)g.SongNum);                             /* the period start tune */
+    if ((int16_t)g.gsp < 2) g.sflags3 |= 0x80;            /* periods 1 and 2 */
+    Gameloop();
+}
+
+/* hockey94.asm:StartPer. Start a period: overtime flag, the faceoff animation, then with a fresh
+ * stack: sound off, the rink, the clock, the opening faceoff, two frames, the crowd and the
+ * period tune, and the game loop. */
+void StartPer(void)
+{
+    if (g.gsp == 3) g.sflags7 |= 2;                       /* overtime */
+    ST_W(g.faceoffanim[0]);
+    restart_at(start_period);                             /* movea.w #Stack,sp */
+}
+
+/* hockey94.asm:Pausemode. The pause menu: fade out, silence, the menu for the pausing pad's team
+ * (shootout or alternate item lists), run it until it is left, then put the rink back (vertical
+ * or horizontal as it was), redraw the scores and fade in. */
+void Pausemode(void)
+{
+    forceblack();
+    uint16_t v = g.vcount;
+    while (g.vcount == v) hal_wait_vblank();
+    p_turnoff();
+    uint16_t saved = g.sflags;
+    uint8_t *tm = seta2();
+    uint32_t items = SYM_PauseText;
+    if (g.gmode2 & HI(0)) items = SYM_PauseMenuItems;
+    else if (tm[tmflags] & 4) items = SYM_PauseText2;
+    InitMenuState(items, SYM_SetupPauseScreen);
+    for (;;) {
+        vcountwait();
+        uint16_t d0, d1, d2, d3;
+        getpzjoy(&d0, &d1, &d2, &d3);
+        struct Vid vid = { ram_ptr(g.DMAlistend), ram_ptr(RAM_BASE + RAM_OFF_Satt), 1 };   /* a5 as setvideo left it */
+        showclock(&vid);
+        ProcessInputWithRepeat(&d1, d2, d3);
+        if (HandleMenuInput(&d1)) break;
+    }
+    forceblack();
+    g.sflags = saved;
+    if (g.sflags & HI(sfhor)) {
+        ReloadRefHorTiles();
+        SetHor();
+    } else {
+        ClrHor();
+    }
+    vdp_ctrl16(SYM_VDPR_WINX);
+    vdp_ctrl16(SYM_VDPR_WINY);
+    g.disflags |= HI(dfclock);
+    g.sflags &= (uint16_t)~HI(sfpz);
+    printscores1();
+    setvideo();
+    g.palcount = 0x18;
+    while ((int16_t)g.palcount >= 0) hal_wait_vblank();
+    g.oldvcount = g.vcount;
+}

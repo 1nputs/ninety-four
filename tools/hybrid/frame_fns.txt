@@ -1,0 +1,3 @@
+DoGameFrame Pausemode setupice setSlotBit InitMenuState defaultsprites defaultsprites2 setupTeamBlocksMap CopyTeamBlockMapData ReloadRefHorTiles
+setvideo ShowGoalBox DrawMenuScreen HandleMenuInput forceblack forcefade setVram setVram_0 waitxsr ShowThreeStars ShowInjuryBox PenaltyShotBox
+AddSmallFont DoFill vb2 SetupPauseScreen vcountwait checkgoal SetHor ClrHor puckpenshot puckfaceoff2 periodicevents updateplayers clockcont

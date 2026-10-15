@@ -9,10 +9,15 @@ uint8_t z80_ram_read8(uint16_t off) { return (uint8_t)replay_io_read(Z80_RAM_BAS
 uint8_t pad_read(uint32_t port) { return (uint8_t)replay_io_read(port, 1); }
 uint8_t sram_read8(uint32_t off) { return (uint8_t)replay_io_read(SRAM_BASE + off, 1); }
 #include "game.h"
-/* A routine that waits for the vblank (setvideo spinning on dfok, forcefade on palcount, waitx
- * on vcount) was interrupted in the capture and its record is skipped, so this only runs for a
- * record that would otherwise hang: do what every wait is waiting for. */
-void hal_wait_vblank(void) { g.disflags &= (uint16_t)~HI(dfok); g.vcount++; g.palcount = 0xFFFF; }
+/* A vblank wait: the interrupt the 68k took in its wait loop, replayed (its RAM changes; its
+ * own calls and port accesses go with it). Without one recorded (an old capture, or the C waits
+ * where the 68k did not), fail and do what every wait waits for, so nothing hangs. */
+void hal_wait_vblank(void)
+{
+    if (replay_irq()) return;
+    replay_fail("vblank wait with no recorded interrupt");
+    g.disflags &= (uint16_t)~HI(dfok); g.vcount++; g.palcount = 0xFFFF;
+}
 /* Writes are checked against the capture's write log, in order (captures made before the shim
  * logged writes have none, and then nothing is checked). */
 void vdp_ctrl(uint32_t v) { replay_io_write(VDP_CTRL_PORT, 4, v); }

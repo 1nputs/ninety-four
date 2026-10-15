@@ -723,7 +723,7 @@ void ClrHor(void)
 void SetHor(void)
 {
     g.sflags |= HI(sfhor);
-    hal_wait_vblank();                                    /* dfok clear */
+    while (g.disflags & HI(dfok)) hal_wait_vblank();      /* wait for dfok clear */
     g.Hscroll = 0;
     g.Vscroll = 0;
     SprSort();

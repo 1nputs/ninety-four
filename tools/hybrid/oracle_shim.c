@@ -22,6 +22,11 @@
  *   pc = address | 0x40000000; regs_in[0] = value, regs_in[1] = width, no diff. Hardware is the
  *   VDP / PSG ($C00000-$C0001F), the I/O ports ($A10000-$A1001F), the Z80 bus and reset
  *   ($A11100, $A11200), Z80 RAM ($A00000-$A0FFFF) and save RAM ($200000-$20FFFF).
+ *   An interrupt taken inside a captured call (not the bare-rte handler) is a block too, with
+ *   pc = handler | 0x20000000, closed at its rte: its stack bytes hold the SR and the PC it
+ *   interrupted, its diff everything the handler changed; the handler's own calls and port
+ *   accesses nest under it. Frames with an interrupt get flags bit 0, and bit 2 when the
+ *   interrupts were logged this way (so a test can replay them at the C code's vblank waits).
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -40,6 +45,7 @@
 #define REC_HDR_WORDS 6
 #define IO_READ_FLAG 0x80000000u
 #define IO_WRITE_FLAG 0x40000000u
+#define IRQ_FLAG 0x20000000u
 #define ABNORMAL_EXIT 0x80000000u
 
 typedef struct {
@@ -164,6 +170,17 @@ static void open_call(uint32_t pc) {
   n_open++;
 }
 
+/* an interrupt: its frame on the stack is SR (2 bytes) + PC (4); it ends at the rte */
+static void open_irq(uint32_t pc) {
+  if (n_open >= MAXOPEN) return;
+  open_call(pc);
+  Open *o = &open_calls[n_open - 1];
+  uint32_t sp = o->regs[15];
+  o->pc = pc | IRQ_FLAG;
+  o->ret = ram_read32(sp + 2);
+  o->sp_after = sp + 6;
+}
+
 static void close_call(Open *o, int abnormal) {
   uint32_t regs_out[NREGS];
   regs_get(regs_out);
@@ -261,8 +278,15 @@ static void hook(hook_type_t type, int width, unsigned int address, unsigned int
     while (depth && pc == frames[depth - 1].ret && sp >= frames[depth - 1].sp_after) { finish_frame(); closed = 1; }
     while (depth && sp > frames[depth - 1].sp_after) { frames[depth - 1].flags |= 2; finish_frame(); closed = 1; }
     if (depth && !closed) {
-      for (int i = 0; i < n_irq_pcs; i++) if (pc == irq_pcs[i]) { for (int d = 0; d < depth; d++) frames[d].flags |= 1; break; }
-      if (map_test(fn_map, pc)) open_call(pc);
+      int irq = 0;
+      for (int i = 0; i < n_irq_pcs; i++)
+        if (pc == irq_pcs[i] && !(READ_BYTE(cart.rom, pc) == 0x4E && READ_BYTE(cart.rom, pc + 1) == 0x73)) {
+          for (int d = 0; d < depth; d++) frames[d].flags |= 5;
+          open_irq(pc);
+          irq = 1;
+          break;
+        }
+      if (!irq && map_test(fn_map, pc)) open_call(pc);
     }
   }
   if (map_test(bp_map, pc)) enter_frame(pc);

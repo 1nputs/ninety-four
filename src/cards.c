@@ -36,3 +36,16 @@ void ReadCrowdRecord(uint32_t team, uint32_t buf)
     g.sflags6 &= (uint16_t)~HI(6);
     CrowdRecordIO(team, buf);
 }
+
+/* cards94.asm:setSlotBit. sflags6 bit 5 (the slot) = the puck carrier is in the slot: in his
+ * attacking zone (y past $58 toward the net he shoots at) within $47 of the middle. */
+void setSlotBit(void)
+{
+    g.sflags6 &= (uint16_t)~HI(5);
+    if ((int16_t)g.puckc < 0) return;
+    const struct SortObj *o = sortobj((int16_t)g.puckc);
+    int16_t y = o->Ypos;
+    if (!(o->pflags & 0x80)) y = (int16_t)-y;
+    if (y < 0x58 || o->Xpos > 0x47 || o->Xpos < -0x47) return;
+    g.sflags6 |= HI(5);
+}

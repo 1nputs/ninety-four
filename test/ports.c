@@ -483,6 +483,20 @@ V(p_turnoff) V(rtsfx) V(rtscmd10) V(ReadJoyData)
 static void run_stop_current_song(const Record *r) { stop_current_song(R16(R_D0)); } V(ResetZ80Bus) V(p_music_vblank) V(z80_bus_release_delay)
 V(UploadCommandBufferToZ80) V(StopPCMChannel) V(p_initialZ80) V(ClearAllTrackAndSFXSlots)
 
+
+/* ---- the game loop: hockey94 drivers and the period start ---- */
+static void run_defaultsprites(const Record *r) { expect_reg16(r, R_D4, defaultsprites(R16(R_D4)), "d4"); }
+static void run_defaultsprites2(const Record *r) { expect_reg16(r, R_D4, defaultsprites2(R16(R_D4)), "d4"); }
+static void run_setupTeamBlocksMap(const Record *r) { expect_reg16(r, R_D4, setupTeamBlocksMap(R16(R_D4)), "d4"); }
+static void run_CopyTeamBlockMapData(const Record *r)
+{
+    expect_reg16(r, R_A1, (uint16_t)ram_addr(CopyTeamBlockMapData(r->regs_in[R_A0], R16(R_D0), R16(R_D1), TEAM(R_A1))), "a1");
+}
+static void run_ReloadRefHorTiles(const Record *r) { expect_reg16(r, R_D4, ReloadRefHorTiles(), "d4"); }
+static void run_InitMenuState(const Record *r) { expect_reg16(r, R_D1, InitMenuState(r->regs_in[R_A0], r->regs_in[R_A1]), "d1"); }
+static void run_never(const Record *r) { replay_fail("this routine does not return; its record cannot be run"); }
+V(DoGameFrame) V(Pausemode) V(setupice) V(setSlotBit)
+
 const Port ports[] = {
     { SYM_checkwallcoll, "checkwallcoll", run_checkwallcoll },
     { SYM_checkgoal, "checkgoal", run_checkgoal },
@@ -1002,5 +1016,18 @@ const Port ports[] = {
     { SYM_StopPCMChannel, "StopPCMChannel", run_StopPCMChannel },
     { SYM_p_initialZ80, "p_initialZ80", run_p_initialZ80 },
     { SYM_ClearAllTrackAndSFXSlots, "ClearAllTrackAndSFXSlots", run_ClearAllTrackAndSFXSlots },
+    { SYM_defaultsprites, "defaultsprites", run_defaultsprites },
+    { SYM_defaultsprites2, "defaultsprites2", run_defaultsprites2 },
+    { SYM_setupTeamBlocksMap, "setupTeamBlocksMap", run_setupTeamBlocksMap },
+    { SYM_CopyTeamBlockMapData, "CopyTeamBlockMapData", run_CopyTeamBlockMapData },
+    { SYM_ReloadRefHorTiles, "ReloadRefHorTiles", run_ReloadRefHorTiles },
+    { SYM_InitMenuState, "InitMenuState", run_InitMenuState },
+    { SYM_DoGameFrame, "DoGameFrame", run_DoGameFrame },
+    { SYM_Pausemode, "Pausemode", run_Pausemode },
+    { SYM_setupice, "setupice", run_setupice },
+    { SYM_setSlotBit, "setSlotBit", run_setSlotBit },
+    { SYM_Gameloop, "Gameloop", run_never },
+    { SYM_StartPer, "StartPer", run_never },
+    { SYM_IntermissionStart, "IntermissionStart", run_never },
     { 0, NULL, NULL }
 };

@@ -99,6 +99,17 @@ uint16_t DrawMenuScreen(void)
     return d1;
 }
 
+/* menu94.asm:InitMenuState. Start a menu: a0 = item list, a1 = screen draw routine, item 0
+ * selected and shown first; falls into DrawMenuScreen -> d1. */
+uint16_t InitMenuState(uint32_t items, uint32_t draw)
+{
+    g.menulist = items;
+    g.menudraw = draw;
+    set_menu_item(0);
+    set_menu_top(0);
+    return DrawMenuScreen();
+}
+
 /* menu94.asm:HandleMenuInput. Act on the pad bits d1: down / up move the selection, C runs the
  * selected item's handler (with a2 = the pause pad's team) and redraws the menu unless the
  * handler drew its own screen (sflags5 bit 1). -> Z (1): leave the menu (start, or C on item 0).

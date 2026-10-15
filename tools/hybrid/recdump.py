@@ -22,6 +22,10 @@ def main():
     print('in :', ' '.join(f'{n}={v:08x}' for n, v in r.regs_in.items()))
     print('out:', ' '.join(f'{n}={v:08x}' for n, v in r.regs_out.items()))
     for c in r.calls:
+        if c.pc & 0x20000000:
+            st = bytes(c.stack) if not isinstance(c.stack, bytes) else c.stack
+            print(f'  {"  " * (c.depth & 0xFF)}IRQ {c.pc & 0xFFFFFF:06x} at {int.from_bytes(st[2:6], "big"):06x} diff={len(c.diff) if hasattr(c.diff, "__len__") else c.diff}')
+            continue
         if c.pc & 0xC0000000:
             ci = c.regs_in if isinstance(c.regs_in, dict) else dict(zip(r.regs_in.keys(), c.regs_in))
             kind = 'read ' if c.pc & 0x80000000 else 'write'
