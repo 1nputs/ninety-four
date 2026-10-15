@@ -27,4 +27,6 @@ run penalty      --state $S2 --max 32 --fn "$(fns penalty94 | sed -E "s/(^|,)(In
 run ph           --state $S2 --max 24 --fn "$(fns period94 hockey94 | sed -E "s/(^|,)(Begin|DoGameFrame|GameStatisticsScreen|Gameloop|Pausemode|PeriodStatsScreen|StartGame|StartPer|VBjsr)(,|$)/\\1/g; s/,,+/,/g; s/^,|,$//g")" &
 # display94 + replay94 without ReplayMode (interactive; the replay navigation helpers get no calls in these sessions)
 run dr           --state $S1 --script "$SCRIPT" --max 24 --fn "$(fns display94 replay94 | sed -E "s/(^|,)ReplayMode(,|$)/\\1/g; s/,,+/,/g; s/^,|,$//g")" &
+# video94: the hardware boundary (VDP writes are checked in order against the logged writes)
+run video        --state $S1 --script "$SCRIPT" --max 32 --fn "$(fns video94)" &
 wait

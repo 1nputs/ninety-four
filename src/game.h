@@ -3,6 +3,7 @@
 #pragma once
 #include <stdint.h>
 #include "ram.h"
+#include "rom.h"
 
 /* A byte access to a word flag (btst #n,(x).w) tests bit n of the HIGH byte: bit n+8 of the word. */
 #define HI(n) (1u << ((n) + 8))
@@ -46,6 +47,13 @@ static inline uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[
 static inline void wr16(uint8_t *p, uint16_t v) { p[0] = (uint8_t)(v >> 8); p[1] = (uint8_t)v; }
 static inline uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]; }
 static inline void wr32(uint8_t *p, uint32_t v) { p[0] = (uint8_t)(v >> 24); p[1] = (uint8_t)(v >> 16); p[2] = (uint8_t)(v >> 8); p[3] = (uint8_t)v; }
+/* a 68k address in ROM or work RAM as a host pointer, and back */
+static inline uint8_t *mem_ptr(uint32_t a) { a &= 0xFFFFFF; return a >= 0xE00000 ? ram_ptr(a) : (uint8_t *)rom_ptr(a); }
+static inline uint32_t mem_addr(const uint8_t *p)
+{
+    if (p >= (const uint8_t *)&g && p < (const uint8_t *)&g + RAM_SIZE) return RAM_BASE + (uint32_t)(p - (const uint8_t *)&g);
+    return (uint32_t)(p - rom_image);
+}
 /* the 68k address of something in work RAM, for pointers the game stores (move.l a2,(x)) */
 #define ram_addr(p) (RAM_BASE + (uint32_t)((const uint8_t *)(p) - (const uint8_t *)&g))
 
@@ -87,12 +95,69 @@ void sfx(int16_t n);                       /* word on stack: sound effect, -1 = 
 void song(int16_t n);                      /* word on stack: song number */
 uint16_t sroot(uint32_t v);                /* d0.l -> d0 */
 void forceblack(void);
+void forcefade(void);
+void CopyPaletteToCRAM(void);
+void UnpackNibbles(uint32_t src, uint16_t count);                 /* a0, d0 */
+void remap(uint32_t src, uint32_t table, uint16_t words, uint16_t vram);   /* a0, a1, d0, d1 */
+void waitx(uint16_t frames, uint16_t *d0, uint16_t *d1, uint16_t *d2, uint16_t *d3);   /* d0 -> d0-d3 */
+uint16_t waitxsr(uint16_t frames);         /* d0 -> d1 */
+uint16_t waitjoy(void);                    /* -> d1 */
+uint16_t orjoy(void);                      /* -> d1 */
+void nodiag(uint16_t *d1, uint16_t d3);
+void ProcessInputWithRepeat(uint16_t *d1, uint16_t d2, uint16_t d3);
+void ReadJoy(uint8_t pad, uint16_t *d0, uint16_t *d1);           /* d0.b -> d0, d1 */
+void DoDMApro(uint32_t src, uint16_t words, uint16_t vram);      /* a0, d0, d1 */
+void DoDMA_nd2(uint16_t words, uint16_t dst, uint16_t src);      /* d0, d1, d2 (VRAM to VRAM) */
+void WaitDMA(void);
+void setVram(uint16_t colour);             /* d0 */
+void setVram_0(void);
+uint16_t DecompressGraphicsWithCallback(uint32_t tiles, uint16_t start, uint32_t cb);  /* a2, d4, table after the call -> d4 */
+uint16_t DecompressGraphics(uint32_t tiles, uint16_t start);     /* a2, d4 -> d4 */
+/* DecompressBytecode's registers: a0 = data, d1 = ring buffer index, d3 = VRAM address */
+struct Unpack { uint32_t src; uint8_t idx; uint16_t vram; };
+void DecompressBytecode(uint32_t src, uint16_t vram);            /* a0, d1 */
+int Opcode_CopyLiteral(struct Unpack *u);                        /* the handlers return 1 at the end code */
+int Opcode_ClearBytes(struct Unpack *u);
+int Opcode_Fillbytes(struct Unpack *u);
+int Opcode_CopyBackwardShort(struct Unpack *u);
+int Opcode_CopyBackwardMedium(struct Unpack *u);
+int Opcode_CopyBackwardLong(struct Unpack *u);
+int Opcode_CopyBackwardExtended1(struct Unpack *u);
+int Opcode_CopyBackwardExtended2(struct Unpack *u);
+int Opcode_CopyBackwardReverseShort(struct Unpack *u);
+int Opcode_CopyBackwardReverseMedium(struct Unpack *u);
+int Opcode_CopyBackwardReverseLong(struct Unpack *u);
+int CopyBackwardRun(struct Unpack *u, uint16_t count, uint8_t dist);        /* d0 = count-1, d2 = distance */
+int CopyBackwardReverseRun(struct Unpack *u, uint16_t count, uint8_t dist);
+void FlushOutputBuffer(struct Unpack *u);
+void xyVmMap(void);
+/* printsmall's registers: a1 = string, d2 = attribute, d3 = bytes left */
+struct PrintState { const uint8_t *p; uint16_t attr; uint16_t count; };
+void ControlCode_SetMapAndPosition(struct PrintState *st);
+void ControlCode_SetMap(struct PrintState *st);
+void ControlCode_SetAttribute(struct PrintState *st);
+void ControlCode_SetX(struct PrintState *st);
+void ControlCode_SetY(struct PrintState *st);
+void ControlCode_AddX(struct PrintState *st);
+void ControlCode_AddY(struct PrintState *st);
+void ControlCode_SetFont(struct PrintState *st);
+void FormatAndPrintTime(uint16_t v);       /* d0 */
+void printbigz(const uint8_t *s, unsigned n);
+/* printbig's pen: d4 = x, d5 = y, d6 = attribute + BigFontChars */
+struct BigPen { uint16_t x, y, attr; };
+void PrintBigChar(uint8_t c, struct BigPen *pen);                /* d0 */
+void PutBigTile(uint16_t tile, const struct BigPen *pen);        /* d3 */
+uint16_t AddSmallFont(uint16_t start);     /* d4 -> d4 */
+uint16_t AddFramer(uint16_t start);        /* d4 -> d4 */
+uint16_t AddTeamBlock(void);               /* -> d4 */
 void printz(const uint8_t *s, unsigned n);       /* inline String after the call: n bytes */
 void printsmallz(const uint8_t *s, unsigned n);
 void eraser(uint16_t w, uint16_t h, uint16_t attr);             /* d0, d1, d2 at printx/printy */
 void Framer(uint16_t w, uint16_t h);                            /* d0, d1 */
 uint16_t DecompressGraphicsPlain(uint32_t tiles, uint16_t start); /* a2, d4 -> d4 = end char */
 uint16_t dobitmap(uint32_t pal, uint32_t map, uint32_t tiles, uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t start, uint16_t palbits); /* a0 a1 a2 d0-d5 -> d4 */
+void play_sfx_or_music_track(uint16_t n);  /* sound94: d0 */
+int HandleMenuInput(uint16_t *d1);         /* menu94: d1 = pad -> Z (1 = leave the menu), d1 */
 void stop_current_song(void);              /* sound94 */
 /* checks94 */
 typedef uint16_t (*skate_aux)(uint16_t dir, struct SortObj *o);   /* a0 callback of skateto: d0 -> d0 */
@@ -476,7 +541,7 @@ uint32_t PushNumberWidth(uint16_t n, uint16_t width);   /* video94: d0, d1 -> a1
 void appendz(const uint8_t *s, unsigned n, uint32_t buf);   /* video94: inline String appended to a3 */
 void appstring(uint32_t src, uint32_t buf);             /* video94: a1, a3 */
 void printbig(uint32_t str);                            /* video94: a1 */
-void printsmall(uint32_t str);                          /* video94: a1 */
+uint32_t printsmall(uint32_t str);                      /* video94: a1 -> a1 after it */
 void PutTeamBlock(uint16_t off);                        /* menu94: d0 */
 void ConvertByteToDigits(uint16_t bcd, uint32_t dst);   /* data94: d0, a1 */
 void DoFill(uint16_t words, uint16_t vram, uint16_t tile);   /* video94: d0, d1, d2 */

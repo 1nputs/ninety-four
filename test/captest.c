@@ -49,7 +49,7 @@ static int run_record(Record *r, const Port *p)
         printf("    %d recorded callee calls never made by the C code:", left);
         int shown = 0;
         for (uint32_t i = 0; i < r->n_calls && shown < 8; i++)
-            if (!r->calls[i].consumed && !is_ported(r->calls[i].pc) && !(r->calls[i].pc & IO_READ_FLAG) && !sym_trivial(r->calls[i].pc)) { const char *n = sym_name(r->calls[i].pc); printf(" %s", n ? n : "?"); shown++; }
+            if (!r->calls[i].consumed && !is_ported(r->calls[i].pc) && !(r->calls[i].pc & IO_READ_FLAG) && !sym_trivial(r->calls[i].pc)) { const char *n = sym_name(r->calls[i].pc); if (r->calls[i].pc & IO_WRITE_FLAG) printf(" write:%06x", r->calls[i].pc & 0xFFFFFF); else printf(" %s", n ? n : "?"); shown++; }
         printf("\n");
     }
     return bad == 0 && replay_failures == 0 && reg_fail == 0 && left == 0;

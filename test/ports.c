@@ -300,6 +300,86 @@ static void run_updateanim(const Record *r) { updateanim(OBJ(R_A3)); }
 static void run_freezewindow(const Record *r) { freezewindow(); }
 static void run_checkwindow(const Record *r) { checkwindow(); }
 
+
+/* ---- video94 ---- */
+#define R16(reg) ((uint16_t)r->regs_in[reg])
+static uint16_t stack_word(const Record *r, int off) { const uint8_t *sp = r->ram_in + ((r->regs_in[R_A7] + off) & 0xFFFF); return (uint16_t)(sp[0] << 8 | sp[1]); }
+static uint32_t ret_addr(const Record *r) { const uint8_t *sp = r->ram_in + (r->regs_in[R_A7] & 0xFFFF); return be32(sp); }
+static const uint8_t *inline_string(const Record *r) { return mem_ptr(ret_addr(r)); }
+static void run_randomd0s(const Record *r) { expect_reg16(r, R_D0, randomd0s(R16(R_D0)), "d0"); }
+static void run_sroot(const Record *r) { expect_reg16(r, R_D0, sroot(r->regs_in[R_D0]), "d0"); }
+static void run_sfx(const Record *r) { sfx((int16_t)stack_word(r, 4)); }
+static void run_song(const Record *r) { song((int16_t)stack_word(r, 4)); }
+static void run_UnpackNibbles(const Record *r) { UnpackNibbles(r->regs_in[R_A0], R16(R_D0)); }
+static void run_WeightedRandomSelect(const Record *r) { expect_reg16(r, R_D0, WeightedRandomSelect(R16(R_D0)), "d0"); }
+static void run_remap(const Record *r) { remap(r->regs_in[R_A0], r->regs_in[R_A1], R16(R_D0), R16(R_D1)); }
+static void run_waitx(const Record *r) { uint16_t d0, d1, d2, d3; waitx(R16(R_D0), &d0, &d1, &d2, &d3); expect_reg16(r, R_D1, d1, "d1"); }
+static void run_waitxsr(const Record *r) { expect_reg16(r, R_D1, waitxsr(R16(R_D0)), "d1"); }
+static void run_waitjoy(const Record *r) { expect_reg16(r, R_D1, waitjoy(), "d1"); }
+static void run_orjoy(const Record *r) { expect_reg16(r, R_D1, orjoy(), "d1"); }
+static void run_nodiag(const Record *r) { uint16_t d1 = R16(R_D1); nodiag(&d1, R16(R_D3)); expect_reg16(r, R_D1, d1, "d1"); }
+static void run_ProcessInputWithRepeat(const Record *r) { uint16_t d1 = R16(R_D1); ProcessInputWithRepeat(&d1, R16(R_D2), R16(R_D3)); expect_reg16(r, R_D1, d1, "d1"); }
+static void run_ReadJoy(const Record *r) { uint16_t d0, d1; ReadJoy((uint8_t)r->regs_in[R_D0], &d0, &d1); expect_reg16(r, R_D0, d0, "d0"); expect_reg16(r, R_D1, d1, "d1"); }
+#define JOY(name) static void run_##name(const Record *r) { uint16_t d0, d1, d2, d3; name(&d0, &d1, &d2, &d3); \
+    expect_reg16(r, R_D0, d0, "d0"); expect_reg16(r, R_D1, d1, "d1"); expect_reg16(r, R_D2, d2, "d2"); expect_reg16(r, R_D3, d3, "d3"); }
+JOY(ReadJoy1) JOY(ReadJoy2) JOY(ReadJoy3) JOY(ReadJoy4)
+static void run_DoDMApro(const Record *r) { DoDMApro(r->regs_in[R_A0], R16(R_D0), R16(R_D1)); }
+static void run_DoDMA(const Record *r) { DoDMA(r->regs_in[R_A0], R16(R_D0), R16(R_D1)); }
+static void run_DoDMA_nd2(const Record *r) { DoDMA_nd2(R16(R_D0), R16(R_D1), R16(R_D2)); }
+static void run_DoFill(const Record *r) { DoFill(R16(R_D0), R16(R_D1), R16(R_D2)); }
+static void run_setVram(const Record *r) { setVram(R16(R_D0)); }
+static void run_Vmaddr(const Record *r) { Vmaddr(R16(R_D0)); }
+static void run_dobitmap(const Record *r)
+{
+    expect_reg16(r, R_D4, dobitmap(r->regs_in[R_A0], r->regs_in[R_A1], r->regs_in[R_A2], R16(R_D0), R16(R_D1), R16(R_D2), R16(R_D3), R16(R_D4), R16(R_D5)), "d4");
+}
+static void run_DecompressGraphicsWithCallback(const Record *r) { expect_reg16(r, R_D4, DecompressGraphicsWithCallback(r->regs_in[R_A2], R16(R_D4), ret_addr(r)), "d4"); }
+static void run_DecompressGraphicsPlain(const Record *r) { expect_reg16(r, R_D4, DecompressGraphicsPlain(r->regs_in[R_A2], R16(R_D4)), "d4"); }
+static void run_DecompressGraphics(const Record *r) { expect_reg16(r, R_D4, DecompressGraphics(r->regs_in[R_A2], R16(R_D4)), "d4"); }
+static void run_DecompressBytecode(const Record *r) { DecompressBytecode(r->regs_in[R_A0], R16(R_D1)); }
+static struct Unpack unpack_in(const Record *r) { struct Unpack u = { r->regs_in[R_A0], (uint8_t)r->regs_in[R_D1], R16(R_D3) }; return u; }
+static void unpack_out(const Record *r, const struct Unpack *u, int done)
+{
+    if (done) return;                              /* the end code returns from DecompressBytecode */
+    expect_reg16(r, R_A0, (uint16_t)u->src, "a0"); expect_reg16(r, R_D1, u->idx, "d1"); expect_reg16(r, R_D3, u->vram, "d3");
+}
+#define OP(name) static void run_##name(const Record *r) { struct Unpack u = unpack_in(r); int done = name(&u); unpack_out(r, &u, done); }
+OP(Opcode_CopyLiteral) OP(Opcode_ClearBytes) OP(Opcode_Fillbytes) OP(Opcode_CopyBackwardShort) OP(Opcode_CopyBackwardMedium)
+OP(Opcode_CopyBackwardLong) OP(Opcode_CopyBackwardExtended1) OP(Opcode_CopyBackwardExtended2) OP(Opcode_CopyBackwardReverseShort)
+OP(Opcode_CopyBackwardReverseMedium) OP(Opcode_CopyBackwardReverseLong)
+static void run_CopyBackwardRun(const Record *r) { struct Unpack u = unpack_in(r); CopyBackwardRun(&u, R16(R_D0), (uint8_t)r->regs_in[R_D2]); unpack_out(r, &u, 0); }
+static void run_CopyBackwardReverseRun(const Record *r) { struct Unpack u = unpack_in(r); CopyBackwardReverseRun(&u, R16(R_D0), (uint8_t)r->regs_in[R_D2]); unpack_out(r, &u, 0); }
+static void run_FlushOutputBuffer(const Record *r) { struct Unpack u = unpack_in(r); FlushOutputBuffer(&u); expect_reg16(r, R_D3, u.vram, "d3"); }
+static void run_eraser(const Record *r) { eraser(R16(R_D0), R16(R_D1), R16(R_D2)); }
+static void run_Framer(const Record *r) { Framer(R16(R_D0), R16(R_D1)); }
+static void run_printsmallz(const Record *r) { const uint8_t *s = inline_string(r); printsmallz(s, rd16(s)); }
+static void run_printz(const Record *r) { const uint8_t *s = inline_string(r); printz(s, rd16(s)); }
+static void run_printbigz(const Record *r) { const uint8_t *s = inline_string(r); printbigz(s, rd16(s)); }
+static void run_appendz(const Record *r) { const uint8_t *s = inline_string(r); appendz(s, rd16(s), r->regs_in[R_A3]); }
+static void run_printsmall(const Record *r) { expect_reg16(r, R_A1, printsmall(r->regs_in[R_A1]), "a1"); }
+static void run_print(const Record *r) { expect_reg16(r, R_A1, print(r->regs_in[R_A1]), "a1"); }
+static void run_printbig(const Record *r) { printbig(r->regs_in[R_A1]); }
+static void run_appstring(const Record *r) { appstring(r->regs_in[R_A1], r->regs_in[R_A3]); }
+#define CC(name) static void run_##name(const Record *r) { struct PrintState st = { mem_ptr(r->regs_in[R_A1]), R16(R_D2), R16(R_D3) }; name(&st); \
+    expect_reg16(r, R_A1, (uint16_t)mem_addr(st.p), "a1"); expect_reg16(r, R_D2, st.attr, "d2"); expect_reg16(r, R_D3, st.count, "d3"); }
+CC(ControlCode_SetMapAndPosition) CC(ControlCode_SetMap) CC(ControlCode_SetAttribute) CC(ControlCode_SetX) CC(ControlCode_SetY)
+CC(ControlCode_AddX) CC(ControlCode_AddY) CC(ControlCode_SetFont)
+static void run_FormatAndPrintTime(const Record *r) { FormatAndPrintTime(R16(R_D0)); }
+static void run_PushTime(const Record *r) { expect_reg16(r, R_A1, PushTime(R16(R_D0)), "a1"); }
+static void run_PushNumber(const Record *r) { expect_reg16(r, R_A1, PushNumber(R16(R_D0)), "a1"); }
+static void run_PushNumberWidth(const Record *r) { expect_reg16(r, R_A1, PushNumberWidth(R16(R_D0), R16(R_D1)), "a1"); }
+static void run_PrintBigChar(const Record *r)
+{
+    struct BigPen pen = { R16(R_D4), R16(R_D5), R16(R_D6) };
+    PrintBigChar((uint8_t)r->regs_in[R_D0], &pen);
+    expect_reg16(r, R_D4, pen.x, "d4"); expect_reg16(r, R_D5, pen.y, "d5");
+}
+static void run_PutBigTile(const Record *r) { struct BigPen pen = { R16(R_D4), R16(R_D5), R16(R_D6) }; PutBigTile(R16(R_D3), &pen); }
+static void run_AddSmallFont(const Record *r) { expect_reg16(r, R_D4, AddSmallFont(R16(R_D4)), "d4"); }
+static void run_AddFramer(const Record *r) { expect_reg16(r, R_D4, AddFramer(R16(R_D4)), "d4"); }
+static void run_AddTeamBlock(const Record *r) { expect_reg16(r, R_D4, AddTeamBlock(), "d4"); }
+V(forceblack) V(forceblack2) V(forcefade) V(cramfade) V(CopyPaletteToCRAM) V(WaitDMA) V(setVram_0) V(xyVmMap)
+
 const Port ports[] = {
     { SYM_checkwallcoll, "checkwallcoll", run_checkwallcoll },
     { SYM_checkgoal, "checkgoal", run_checkgoal },
@@ -633,5 +713,83 @@ const Port ports[] = {
     { SYM_updateanim, "updateanim", run_updateanim },
     { SYM_freezewindow, "freezewindow", run_freezewindow },
     { SYM_checkwindow, "checkwindow", run_checkwindow },
+    { SYM_randomd0s, "randomd0s", run_randomd0s },
+    { SYM_sroot, "sroot", run_sroot },
+    { SYM_sfx, "sfx", run_sfx },
+    { SYM_song, "song", run_song },
+    { SYM_UnpackNibbles, "UnpackNibbles", run_UnpackNibbles },
+    { SYM_WeightedRandomSelect, "WeightedRandomSelect", run_WeightedRandomSelect },
+    { SYM_remap, "remap", run_remap },
+    { SYM_waitx, "waitx", run_waitx },
+    { SYM_waitxsr, "waitxsr", run_waitxsr },
+    { SYM_waitjoy, "waitjoy", run_waitjoy },
+    { SYM_orjoy, "orjoy", run_orjoy },
+    { SYM_nodiag, "nodiag", run_nodiag },
+    { SYM_ProcessInputWithRepeat, "ProcessInputWithRepeat", run_ProcessInputWithRepeat },
+    { SYM_ReadJoy, "ReadJoy", run_ReadJoy },
+    { SYM_ReadJoy1, "ReadJoy1", run_ReadJoy1 },
+    { SYM_ReadJoy2, "ReadJoy2", run_ReadJoy2 },
+    { SYM_ReadJoy3, "ReadJoy3", run_ReadJoy3 },
+    { SYM_ReadJoy4, "ReadJoy4", run_ReadJoy4 },
+    { SYM_DoDMApro, "DoDMApro", run_DoDMApro },
+    { SYM_DoDMA, "DoDMA", run_DoDMA },
+    { SYM_DoDMA_nd2, "DoDMA_nd2", run_DoDMA_nd2 },
+    { SYM_DoFill, "DoFill", run_DoFill },
+    { SYM_setVram, "setVram", run_setVram },
+    { SYM_Vmaddr, "Vmaddr", run_Vmaddr },
+    { SYM_dobitmap, "dobitmap", run_dobitmap },
+    { SYM_DecompressGraphicsWithCallback, "DecompressGraphicsWithCallback", run_DecompressGraphicsWithCallback },
+    { SYM_DecompressGraphicsPlain, "DecompressGraphicsPlain", run_DecompressGraphicsPlain },
+    { SYM_DecompressGraphics, "DecompressGraphics", run_DecompressGraphics },
+    { SYM_DecompressBytecode, "DecompressBytecode", run_DecompressBytecode },
+    { SYM_Opcode_CopyLiteral, "Opcode_CopyLiteral", run_Opcode_CopyLiteral },
+    { SYM_Opcode_ClearBytes, "Opcode_ClearBytes", run_Opcode_ClearBytes },
+    { SYM_Opcode_Fillbytes, "Opcode_Fillbytes", run_Opcode_Fillbytes },
+    { SYM_Opcode_CopyBackwardShort, "Opcode_CopyBackwardShort", run_Opcode_CopyBackwardShort },
+    { SYM_Opcode_CopyBackwardMedium, "Opcode_CopyBackwardMedium", run_Opcode_CopyBackwardMedium },
+    { SYM_Opcode_CopyBackwardLong, "Opcode_CopyBackwardLong", run_Opcode_CopyBackwardLong },
+    { SYM_Opcode_CopyBackwardExtended1, "Opcode_CopyBackwardExtended1", run_Opcode_CopyBackwardExtended1 },
+    { SYM_Opcode_CopyBackwardExtended2, "Opcode_CopyBackwardExtended2", run_Opcode_CopyBackwardExtended2 },
+    { SYM_Opcode_CopyBackwardReverseShort, "Opcode_CopyBackwardReverseShort", run_Opcode_CopyBackwardReverseShort },
+    { SYM_Opcode_CopyBackwardReverseMedium, "Opcode_CopyBackwardReverseMedium", run_Opcode_CopyBackwardReverseMedium },
+    { SYM_Opcode_CopyBackwardReverseLong, "Opcode_CopyBackwardReverseLong", run_Opcode_CopyBackwardReverseLong },
+    { SYM_CopyBackwardRun, "CopyBackwardRun", run_CopyBackwardRun },
+    { SYM_CopyBackwardReverseRun, "CopyBackwardReverseRun", run_CopyBackwardReverseRun },
+    { SYM_FlushOutputBuffer, "FlushOutputBuffer", run_FlushOutputBuffer },
+    { SYM_eraser, "eraser", run_eraser },
+    { SYM_Framer, "Framer", run_Framer },
+    { SYM_printsmallz, "printsmallz", run_printsmallz },
+    { SYM_printz, "printz", run_printz },
+    { SYM_printbigz, "printbigz", run_printbigz },
+    { SYM_appendz, "appendz", run_appendz },
+    { SYM_printsmall, "printsmall", run_printsmall },
+    { SYM_print, "print", run_print },
+    { SYM_printbig, "printbig", run_printbig },
+    { SYM_appstring, "appstring", run_appstring },
+    { SYM_ControlCode_SetMapAndPosition, "ControlCode_SetMapAndPosition", run_ControlCode_SetMapAndPosition },
+    { SYM_ControlCode_SetMap, "ControlCode_SetMap", run_ControlCode_SetMap },
+    { SYM_ControlCode_SetAttribute, "ControlCode_SetAttribute", run_ControlCode_SetAttribute },
+    { SYM_ControlCode_SetX, "ControlCode_SetX", run_ControlCode_SetX },
+    { SYM_ControlCode_SetY, "ControlCode_SetY", run_ControlCode_SetY },
+    { SYM_ControlCode_AddX, "ControlCode_AddX", run_ControlCode_AddX },
+    { SYM_ControlCode_AddY, "ControlCode_AddY", run_ControlCode_AddY },
+    { SYM_ControlCode_SetFont, "ControlCode_SetFont", run_ControlCode_SetFont },
+    { SYM_FormatAndPrintTime, "FormatAndPrintTime", run_FormatAndPrintTime },
+    { SYM_PushTime, "PushTime", run_PushTime },
+    { SYM_PushNumber, "PushNumber", run_PushNumber },
+    { SYM_PushNumberWidth, "PushNumberWidth", run_PushNumberWidth },
+    { SYM_PrintBigChar, "PrintBigChar", run_PrintBigChar },
+    { SYM_PutBigTile, "PutBigTile", run_PutBigTile },
+    { SYM_AddSmallFont, "AddSmallFont", run_AddSmallFont },
+    { SYM_AddFramer, "AddFramer", run_AddFramer },
+    { SYM_AddTeamBlock, "AddTeamBlock", run_AddTeamBlock },
+    { SYM_forceblack, "forceblack", run_forceblack },
+    { SYM_forceblack2, "forceblack2", run_forceblack2 },
+    { SYM_forcefade, "forcefade", run_forcefade },
+    { SYM_cramfade, "cramfade", run_cramfade },
+    { SYM_CopyPaletteToCRAM, "CopyPaletteToCRAM", run_CopyPaletteToCRAM },
+    { SYM_WaitDMA, "WaitDMA", run_WaitDMA },
+    { SYM_setVram_0, "setVram_0", run_setVram_0 },
+    { SYM_xyVmMap, "xyVmMap", run_xyVmMap },
     { 0, NULL, NULL }
 };

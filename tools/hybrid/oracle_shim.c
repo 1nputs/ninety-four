@@ -18,8 +18,10 @@
  *   then n_calls blocks, each written when the call returns (so in close order; seq gives the
  *   entry order): pc, depth (bit31 = left by unwinding), seq, regs_in[18], regs_out[18],
  *   stack[16 bytes], n_diff, n_diff x (u16 off, u8 old, u8 new).
- *   A hardware read is a block with pc = address | 0x80000000, regs_in[0] = value,
- *   regs_in[1] = width and no diff.
+ *   A hardware read is a block with pc = address | 0x80000000, a hardware write one with
+ *   pc = address | 0x40000000; regs_in[0] = value, regs_in[1] = width, no diff. Hardware is the
+ *   VDP / PSG ($C00000-$C0001F), the I/O ports ($A10000-$A1001F), the Z80 bus and reset
+ *   ($A11100, $A11200) and Z80 RAM ($A00000-$A0FFFF).
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -37,6 +39,7 @@
 #define CAP_MAGIC 0x43434C48u    /* 'HLCC' */
 #define REC_HDR_WORDS 6
 #define IO_READ_FLAG 0x80000000u
+#define IO_WRITE_FLAG 0x40000000u
 #define ABNORMAL_EXIT 0x80000000u
 
 typedef struct {
@@ -134,13 +137,17 @@ static void write_block(int k, uint32_t pc, uint32_t depth_word, uint32_t seq, c
   f->n_closed++;
 }
 
-/* ---- hardware reads ---------------------------------------------------------------------- */
-static void log_io_read(int width, uint32_t address, uint32_t value) {
+/* ---- hardware reads and writes ------------------------------------------------------------ */
+static int is_hw(uint32_t a) {
+  return (a >= 0xC00000 && a < 0xC00020) || (a >= 0xA10000 && a < 0xA10020) || (a & ~0x1u) == 0xA11100 ||
+         (a & ~0x1u) == 0xA11200 || (a >= 0xA00000 && a < 0xA10000);
+}
+static void log_io(uint32_t flag, int width, uint32_t address, uint32_t value) {
   uint32_t regs[NREGS] = { value, (uint32_t)width };
   uint32_t zero[NREGS] = {0};
   uint8_t stk[16] = {0};
   for (int k = 0; k < depth; k++)
-    write_block(k, address | IO_READ_FLAG, (uint32_t)(n_open + 1 - frames[k].n_open_at_entry), frames[k].n_calls++, regs, zero, stk, 0, NULL);
+    write_block(k, address | flag, (uint32_t)(n_open + 1 - frames[k].n_open_at_entry), frames[k].n_calls++, regs, zero, stk, 0, NULL);
 }
 
 /* ---- nested calls ----------------------------------------------------------------------- */
@@ -225,9 +232,9 @@ static void enter_frame(uint32_t pc) {
 }
 
 static void hook(hook_type_t type, int width, unsigned int address, unsigned int value) {
-  if (type == HOOK_M68K_R) {
+  if (type == HOOK_M68K_R || type == HOOK_M68K_W) {
     uint32_t a = address & 0xFFFFFF;
-    if (depth && ((a >= 0xC00000 && a < 0xC00020) || (a >= 0xA10000 && a < 0xA10020))) log_io_read(width, a, value);
+    if (depth && is_hw(a)) log_io(type == HOOK_M68K_R ? IO_READ_FLAG : IO_WRITE_FLAG, width, a, value);
     return;
   }
   if (type != HOOK_M68K_E) return;

@@ -22,8 +22,10 @@ def main():
     print('in :', ' '.join(f'{n}={v:08x}' for n, v in r.regs_in.items()))
     print('out:', ' '.join(f'{n}={v:08x}' for n, v in r.regs_out.items()))
     for c in r.calls:
-        if c.pc & 0x80000000:
-            print(f'  io read {c.pc & 0xFFFFFF:06x}')
+        if c.pc & 0xC0000000:
+            ci = c.regs_in if isinstance(c.regs_in, dict) else dict(zip(r.regs_in.keys(), c.regs_in))
+            kind = 'read ' if c.pc & 0x80000000 else 'write'
+            print(f'  {"  " * (c.depth & 0xFF)}io {kind} {c.pc & 0xFFFFFF:06x}.{ci["d1"]} = {ci["d0"]:0{2 * ci["d1"]}x}')
             continue
         ci = c.regs_in if isinstance(c.regs_in, dict) else dict(zip(r.regs_in.keys(), c.regs_in))
         co = c.regs_out if isinstance(c.regs_out, dict) else dict(zip(r.regs_in.keys(), c.regs_out))

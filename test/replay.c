@@ -53,6 +53,8 @@ int cap_load(const char *path, Record **out, size_t *n)
         }
         if (q != p + total) { fprintf(stderr, "record %zu: trailer mismatch\n", cnt - 1); return 0; }
         qsort(r->calls, r->n_calls, sizeof(Call), cmp_seq);
+        r->has_writes = 0;
+        for (uint32_t c = 0; c < r->n_calls; c++) if (r->calls[c].pc & IO_WRITE_FLAG) r->has_writes = 1;
         o += total;
     }
     *out = recs; *n = cnt;
@@ -92,6 +94,21 @@ uint32_t replay_io_read(uint32_t addr, int width)
     return 0;
 }
 
+void replay_io_write(uint32_t addr, int width, uint32_t value)
+{
+    uint32_t mask = width == 4 ? 0xFFFFFFFFu : width == 2 ? 0xFFFFu : 0xFFu;
+    for (uint32_t i = cursor; i < cur->n_calls; i++) {
+        Call *c = &cur->calls[i];
+        if (c->consumed || !(c->pc & IO_WRITE_FLAG)) continue;
+        c->consumed = 1; cursor = i + 1;
+        if ((c->pc & 0xFFFFFF) != addr || (int)c->regs_in[1] != width || (c->regs_in[0] & mask) != (value & mask))
+            replay_fail("hardware write %06x.%d = %0*x, recorded %06x.%d = %0*x", addr, width, 2 * width, value & mask,
+                        c->pc & 0xFFFFFF, c->regs_in[1], 2 * (int)c->regs_in[1], c->regs_in[0]);
+        return;
+    }
+    if (cur->has_writes) replay_fail("hardware write %06x.%d = %0*x was not made by the 68k", addr, width, 2 * width, value & mask);
+}
+
 void replay_apply(const Call *c)
 {
     uint8_t *ram = (uint8_t *)&g;
@@ -105,7 +122,8 @@ int replay_unconsumed(const Record *r, int (*is_ported)(uint32_t))
 {
     int n = 0;
     for (uint32_t i = 0; i < r->n_calls; i++)
-        if (!r->calls[i].consumed && !is_ported(r->calls[i].pc) && !(r->calls[i].pc & IO_READ_FLAG) && !sym_trivial(r->calls[i].pc)) n++;
+        if (!r->calls[i].consumed && ((r->calls[i].pc & IO_WRITE_FLAG) ||
+            (!is_ported(r->calls[i].pc) && !(r->calls[i].pc & IO_READ_FLAG) && !sym_trivial(r->calls[i].pc)))) n++;
     return n;
 }
 

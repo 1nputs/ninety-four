@@ -22,6 +22,7 @@ typedef struct {
     uint32_t regs_in[NREGS], regs_out[NREGS];
     const uint8_t *ram_in, *ram_out;
     Call *calls;                  /* sorted by seq */
+    int has_writes;               /* the capture logged hardware writes (newer shim) */
 } Record;
 
 /* capture file */
@@ -33,7 +34,9 @@ const Call *replay_next(uint32_t pc);         /* next unconsumed call of routine
 void replay_apply(const Call *c);             /* write the call's RAM changes into g */
 int replay_unconsumed(const Record *r, int (*is_ported)(uint32_t));  /* count of leftover stub calls */
 #define IO_READ_FLAG 0x80000000u
+#define IO_WRITE_FLAG 0x40000000u
 uint32_t replay_io_read(uint32_t addr, int width);   /* next recorded hardware read of addr */
+void replay_io_write(uint32_t addr, int width, uint32_t value);  /* check against the next recorded hardware write */
 const uint8_t *cur_ram_in(void);
 const char *sym_name(uint32_t addr);
 int sym_trivial(uint32_t addr);               /* a one-instruction routine (shared rts / jump) */

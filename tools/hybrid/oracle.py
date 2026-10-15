@@ -119,6 +119,7 @@ class Oracle(Core):
 
 
 IO_READ_FLAG = 0x80000000
+IO_WRITE_FLAG = 0x40000000
 
 
 class Call:
@@ -130,7 +131,7 @@ class Call:
 
     @property
     def is_io(self):
-        return bool(self.pc & IO_READ_FLAG)
+        return bool(self.pc & (IO_READ_FLAG | IO_WRITE_FLAG))
 
 
 class Record:
