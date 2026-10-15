@@ -34,6 +34,7 @@ static int run(const char *path)
     if (fread(d, 1, (size_t)len, f) != (size_t)len) { fclose(f); free(d); return 1; }
     fclose(f);
     if (memcmp(d, "MDST", 4) || u32(d + 4) != 3) { printf("%s: not a version 3 sndtrace\n", name); free(d); return 1; }
+    if (u32(d + 16) & 2) { printf("%s: recorded with the Nuked FM core (another busy flag), skipped\n", name); free(d); return 0; }
     size_t o = 20;                                        /* after the audio rate, the preamps, the flags */
     /* the start: Z80 RAM, and the Z80 (running the relay, or held) */
     memcpy(z80_ram, d + o, 0x2000); o += 0x2000;

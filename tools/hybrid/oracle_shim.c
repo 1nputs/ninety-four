@@ -543,7 +543,8 @@ void oracle_padtrace_close(void) { if (pt) { pt_u8(4); fclose(pt); pt = NULL; } 
  * "MDST", version u32 = 3, the oracle's audio rate u32 (Hz), its FM and PSG preamps u16 each (in
  * percent: GPGX's defaults are 100 and 150; 0 leaves that chip out of the audio), flags u32 (bit 0:
  * recorded from power on, so every write the chips had is in the trace; otherwise they start in a
- * state the trace does not hold), Z80 RAM at the start [8192], the Z80 at the start: PC u16, HL u16,
+ * state the trace does not hold; bit 1: the oracle's FM core was Nuked-OPN2, not MAME's YM2612,
+ * which also gives the Z80 a different busy flag to poll), Z80 RAM at the start [8192], the Z80 at the start: PC u16, HL u16,
  * C u8, bank u16 (68k address >> 15), state u8 (bit 0 running, bit 1 bus taken by the 68k), time
  * u32 (master clocks from the trace's start to where the Z80 is: the oracle runs it whole
  * instructions at a time, so it can be a little ahead);

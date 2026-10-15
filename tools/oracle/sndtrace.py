@@ -6,6 +6,8 @@ output (format: tools/hybrid/oracle_shim.c).
 usage: sndtrace.py ROM --out FILE.sndtrace [--state STATE] [--frames N] [--skip N] [--script S]
                    [--fm-preamp P] [--psg-preamp P]   (percent, GPGX's defaults 100 / 150; 0 mutes
                                                        that chip in the recorded audio)
+                   [--ym2612 mame|nuked]              (the oracle's FM core: MAME's, the default, or
+                                                       Nuked-OPN2, md-runtime's)
 """
 import argparse, ctypes as C, os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'hybrid'))
@@ -24,8 +26,10 @@ def main():
     ap.add_argument('--script', default='')
     ap.add_argument('--fm-preamp', type=int, default=100)
     ap.add_argument('--psg-preamp', type=int, default=150)
+    ap.add_argument('--ym2612', choices=['mame', 'nuked'], default='mame')
     a = ap.parse_args()
-    o = Oracle(options={'genesis_plus_gx_fm_preamp': str(a.fm_preamp), 'genesis_plus_gx_psg_preamp': str(a.psg_preamp)})
+    o = Oracle(options={'genesis_plus_gx_fm_preamp': str(a.fm_preamp), 'genesis_plus_gx_psg_preamp': str(a.psg_preamp),
+                        'genesis_plus_gx_ym2612': 'nuked (ym2612)' if a.ym2612 == 'nuked' else 'mame (ym2612)'})
     o.load(a.rom)
     if a.state:
         o.unserialize(open(a.state, 'rb').read())
@@ -35,7 +39,8 @@ def main():
     for f in range(a.skip + a.frames):
         if f == a.skip:
             power_on = not a.state and a.skip == 0         # every chip write is in the trace
-            if not o.lib.oracle_sndtrace_open(a.out.encode(), rate, a.fm_preamp, a.psg_preamp, int(power_on)):
+            flags = int(power_on) | (2 if a.ym2612 == 'nuked' else 0)
+            if not o.lib.oracle_sndtrace_open(a.out.encode(), rate, a.fm_preamp, a.psg_preamp, flags):
                 sys.exit(f'cannot write {a.out}')
             o.audio_keep = bytearray()
         while si < len(script) and script[si][0] <= f:
