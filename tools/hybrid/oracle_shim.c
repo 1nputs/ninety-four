@@ -261,7 +261,19 @@ static void enter_frame(uint32_t pc) {
   bptab[k].captured++;
 }
 
+static void vdptrace_access(int write, int width, uint32_t a, uint32_t value);
+static void vdptrace_tick(void);
+static FILE *vt;
+
 static void hook(hook_type_t type, int width, unsigned int address, unsigned int value) {
+  if (vt) {
+    if (type == HOOK_M68K_R || type == HOOK_M68K_W) {
+      uint32_t a = address & 0xFFFFFF;
+      if (a >= 0xC00000 && a < 0xC0000C) vdptrace_access(type == HOOK_M68K_W, width, a, value);
+    } else if (type == HOOK_M68K_E) {
+      vdptrace_tick();
+    }
+  }
   if (type == HOOK_M68K_R || type == HOOK_M68K_W) {
     uint32_t a = address & 0xFFFFFF;
     if (depth && is_hw(a)) log_io(type == HOOK_M68K_R ? IO_READ_FLAG : IO_WRITE_FLAG, width, a, value);
@@ -350,4 +362,133 @@ void oracle_vdp_get(uint8_t *out_vram, uint8_t *out_cram, uint8_t *out_vsram, ui
   }
   memcpy(out_reg, reg, 32);
   memcpy(out_zram, zram, 0x2000);
+}
+
+/* ---- VDP test vectors for md-runtime (.vdptrace) ------------------------------------------
+ * Every VDP port access of the 68k in order, the 68k bytes each DMA from the 68k bus will read,
+ * and at the start of each vblank (v_counter reaching the active height) a FRAME marker with the
+ * VDP state and the frame just drawn in 9-bit colours. Format (integers little-endian unless
+ * noted):
+ *   "MDVT", version u32 = 1, region u8 (0 NTSC), 3 reserved bytes, state
+ *   state:  regs[24], VRAM[65536] (VDP order), CRAM[64] u16 BE, VSRAM[40] u16 BE
+ *           (CRAM as bus words 0000BBB0GGG0RRR0, VSRAM 11 bits)
+ *   events: tag u8, then
+ *     1 CTRL16 u16 | 2 CTRL32 u32 | 3 DATA16 u16 | 4 DATA32 u32 | 5 READ16 u16 (data port)
+ *     6 STATUS u16 | 7 HV8 addr u8, value u8 | 8 HV16 u16
+ *     9 DMASRC n u32, n bytes (the 68k memory the DMA started by the next CTRL reads, in order)
+ *    10 FRAME state, width u16, height u16, width x height u16 9-bit colours (bus format)
+ *    11 END
+ */
+static uint8_t vt_pending;
+static uint16_t vt_first;
+static uint16_t vt_last_vc;
+
+static void vt_u8(uint8_t v) { fputc(v, vt); }
+static void vt_u16(uint16_t v) { fputc(v & 0xFF, vt); fputc(v >> 8, vt); }
+static void vt_u32(uint32_t v) { vt_u16((uint16_t)v); vt_u16((uint16_t)(v >> 16)); }
+
+static void vt_state(void) {
+  static uint8_t v[0x10000], c[128], s[80], r[32], z[0x2000];
+  oracle_vdp_get(v, c, s, r, z);
+  fwrite(r, 1, 24, vt);
+  fwrite(v, 1, sizeof v, vt);
+  fwrite(c, 1, sizeof c, vt);
+  fwrite(s, 1, sizeof s, vt);
+}
+
+static uint8_t bus_byte(uint32_t a) {
+  cpu_memory_map *m = &m68k.memory_map[(a >> 16) & 0xFF];
+  if (m->read8) return (uint8_t)m->read8(a);
+  return READ_BYTE(m->base, a & 0xFFFF);
+}
+
+/* the second command word of a DMA from the 68k bus: log what it will read */
+static void vt_command(uint16_t w) {
+  if (!vt_pending) {
+    if ((w & 0xC000) != 0x8000) { vt_pending = reg[1] & 4; vt_first = w; }
+    return;
+  }
+  vt_pending = 0;
+  uint8_t code = (uint8_t)(((vt_first >> 14) & 3) | ((w >> 2) & 0x3C));
+  if (!(code & 0x20) || !(reg[1] & 0x10) || (reg[23] >> 6) >= 2) return;
+  uint32_t n = (uint32_t)(reg[20] << 8 | reg[19]);
+  if (!n) n = 0x10000;
+  uint32_t hi = (uint32_t)(reg[23] & 0x7F) << 17, src = (uint32_t)(reg[22] << 8 | reg[21]) << 1;
+  vt_u8(9); vt_u32(n * 2);
+  for (uint32_t i = 0; i < n; i++) {
+    vt_u8(bus_byte(hi | src)); vt_u8(bus_byte(hi | (src + 1)));
+    src = (src + 2) & 0x1FFFF;
+  }
+}
+
+static void vdptrace_access(int write, int width, uint32_t a, uint32_t value) {
+  uint32_t port = a & 0x1E;
+  if (write) {
+    if (port == 0 || port == 2) {                        /* data */
+      vt_pending = 0;
+      if (width == 4) { vt_u8(4); vt_u32(value); }
+      else { uint16_t v = width == 1 ? (uint16_t)((value & 0xFF) << 8 | (value & 0xFF)) : (uint16_t)value; vt_u8(3); vt_u16(v); }
+    } else if (port == 4 || port == 6) {                 /* control */
+      if (width == 4) {
+        vt_command((uint16_t)(value >> 16)); vt_command((uint16_t)value);
+        vt_u8(2); vt_u32(value);
+      } else {
+        uint16_t v = width == 1 ? (uint16_t)((value & 0xFF) << 8 | (value & 0xFF)) : (uint16_t)value;
+        vt_command(v);
+        vt_u8(1); vt_u16(v);
+      }
+    }
+    return;
+  }
+  if (port == 0 || port == 2) {
+    vt_pending = 0;
+    if (width == 4) { vt_u8(5); vt_u16((uint16_t)(value >> 16)); vt_u8(5); vt_u16((uint16_t)value); }
+    else { vt_u8(5); vt_u16((uint16_t)value); }
+  } else if (port == 4 || port == 6) {
+    vt_pending = 0;
+    vt_u8(6); vt_u16((uint16_t)value);
+  } else if (width == 1) {
+    vt_u8(7); vt_u8((uint8_t)a); vt_u8((uint8_t)value);
+  } else {
+    vt_u8(8); vt_u16((uint16_t)value);
+  }
+}
+
+static void vdptrace_tick(void) {
+  uint16_t vc = v_counter;
+  uint16_t h = (uint16_t)bitmap.viewport.h;
+  if (vt_last_vc < h && vc >= h && vc < lines_per_frame) {
+    uint16_t w = (uint16_t)bitmap.viewport.w;
+    vt_u8(10);
+    vt_state();
+    vt_u16(w); vt_u16(h);
+    for (int y = 0; y < h; y++) {
+      const uint16_t *row = (const uint16_t *)(bitmap.data + (y + bitmap.viewport.y) * bitmap.pitch) + bitmap.viewport.x;
+      for (int x = 0; x < w; x++) {
+        uint16_t px = row[x];                            /* RGB565 from 4-bit levels, normal colours even */
+        uint16_t r = (px >> 13) & 7, g = (px >> 8) & 7, b = (px >> 2) & 7;
+        vt_u16((uint16_t)(b << 9 | g << 5 | r << 1));
+      }
+    }
+  }
+  vt_last_vc = vc;
+}
+
+int oracle_install(void);
+int oracle_vdptrace_open(const char *path) {
+  oracle_install();
+  if (vt) fclose(vt);
+  vt = fopen(path, "wb");
+  if (!vt) return 0;
+  fwrite("MDVT", 1, 4, vt); vt_u32(1); vt_u8(0); vt_u8(0); vt_u8(0); vt_u8(0);
+  vt_state();
+  vt_pending = 0; vt_last_vc = v_counter;
+  return 1;
+}
+
+void oracle_vdptrace_close(void) {
+  if (!vt) return;
+  vt_u8(11);
+  fclose(vt);
+  vt = NULL;
 }
