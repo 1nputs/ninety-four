@@ -104,15 +104,23 @@ static uint8_t read68k(void *user, uint32_t addr) { (void)user; return *mem_ptr(
 
 void native_quit(void) { longjmp(out, 1); }
 
+/* the game loop, from the 68k waiting in setvideo at the end of a frame of DoGameFrame: the rest
+ * of that frame, then the loop (also lockstep's way in after it takes the oracle's state) */
+void native_resume_game_loop(void)
+{
+    setvideo();
+    demoread();
+    if (g.sflags & HI(sfpz)) Pausemode();
+    Gameloop();
+}
+
 /* where the snapshot's 68k was: the rest of what it was doing, before the game loop goes on */
 static void resume(void)
 {
     const uint8_t *p = snapshot + sizeof snapshot - 20;
     uint32_t pc = snapshot_len >= sizeof snapshot ? (uint32_t)(p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24) : 0;
     if (pc >= SYM_setvideo && pc < SYM_setvideo + 12) {   /* in setvideo's wait for dfok, at a game frame's end */
-        setvideo();
-        demoread();
-        if (g.sflags & HI(sfpz)) Pausemode();
+        run68k(native_resume_game_loop);
     } else if (pc) {
         fprintf(stderr, "%s: the 68k was at %06x, not a place the native game resumes from: it starts the game loop\n", snap, pc);
     }

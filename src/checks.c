@@ -190,7 +190,7 @@ void asscentero(uint8_t *tm, struct SortObj *o)
         }
     }
     int16_t d0 = o->temp3, d1 = o->temp4;
-    if (!PFLAG(o, pfgoal)) { d0 = (int16_t)-d0; d1 = (int16_t)-d1; }
+    if (!PFLAG(o, pfgoal)) d1 = (int16_t)-d1;             /* (only Y, unlike the wings: the center's X is kept) */
     skateto(d0, d1, EvadePC, o);
 }
 
@@ -2426,12 +2426,8 @@ void goalieacc(uint16_t dir, struct SortObj *o)
             AdjustFacingDirection((int16_t)d0, o);
         if (o->pflags2 & 2) return;
         SetSPA(o, SPAgready);
-        if (d0 == 8 && o->position == 0 && PFLAG(o, pfjoycon)) {
-            int16_t y = o->Ypos;
-            if (!PFLAG(o, pfgoal)) y = (int16_t)-y;
-            stopna2(o);                                   /* either way he slows down */
-            (void)y;
-        }
+        if (d0 == 8 && o->position == 0 && PFLAG(o, pfjoycon))
+            stopna2(o);                                   /* in the crease or not (.topstay), he slows down */
         playeracc((int16_t)d0, o);
         return;
     }
@@ -2442,7 +2438,7 @@ void goalieacc(uint16_t dir, struct SortObj *o)
         if (o->position != 0) goto cgl;
         {
             int16_t y = o->Ypos;
-            if (!PFLAG(o, pfgoal)) y = (int16_t)-y;
+            if (PFLAG(o, pfgoal)) y = (int16_t)-y;         /* his own end: the other way from the net he shoots at */
             if (y >= 0xD8 && o->Xpos <= 0x20 && o->Xpos >= -0x20)
                 stopna(o);                                /* idle in the crease */
         }
