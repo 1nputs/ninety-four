@@ -540,11 +540,14 @@ void oracle_padtrace_frame(uint32_t b1, uint32_t b2) {
 void oracle_padtrace_close(void) { if (pt) { pt_u8(4); fclose(pt); pt = NULL; } }
 
 /* ---- sound test vectors for md-runtime and the Z80 relay (.sndtrace) -----------------------
- * "MDST", version u32 = 2, the oracle's audio rate u32 (Hz), Z80 RAM at the start [8192], the
- * Z80 at the start: PC u16, HL u16, C u8, bank u16 (68k address >> 15), state u8 (bit 0 running,
- * bit 1 bus taken by the 68k);
- * then events: tag u8, time u32 (master clocks since the trace started; 3420 a line, 262 lines a
- * frame), and
+ * "MDST", version u32 = 3, the oracle's audio rate u32 (Hz), its FM and PSG preamps u16 each (in
+ * percent: GPGX's defaults are 100 and 150; 0 leaves that chip out of the audio), flags u32 (bit 0:
+ * recorded from power on, so every write the chips had is in the trace; otherwise they start in a
+ * state the trace does not hold), Z80 RAM at the start [8192], the Z80 at the start: PC u16, HL u16, C u8, bank u16 (68k address >> 15), state u8
+ * (bit 0 running, bit 1 bus taken by the 68k);
+ * then events: tag u8, time u32 (master clocks since the trace started, modulo 2^32: 3420 a line,
+ * 262 lines a frame, so it wraps after 4793 frames; events come in time order give or take a few
+ * hundred clocks, so a reader unwraps it), and
  *   1 YM     address u8 (0 / 1 address / data of part I, 2 / 3 of part II), value u8
  *   2 PSG    value u8                     (68k writes to $C00011)
  *   3 Z80RAM address u16, value u8        (68k byte writes to $A00000-$A01FFF)
@@ -572,12 +575,12 @@ static void sndtrace_access(uint32_t a, uint32_t value) {
   else { st_u8(5); st_u32(t); st_u16((uint16_t)value); }
 }
 
-int oracle_sndtrace_open(const char *path, uint32_t rate) {
+int oracle_sndtrace_open(const char *path, uint32_t rate, uint32_t fm_preamp, uint32_t psg_preamp, uint32_t flags) {
   oracle_install();
   if (st) fclose(st);
   st = fopen(path, "wb");
   if (!st) return 0;
-  fwrite("MDST", 1, 4, st); st_u32(2); st_u32(rate);
+  fwrite("MDST", 1, 4, st); st_u32(3); st_u32(rate); st_u16((uint16_t)fm_preamp); st_u16((uint16_t)psg_preamp); st_u32(flags);
   fwrite(zram, 1, 0x2000, st);
   st_u16((uint16_t)Z80.pc.w.l); st_u16((uint16_t)Z80.hl.w.l); st_u8((uint8_t)Z80.bc.b.l);
   st_u16((uint16_t)(zbank >> 15)); st_u8(zstate);

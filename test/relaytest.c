@@ -9,14 +9,14 @@
 #include "rom.h"
 #include "z80.h"
 
-struct w { uint32_t t; uint8_t part, reg, val; };
+struct w { uint64_t t; uint8_t part, reg, val; };
 static struct w *got; static size_t ngot, capgot;
 
 void z80_ym_reset(void) {}
 void z80_ym_write(int part, uint8_t reg, uint8_t val)
 {
     if (ngot == capgot) got = realloc(got, (capgot = capgot ? capgot * 2 : 1 << 16) * sizeof *got);
-    got[ngot++] = (struct w){ (uint32_t)z80.zc, (uint8_t)part, reg, val };
+    got[ngot++] = (struct w){ z80.zc, (uint8_t)part, reg, val };
 }
 
 static uint32_t u32(const uint8_t *p) { return (uint32_t)(p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24); }
@@ -33,8 +33,8 @@ static int run(const char *path)
     uint8_t *d = malloc((size_t)len);
     if (fread(d, 1, (size_t)len, f) != (size_t)len) { fclose(f); free(d); return 1; }
     fclose(f);
-    if (memcmp(d, "MDST", 4) || u32(d + 4) != 2) { printf("%s: not a version 2 sndtrace\n", name); free(d); return 1; }
-    size_t o = 12;
+    if (memcmp(d, "MDST", 4) || u32(d + 4) != 3) { printf("%s: not a version 3 sndtrace\n", name); free(d); return 1; }
+    size_t o = 20;                                        /* after the audio rate, the preamps, the flags */
     /* the start: Z80 RAM, and the Z80 (running the relay, or held) */
     memcpy(z80_ram, d + o, 0x2000); o += 0x2000;
     uint16_t pc = u16(d + o), hl = u16(d + o + 2), bank = u16(d + o + 5);
@@ -49,12 +49,19 @@ static int run(const char *path)
     /* the events; the oracle's YM writes from its address latches */
     struct w *want = malloc(sizeof *want * (size_t)(len / 6 + 1)); size_t nwant = 0;
     uint8_t latch[2] = { 0, 0 };
-    uint32_t told = 0;                                    /* master clocks the relay has been told */
+    uint64_t told = 0, high = 0;                          /* master clocks the relay has been told; the time's wraps */
+    uint32_t last = 0;
     while (o < (size_t)len) {
         uint8_t t = d[o++];
         if (t == 7) break;
-        uint32_t time = u32(d + o); o += 4;
-        if (time > told) { z80_relay_run(time - told); told = time; }
+        uint32_t t32 = u32(d + o); o += 4;
+        if (t32 < last && last - t32 > 0x80000000u) high += 1ull << 32;   /* the time wrapped */
+        last = t32;
+        uint64_t time = high | t32;
+        while (time > told) {                             /* (in steps a u32 holds) */
+            uint64_t step = time - told > 0x40000000u ? 0x40000000u : time - told;
+            z80_relay_run((uint32_t)step); told += step;
+        }
         switch (t) {
         case 1: {
             uint8_t a = d[o], v = d[o + 1]; o += 2;
@@ -80,15 +87,15 @@ static int run(const char *path)
     printf("%s: %zu / %zu YM2612 writes match, at their times (%zu to the DAC)", name, i, nwant, ndac);
     if (!ok) {
         printf("; first difference at %zu:", i);
-        if (i < ngot) printf(" got %d:%02x=%02x at frame %u + %u,", got[i].part, got[i].reg, got[i].val, got[i].t / FRAME, got[i].t % FRAME);
+        if (i < ngot) printf(" got %d:%02x=%02x at frame %u + %u,", got[i].part, got[i].reg, got[i].val, (unsigned)(got[i].t / FRAME), (unsigned)(got[i].t % FRAME));
         else printf(" got none,");
-        if (i < nwant) printf(" expected %d:%02x=%02x at frame %u + %u", want[i].part, want[i].reg, want[i].val, want[i].t / FRAME, want[i].t % FRAME);
+        if (i < nwant) printf(" expected %d:%02x=%02x at frame %u + %u", want[i].part, want[i].reg, want[i].val, (unsigned)(want[i].t / FRAME), (unsigned)(want[i].t % FRAME));
         else printf(" expected none");
         if (getenv("RELAY_DEBUG"))
             for (size_t k = i > 8 ? i - 8 : 0; k < i + 8 && (k < ngot || k < nwant); k++)
-                printf("\n  %6zu  got %d:%02x=%02x @%-10u  want %d:%02x=%02x @%u", k,
-                       k < ngot ? got[k].part : -1, k < ngot ? got[k].reg : 0, k < ngot ? got[k].val : 0, k < ngot ? got[k].t : 0,
-                       k < nwant ? want[k].part : -1, k < nwant ? want[k].reg : 0, k < nwant ? want[k].val : 0, k < nwant ? want[k].t : 0);
+                printf("\n  %6zu  got %d:%02x=%02x @%-12llu  want %d:%02x=%02x @%llu", k,
+                       k < ngot ? got[k].part : -1, k < ngot ? got[k].reg : 0, k < ngot ? got[k].val : 0, (unsigned long long)(k < ngot ? got[k].t : 0),
+                       k < nwant ? want[k].part : -1, k < nwant ? want[k].reg : 0, k < nwant ? want[k].val : 0, (unsigned long long)(k < nwant ? want[k].t : 0));
     }
     printf("\n");
     free(d); free(want);
