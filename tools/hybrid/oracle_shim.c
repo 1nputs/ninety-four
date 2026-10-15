@@ -21,7 +21,7 @@
  *   A hardware read is a block with pc = address | 0x80000000, a hardware write one with
  *   pc = address | 0x40000000; regs_in[0] = value, regs_in[1] = width, no diff. Hardware is the
  *   VDP / PSG ($C00000-$C0001F), the I/O ports ($A10000-$A1001F), the Z80 bus and reset
- *   ($A11100, $A11200) and Z80 RAM ($A00000-$A0FFFF).
+ *   ($A11100, $A11200), Z80 RAM ($A00000-$A0FFFF) and save RAM ($200000-$20FFFF).
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -140,7 +140,7 @@ static void write_block(int k, uint32_t pc, uint32_t depth_word, uint32_t seq, c
 /* ---- hardware reads and writes ------------------------------------------------------------ */
 static int is_hw(uint32_t a) {
   return (a >= 0xC00000 && a < 0xC00020) || (a >= 0xA10000 && a < 0xA10020) || (a & ~0x1u) == 0xA11100 ||
-         (a & ~0x1u) == 0xA11200 || (a >= 0xA00000 && a < 0xA10000);
+         (a & ~0x1u) == 0xA11200 || (a >= 0xA00000 && a < 0xA10000) || (a >= 0x200000 && a < 0x210000);
 }
 static void log_io(uint32_t flag, int width, uint32_t address, uint32_t value) {
   uint32_t regs[NREGS] = { value, (uint32_t)width };

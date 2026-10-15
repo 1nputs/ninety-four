@@ -29,4 +29,9 @@ run ph           --state $S2 --max 24 --fn "$(fns period94 hockey94 | sed -E "s/
 run dr           --state $S1 --script "$SCRIPT" --max 24 --fn "$(fns display94 replay94 | sed -E "s/(^|,)ReplayMode(,|$)/\\1/g; s/,,+/,/g; s/^,|,$//g")" &
 # video94: the hardware boundary (VDP writes are checked in order against the logged writes)
 run video        --state $S1 --script "$SCRIPT" --max 32 --fn "$(fns video94)" &
+# the game-play helpers of title94 / data94 / setup94 / stats94 / cards94 / shootout94 / menu94 / fourway94 / sram94
+# (the front-end screens of those modules never run in a game); 80000 frames to reach the end of the game
+HELPERS="$(tr -s ' \n' ',' < tools/hybrid/helpers_fns.txt)"
+run helpers1p    --state $S1 --script "$SCRIPT" --max 24 --frames 80000 --fn "$HELPERS" &
+run helpers      --state $S2 --max 24 --frames 80000 --fn "$HELPERS" &
 wait

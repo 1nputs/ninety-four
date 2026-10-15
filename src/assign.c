@@ -168,7 +168,7 @@ void asspenalty(uint8_t *tm, struct SortObj *o)
         o->pflags &= (uint8_t)~(1 << pfna);
         o->pflags2 |= 4;                                  /* unavailable */
         if (PFLAG(o, pfjoycon))                           /* take the joystick off him */
-            changeplayer(o->SCnum == (int16_t)g.c1playernum ? 0 : 2);
+            changeplayer(o->SCnum == (int16_t)g.c1playernum ? 0 : 2, o);
         setpads(-2, o);
         o->temp2 = 8;
         int16_t d0 = 0xB;

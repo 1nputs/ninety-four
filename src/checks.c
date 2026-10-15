@@ -1145,9 +1145,9 @@ void puckshootout(uint8_t *tm, struct SortObj *o)
         g.padcont[0] = 0; g.padcont[1] = 0; g.padcont[2] = 0;
         g.gmode2 &= (uint16_t)~HI(7);
         if (g.gmode2 & HI(0))
-            NextShooter();
+            NextShooter(o);
         else {
-            StartShootoutPath();
+            StartShootoutPath(o);
             uint8_t *t = team_struct(g.BA_Team != 0);
             wr16(t + tmsoattempts, (uint16_t)(rd16(t + tmsoattempts) + 1));
         }
@@ -1337,7 +1337,7 @@ void puckpenshot(uint8_t *tm, struct SortObj *o)
         }
     }
     SprSort();
-    ResetAndSelectPlayers();
+    ResetAndSelectPlayers(o);
     struct SortObj *gk = sortobj((int16_t)g.BA_Goalie_SCnum);
     gk->Xpos = 0;
     gk->Ypos = PFLAG(gk, pfgoal) ? -0xFA : 0xFA;
@@ -1738,7 +1738,7 @@ void puckfaceoff2(uint8_t *tm, struct SortObj *o)
         SetSPA(pl, SPAglide);
     }
     SprSort();
-    ResetAndSelectPlayers();
+    ResetAndSelectPlayers(o);
     uint16_t d4 = DecompressGraphicsPlain(SYM_FaceOffMap + 8, g.ExtraChars);
     g.faceoffvrcset = d4;
     DecompressGraphicsPlain(SYM_FaceOffSprites + 8, d4);
@@ -1804,17 +1804,17 @@ void puckfaceoff2(uint8_t *tm, struct SortObj *o)
 
 /* checks94.asm:ResetAndSelectPlayers. c1playernum / c2playernum = -1, then changeplayer for
  * each human team (pads 3 and 4 borrow the pad 1 and 2 variables). */
-void ResetAndSelectPlayers(void)
+void ResetAndSelectPlayers(struct SortObj *o)
 {
     g.c1playernum = 0xFFFF;
     g.c2playernum = 0xFFFF;
-    if (g.cont1team != 0) changeplayer(0);
-    if (g.cont2team != 0) changeplayer(2);
+    if (g.cont1team != 0) changeplayer(0, o);
+    if (g.cont2team != 0) changeplayer(2, o);
     if (g.cont3team != 0) {
         uint16_t t = g.cont1team, p = g.c1playernum;
         g.cont1team = g.cont3team;
         g.c1playernum = 0xFFFF;
-        changeplayer(0);
+        changeplayer(0, o);
         g.c3playernum = g.c1playernum;
         g.cont3team = g.cont1team;
         g.c1playernum = p;
@@ -1824,7 +1824,7 @@ void ResetAndSelectPlayers(void)
         uint16_t t = g.cont2team, p = g.c2playernum;
         g.cont2team = g.cont4team;
         g.c2playernum = 0xFFFF;
-        changeplayer(2);
+        changeplayer(2, o);
         g.c4playernum = g.c2playernum;
         g.cont4team = g.cont2team;
         g.c2playernum = p;

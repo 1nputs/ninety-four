@@ -5,3 +5,4 @@
 extern const uint8_t *rom_image;
 int rom_load(const char *path);
 static inline const uint8_t *rom_ptr(uint32_t addr) { return rom_image + addr; }
+uint32_t rom_find(uint32_t from, uint32_t to, const void *bytes, unsigned n);

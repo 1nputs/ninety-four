@@ -855,7 +855,7 @@ void pplpen(uint8_t *tm, uint16_t d0)
     }
     uint16_t num = a1[-8];                                /* his number (BCD) */
     uint16_t saved = g.printx;
-    ConvertByteToDigits(num, RAM_BASE + RAM_OFF_TextBuffer);
+    ConvertByteToDigits(num, ram_ptr(RAM_BASE + RAM_OFF_TextBuffer));
     wr16(ram_ptr(RAM_BASE + RAM_OFF_mesarea), 4);         /* string length: 2 digits */
     print(RAM_BASE + RAM_OFF_mesarea);
     print(PushTime(d2));
@@ -1039,7 +1039,7 @@ void SetScore(uint8_t *a0)
 void InitScores(void)
 {
     if ((int16_t)g.gamelevel > 1) return;
-    int16_t d1 = (int16_t)GetShifter();
+    int16_t d1 = (int16_t)GetShifter(NULL);
     uint8_t *a0 = ram_ptr(RAM_BASE + RAM_OFF_gsstruct) + 0x10 * d1;
     for (; d1 >= 0; d1--, a0 -= 0x10) {
         if ((uint16_t)d1 == g.gamenum) continue;
@@ -1052,7 +1052,7 @@ void InitScores(void)
 /* penalty94.asm:UpdateScores. Update the ticker score values (PeriodOver). */
 void UpdateScores(void)
 {
-    int16_t d1 = (int16_t)GetShifter();
+    int16_t d1 = (int16_t)GetShifter(NULL);
     g.TickerNum = (uint16_t)d1;
     uint8_t *a0 = ram_ptr(RAM_BASE + RAM_OFF_gsstruct) + 0x10 * d1;
     for (; d1 >= 0; d1--, a0 -= 0x10) {
@@ -1115,7 +1115,7 @@ void NewTicker3(int16_t d3, const uint8_t *gs)
     g.printx += 1;
     g.printy -= 4;
     uint16_t x = g.printx;
-    GetShifter();
+    GetShifter(NULL);
     g.printa = 0xA000;
     printz(str_NewTicker3_1, sizeof str_NewTicker3_1);
     g.printx = x;

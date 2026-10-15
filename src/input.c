@@ -79,7 +79,7 @@ void doinput(uint16_t d0, uint16_t d1, uint16_t d2, uint16_t d3, int16_t d4, str
     if (o->position != 0) {
         if (g.BA_PS_flags & HI(2)) goto noswitch;
     } else if (!(g.sflags5 & 0x40) && goaliemode(d4) != 0 && o->SCnum != puckc()) {
-        changeplayer((uint16_t)d4);                       /* the goalie plays himself: switch off him */
+        changeplayer((uint16_t)d4, o);                       /* the goalie plays himself: switch off him */
         return;
     }
     /* B held / pressed / released: switch player, or (held long) take the goalie */
@@ -107,10 +107,10 @@ bpress:
         uint16_t t = g.bholdtimer;                        /* released: a short press switches */
         TIMER_SET(g.bholdtimer, d4, 0x11);
         t &= d4 ? 0xFF : 0xFF00;
-        if (t != 0 || goaliemode(d4) != 0) { changeplayer((uint16_t)d4); return; }
+        if (t != 0 || goaliemode(d4) != 0) { changeplayer((uint16_t)d4, o); return; }
     }
 goalie:
-    if (g.holdreset != 0) { changeplayer((uint16_t)d4); return; }
+    if (g.holdreset != 0) { changeplayer((uint16_t)d4, o); return; }
     {
         int16_t gk = getGoalieSCnum(o->SCnum <= 5 ? 5 : 0xB);
         if (gk < 0) return;
@@ -246,7 +246,7 @@ void doinput_islocked(uint16_t d1, int16_t d4, struct SortObj *o)
     if (puckc() == o->SCnum) return;
     if (!(d1 & BUT_B)) return;
     if (g.sflags5 & 0x40) return;
-    changeplayer((uint16_t)d4);
+    changeplayer((uint16_t)d4, o);
     int16_t d0 = (int16_t)(d4 ? g.c2playernum : g.c1playernum);
     if (d0 >= 0) sortobj(d0)->pflags3 |= 0x40;
 }
@@ -630,10 +630,11 @@ void passtoa0(struct SortObj *rcv, struct SortObj *o)
     g.puckvy = (uint16_t)m68k_divs((int32_t)sw, tt);
 }
 
-/* input94.asm:changeplayer. The pad d4 takes the nearest free skater (chgplayer). */
-void changeplayer(uint16_t pad)
+/* input94.asm:changeplayer. The pad d4 takes the nearest free skater (chgplayer); a3 sweep
+ * checks when it is the pad's own player. */
+void changeplayer(uint16_t pad, struct SortObj *o)
 {
-    chgplayer(pad);
+    chgplayer(pad, o);
 }
 
 /* input94.asm:Sweepcheck. Start a sweep check on player a3. */

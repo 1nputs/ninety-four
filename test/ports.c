@@ -97,7 +97,8 @@ O(breakaway) O(BreakawayOffsidesFlagSet) O(chkpk) O(chkpk2) O(chk4shot) O(CompSh
 O(SkateToTempTarget) O(UpdatePenaltyShotEnd) O(WaitForFaceoffLineChanges) O(updatefaceoff) O(Endfaceoff) O(puckunflip)
 O(skatetopuck) O(assexit) O(dostop) O(stopna)
 #define V(name) static void run_##name(const Record *r) { name(); }
-V(EndPenaltyShotPlay) V(ChkGoalies) V(ReturnGoalies) V(ResetAndSelectPlayers) V(findpc)
+V(EndPenaltyShotPlay) V(ChkGoalies) V(ReturnGoalies) V(findpc)
+static void run_ResetAndSelectPlayers(const Record *r) { ResetAndSelectPlayers(OBJ(R_A3)); }
 static void run_ClampYPosition(const Record *r)
 {
     int16_t d0 = D16(R_D0), d1 = D16(R_D1);
@@ -162,7 +163,7 @@ static void run_getlchoice(const Record *r) { expect_reg16(r, R_D0, (uint16_t)ge
 static void run_lcfound(const Record *r) { lcfound((uint16_t)r->regs_in[R_D2], TEAM(R_A2), OBJ(R_A3)); }
 O(burst) O(dopass) O(Sweepcheck) O(SetShotMode)
 static void run_Acheck(const Record *r) { Acheck(OBJ(R_A0), OBJ(R_A3)); }
-static void run_changeplayer(const Record *r) { changeplayer((uint16_t)r->regs_in[R_D4]); }
+static void run_changeplayer(const Record *r) { changeplayer((uint16_t)r->regs_in[R_D4], OBJ(R_A3)); }
 static void run_setc1player(const Record *r) { setc1player((uint16_t)r->regs_in[R_D0]); }
 static void run_setc2player(const Record *r) { setc2player((uint16_t)r->regs_in[R_D0]); }
 static void run_Findhittype(const Record *r) { int z = Findhittype((uint16_t)r->regs_in[R_D0], OBJ(R_A3)); if (z != (int)((r->regs_out[R_SR] >> 2) & 1)) { printf("    Z flag: got %d, 68k %d\n", z, (int)((r->regs_out[R_SR] >> 2) & 1)); } }
@@ -379,6 +380,85 @@ static void run_AddSmallFont(const Record *r) { expect_reg16(r, R_D4, AddSmallFo
 static void run_AddFramer(const Record *r) { expect_reg16(r, R_D4, AddFramer(R16(R_D4)), "d4"); }
 static void run_AddTeamBlock(const Record *r) { expect_reg16(r, R_D4, AddTeamBlock(), "d4"); }
 V(forceblack) V(forceblack2) V(forcefade) V(cramfade) V(CopyPaletteToCRAM) V(WaitDMA) V(setVram_0) V(xyVmMap)
+
+
+/* ---- title94, data94, cards94, sram94, stats94, setup94, shootout94, fourway94, menu94 helpers ---- */
+static void expect_z(const Record *r, int z) { expect_reg16(r, R_SR, z ? 4 : 0, "Z flag"); }
+#define ZOUT(r) (((r)->regs_out[R_SR] >> 2) & 1)
+static void expect_z_only(const Record *r, int z) { if (z != (int)ZOUT(r)) expect_z(r, z); }
+static void run_EndOneTimer(const Record *r) { EndOneTimer(OBJ(R_A3)); }
+static void run_getFgtbyte(const Record *r) { expect_reg16(r, R_D0, getFgtbyte(OBJ(R_A2), OBJ(R_A3)), "d0"); }
+static void run_chkFgtBit1(const Record *r) { expect_z_only(r, chkFgtBit1(OBJ(R_A2), OBJ(R_A3))); }
+static void run_ReadGoaliePulled(const Record *r)
+{
+    uint8_t ccr = ReadGoaliePulled(OBJ(R_A3));
+    if ((ccr & (CCR_Z | CCR_N)) != (r->regs_out[R_SR] & (CCR_Z | CCR_N))) expect_reg16(r, R_SR, ccr, "ccr (N, Z)");
+}
+static void run_ShootoutShootCheck(const Record *r) { expect_z_only(r, ShootoutShootCheck(OBJ(R_A3))); }
+static void run_SkatePath(const Record *r)
+{
+    int16_t x = D16(R_D0), y = D16(R_D1);
+    SkatePath(&x, &y, OBJ(R_A3));
+    expect_reg16(r, R_D0, (uint16_t)x, "d0"); expect_reg16(r, R_D1, (uint16_t)y, "d1");
+}
+static void run_NextPathPoint(const Record *r) { NextPathPoint(OBJ(R_A3)); }
+static void run_StartShootoutPath(const Record *r) { StartShootoutPath(OBJ(R_A3)); }
+static void run_RandomFaceoffAnim(const Record *r) { expect_reg16(r, R_D0, RandomFaceoffAnim(), "d0"); }
+static void run_LeadSongExit(const Record *r) { LeadSongExit(stack_word(r, 0)); }
+static void run_chgplayer(const Record *r) { chgplayer(R16(R_D4), OBJ(R_A3)); }
+static void run_swpchk(const Record *r) { swpchk(OBJ(R_A3)); }
+static void run_j_setc1player(const Record *r) { j_setc1player(R16(R_D0)); }
+static void run_j_setc2player(const Record *r) { j_setc2player(R16(R_D0)); }
+static void run_CountButtonPress(const Record *r) { CountButtonPress(D16(R_D4), OBJ(R_A3)); }
+static void run_PSandSOpassdir(const Record *r) { PSandSOpassdir(OBJ(R_A3)); }
+static void run_LoadHomeTeamGfx(const Record *r) { expect_reg16(r, R_D4, LoadHomeTeamGfx(R16(R_D4)), "d4"); }
+static void run_HotColdIcon(const Record *r) { HotColdIcon(TEAM(R_A2)); }
+static void run_clrTmPdst(const Record *r) { clrTmPdst(TEAM(R_A0)); }
+static void run_PlaceBoardFall(const Record *r) { PlaceBoardFall(OBJ(R_A3)); }
+static void run_PrintParenNumber(const Record *r) { PrintParenNumber(TEAM(R_A2), R16(R_D0)); }
+static void run_PrintPlayerGoals(const Record *r) { PrintPlayerGoals(R16(R_D0), TEAM(R_A2)); }
+static void run_PrintPlayerAssists(const Record *r) { PrintPlayerAssists(R16(R_D0), TEAM(R_A2)); }
+static void run_CalcStarScores(const Record *r) { CalcStarScores(R16(R_D2)); }
+static void run_CalcTeamStarScores(const Record *r)
+{
+    uint8_t *out = TEAM(R_A4);
+    expect_reg16(r, R_D3, (uint16_t)CalcTeamStarScores(TEAM(R_A2), TEAM(R_A3), &out, R16(R_D5)), "d3");
+    expect_reg16(r, R_A4, (uint16_t)ram_addr(out), "a4");
+}
+static void run_TakeTopStarScore(const Record *r)
+{
+    uint8_t *tm;
+    expect_reg16(r, R_D0, TakeTopStarScore(&tm), "d0");
+    expect_reg16(r, R_A2, (uint16_t)ram_addr(tm), "a2");
+}
+static void run_GetPlayerNamePointer(const Record *r) { expect_reg16(r, R_A0, (uint16_t)GetPlayerNamePointer(R16(R_D0), TEAM(R_A2)), "a0"); }
+static void run_ConvertByteToDigits(const Record *r) { expect_reg16(r, R_A1, (uint16_t)ram_addr(ConvertByteToDigits(R16(R_D0), TEAM(R_A1))), "a1"); }
+static void run_FinalizeTextBuffer(const Record *r) { expect_reg16(r, R_A1, (uint16_t)FinalizeTextBuffer(TEAM(R_A1)), "a1"); }
+static void run_FormatPlayerName(const Record *r) { expect_reg16(r, R_A1, (uint16_t)FormatPlayerName(R16(R_D0), TEAM(R_A2)), "a1"); }
+static void run_FormatPlayerNumInitial(const Record *r) { expect_reg16(r, R_A1, (uint16_t)FormatPlayerNumInitial(R16(R_D0), TEAM(R_A2)), "a1"); }
+static void run_getname(const Record *r) { expect_reg16(r, R_A1, (uint16_t)getname(R16(R_D0), TEAM(R_A2)), "a1"); }
+static void run_GetPlayerName(const Record *r) { expect_reg16(r, R_A1, (uint16_t)GetPlayerName(), "a1"); }
+static void run_GetPlayerNumInitial(const Record *r) { expect_reg16(r, R_A1, (uint16_t)GetPlayerNumInitial(), "a1"); }
+static void run_GetShifter(const Record *r) { uint16_t d2; expect_reg16(r, R_D1, GetShifter(&d2), "d1"); expect_reg16(r, R_D2, d2, "d2"); }
+static void run_wallcollduringcheck(const Record *r) { wallcollduringcheck(OBJ(R_A2), OBJ(R_A3)); }
+static void run_CrowdRecordIO(const Record *r) { CrowdRecordIO(r->regs_in[R_D1], r->regs_in[R_A0]); }
+static void run_ReadCrowdRecord(const Record *r) { ReadCrowdRecord(r->regs_in[R_D1], r->regs_in[R_A0]); }
+static void run_ReadSRAM(const Record *r) { ReadSRAM(r->regs_in[R_D0], r->regs_in[R_D1], r->regs_in[R_A0]); }
+static void run_WriteSRAM(const Record *r) { WriteSRAM(r->regs_in[R_D0], r->regs_in[R_D1], r->regs_in[R_A0]); }
+static void run_GetPlayerCount(const Record *r) { expect_reg16(r, R_D0, GetPlayerCount(TEAM(R_A2)), "d0"); }
+static void run_GetGoalieCount(const Record *r) { expect_reg16(r, R_D0, GetGoalieCount(TEAM(R_A2)), "d0"); }
+static void run_ReloadEnergyBarTiles(const Record *r) { expect_reg16(r, R_D4, ReloadEnergyBarTiles(), "d4"); }
+static void run_ReloadCrowdTiles(const Record *r) { expect_reg16(r, R_D4, ReloadCrowdTiles(), "d4"); }
+static void run_NextShooter(const Record *r) { NextShooter(OBJ(R_A3)); }
+static void run_Set4WayPlayerStub(const Record *r) { Set4WayPlayerStub(OBJ(R_A3)); }
+static void run_PrintMenuItem(const Record *r) { expect_reg16(r, R_A1, (uint16_t)PrintMenuItem(r->regs_in[R_A1]), "a1"); }
+static void run_UpdateMenuSelection(const Record *r) { expect_reg16(r, R_D1, UpdateMenuSelection(), "d1"); }
+static void run_DrawMenuScreen(const Record *r) { expect_reg16(r, R_D1, DrawMenuScreen(), "d1"); }
+static void run_HandleMenuInput(const Record *r) { uint16_t d1 = R16(R_D1); expect_z_only(r, HandleMenuInput(&d1)); expect_reg16(r, R_D1, d1, "d1"); }
+static void run_PutTeamBlock(const Record *r) { PutTeamBlock(R16(R_D0)); }
+V(ChooseSong) V(CheckScoreLeader) V(LeadSong) V(ClearLeadSong) V(rtsChgplayer) V(ClearPenalties) V(SetSflags8Bit1) V(box) V(ShowGoalBox)
+V(PenaltyShotBox) V(ShowThreeStars) V(ShowInjuryBox) V(CountGoalies) V(ReloadRinkGraphics) V(PeriodOver) V(resetplstuff) V(SprSort)
+V(setupEASNmap) V(setupIceRinkPal) V(setplayercolors) V(ShootoutModeBox) V(CountShootoutGoals) V(ShootoutWonBy) V(SetMenuPrintX) V(vcountwait)
 
 const Port ports[] = {
     { SYM_checkwallcoll, "checkwallcoll", run_checkwallcoll },
@@ -791,5 +871,81 @@ const Port ports[] = {
     { SYM_WaitDMA, "WaitDMA", run_WaitDMA },
     { SYM_setVram_0, "setVram_0", run_setVram_0 },
     { SYM_xyVmMap, "xyVmMap", run_xyVmMap },
+    { SYM_EndOneTimer, "EndOneTimer", run_EndOneTimer },
+    { SYM_getFgtbyte, "getFgtbyte", run_getFgtbyte },
+    { SYM_chkFgtBit1, "chkFgtBit1", run_chkFgtBit1 },
+    { SYM_ReadGoaliePulled, "ReadGoaliePulled", run_ReadGoaliePulled },
+    { SYM_ShootoutShootCheck, "ShootoutShootCheck", run_ShootoutShootCheck },
+    { SYM_SkatePath, "SkatePath", run_SkatePath },
+    { SYM_NextPathPoint, "NextPathPoint", run_NextPathPoint },
+    { SYM_StartShootoutPath, "StartShootoutPath", run_StartShootoutPath },
+    { SYM_RandomFaceoffAnim, "RandomFaceoffAnim", run_RandomFaceoffAnim },
+    { SYM_LeadSongExit, "LeadSongExit", run_LeadSongExit },
+    { SYM_chgplayer, "chgplayer", run_chgplayer },
+    { SYM_swpchk, "swpchk", run_swpchk },
+    { SYM_j_setc1player, "j_setc1player", run_j_setc1player },
+    { SYM_j_setc2player, "j_setc2player", run_j_setc2player },
+    { SYM_CountButtonPress, "CountButtonPress", run_CountButtonPress },
+    { SYM_PSandSOpassdir, "PSandSOpassdir", run_PSandSOpassdir },
+    { SYM_LoadHomeTeamGfx, "LoadHomeTeamGfx", run_LoadHomeTeamGfx },
+    { SYM_HotColdIcon, "HotColdIcon", run_HotColdIcon },
+    { SYM_clrTmPdst, "clrTmPdst", run_clrTmPdst },
+    { SYM_PlaceBoardFall, "PlaceBoardFall", run_PlaceBoardFall },
+    { SYM_PrintParenNumber, "PrintParenNumber", run_PrintParenNumber },
+    { SYM_PrintPlayerGoals, "PrintPlayerGoals", run_PrintPlayerGoals },
+    { SYM_PrintPlayerAssists, "PrintPlayerAssists", run_PrintPlayerAssists },
+    { SYM_CalcStarScores, "CalcStarScores", run_CalcStarScores },
+    { SYM_CalcTeamStarScores, "CalcTeamStarScores", run_CalcTeamStarScores },
+    { SYM_TakeTopStarScore, "TakeTopStarScore", run_TakeTopStarScore },
+    { SYM_GetPlayerNamePointer, "GetPlayerNamePointer", run_GetPlayerNamePointer },
+    { SYM_ConvertByteToDigits, "ConvertByteToDigits", run_ConvertByteToDigits },
+    { SYM_FinalizeTextBuffer, "FinalizeTextBuffer", run_FinalizeTextBuffer },
+    { SYM_FormatPlayerName, "FormatPlayerName", run_FormatPlayerName },
+    { SYM_FormatPlayerNumInitial, "FormatPlayerNumInitial", run_FormatPlayerNumInitial },
+    { SYM_getname, "getname", run_getname },
+    { SYM_GetPlayerName, "GetPlayerName", run_GetPlayerName },
+    { SYM_GetPlayerNumInitial, "GetPlayerNumInitial", run_GetPlayerNumInitial },
+    { SYM_GetShifter, "GetShifter", run_GetShifter },
+    { SYM_wallcollduringcheck, "wallcollduringcheck", run_wallcollduringcheck },
+    { SYM_CrowdRecordIO, "CrowdRecordIO", run_CrowdRecordIO },
+    { SYM_ReadCrowdRecord, "ReadCrowdRecord", run_ReadCrowdRecord },
+    { SYM_ReadSRAM, "ReadSRAM", run_ReadSRAM },
+    { SYM_WriteSRAM, "WriteSRAM", run_WriteSRAM },
+    { SYM_GetPlayerCount, "GetPlayerCount", run_GetPlayerCount },
+    { SYM_GetGoalieCount, "GetGoalieCount", run_GetGoalieCount },
+    { SYM_ReloadEnergyBarTiles, "ReloadEnergyBarTiles", run_ReloadEnergyBarTiles },
+    { SYM_ReloadCrowdTiles, "ReloadCrowdTiles", run_ReloadCrowdTiles },
+    { SYM_NextShooter, "NextShooter", run_NextShooter },
+    { SYM_Set4WayPlayerStub, "Set4WayPlayerStub", run_Set4WayPlayerStub },
+    { SYM_PrintMenuItem, "PrintMenuItem", run_PrintMenuItem },
+    { SYM_UpdateMenuSelection, "UpdateMenuSelection", run_UpdateMenuSelection },
+    { SYM_DrawMenuScreen, "DrawMenuScreen", run_DrawMenuScreen },
+    { SYM_HandleMenuInput, "HandleMenuInput", run_HandleMenuInput },
+    { SYM_PutTeamBlock, "PutTeamBlock", run_PutTeamBlock },
+    { SYM_ChooseSong, "ChooseSong", run_ChooseSong },
+    { SYM_CheckScoreLeader, "CheckScoreLeader", run_CheckScoreLeader },
+    { SYM_LeadSong, "LeadSong", run_LeadSong },
+    { SYM_ClearLeadSong, "ClearLeadSong", run_ClearLeadSong },
+    { SYM_rtsChgplayer, "rtsChgplayer", run_rtsChgplayer },
+    { SYM_ClearPenalties, "ClearPenalties", run_ClearPenalties },
+    { SYM_SetSflags8Bit1, "SetSflags8Bit1", run_SetSflags8Bit1 },
+    { SYM_box, "box", run_box },
+    { SYM_ShowGoalBox, "ShowGoalBox", run_ShowGoalBox },
+    { SYM_PenaltyShotBox, "PenaltyShotBox", run_PenaltyShotBox },
+    { SYM_ShowThreeStars, "ShowThreeStars", run_ShowThreeStars },
+    { SYM_ShowInjuryBox, "ShowInjuryBox", run_ShowInjuryBox },
+    { SYM_CountGoalies, "CountGoalies", run_CountGoalies },
+    { SYM_ReloadRinkGraphics, "ReloadRinkGraphics", run_ReloadRinkGraphics },
+    { SYM_PeriodOver, "PeriodOver", run_PeriodOver },
+    { SYM_resetplstuff, "resetplstuff", run_resetplstuff },
+    { SYM_SprSort, "SprSort", run_SprSort },
+    { SYM_setupEASNmap, "setupEASNmap", run_setupEASNmap },
+    { SYM_setupIceRinkPal, "setupIceRinkPal", run_setupIceRinkPal },
+    { SYM_setplayercolors, "setplayercolors", run_setplayercolors },
+    { SYM_ShootoutModeBox, "ShootoutModeBox", run_ShootoutModeBox },
+    { SYM_CountShootoutGoals, "CountShootoutGoals", run_CountShootoutGoals },
+    { SYM_ShootoutWonBy, "ShootoutWonBy", run_ShootoutWonBy },
+    { SYM_SetMenuPrintX, "SetMenuPrintX", run_SetMenuPrintX },
+    { SYM_vcountwait, "vcountwait", run_vcountwait },
     { 0, NULL, NULL }
 };
