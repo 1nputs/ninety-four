@@ -1028,11 +1028,10 @@ de1:
         int16_t d2w = o->Ypos;
         if (d0 < 0) { d0 = (int16_t)-d0; d2w = (int16_t)-d2w; }
         d2w = (int16_t)(d2w - d0);
-        if (d2w >= 0xA) {                                 /* between the net and the carrier */
-            d0 = (int16_t)(o->Xpos - puckx());
-            if (d0 < 0) d0 = (int16_t)-d0;
-            if (d0 >= 0xF) return;
-        }
+        if (d2w < 0xA) return;                            /* not between the net and the carrier */
+        d0 = (int16_t)(o->Xpos - puckx());
+        if (d0 < 0) d0 = (int16_t)-d0;
+        if (d0 >= 0xF) return;                            /* nor in line with him */
         d0 = o->checking;
         uint8_t saved = o->checking;
         int16_t dbl = (int16_t)(int8_t)(d0 + d0);

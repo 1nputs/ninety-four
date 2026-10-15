@@ -5,6 +5,7 @@
  *
  * usage: nhl94 [--rom FILE] [--snap FILE] [--scale N] [--aspect] [--sram FILE]
  *              [--headless] [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE]
+ *              [--lockstep FILE]
  *
  * --headless runs without a window or pacing (as fast as it goes): with --frames it stops, --shot
  * writes the last picture, --wav the sound. Keys: md-runtime's (include/mdrt/platform_sdl2.h):
@@ -16,18 +17,19 @@
 #include <string.h>
 #include "game.h"
 #include "rom.h"
+#include "symbols_gen.h"
 #include "z80.h"
 #include "native.h"
 #include "mdrt/platform_sdl2.h"
 
-static const char *snap = "out/states/faceoff.snap", *shot_path, *shots_dir, *wav_path;
+static const char *snap = "out/states/faceoff.snap", *shot_path, *shots_dir, *wav_path, *lockstep_path;
 static long stop_after = -1, shots_every = 600;
 static jmp_buf out;
 
 /* ---- the snapshot --------------------------------------------------------------------------- */
 
 #define SNAP_BASE (8 + 0x10000 + 0x10000 + 128 + 80 + 32 + 0x2000)
-static uint8_t snapshot[SNAP_BASE + 4 + 512 + 17 + 8];
+static uint8_t snapshot[SNAP_BASE + 4 + 512 + 17 + 8 + 4 + 16];
 static size_t snapshot_len;
 
 static void read_snapshot(void)
@@ -52,6 +54,10 @@ static void load_snapshot(mdrt *m)
     memcpy(s.reg, p, 24); p += 32;
     mdrt_vdp_set_state(mdrt_get_vdp(m), &s);
     memcpy(z80_ram, p, 0x2000); p += 0x2000;
+    if (snapshot_len >= sizeof snapshot) {                /* the I/O chip: the pads' TH direction and the rest */
+        const uint8_t *io = snapshot + sizeof snapshot - 16;
+        for (int i = 1; i < 16; i++) mdrt_pad_write(mdrt_get_pads(m), 0xA10001u + 2u * (unsigned)i, io[i]);
+    }
     native_hal_start(m, 0);
     int chips = snapshot_len >= sizeof snapshot && (p[0] & 1);
     if (!chips) fprintf(stderr, "%s: no sound chip registers (a snapshot from a saved state): the FM sounds start blank\n", snap);
@@ -98,12 +104,27 @@ static uint8_t read68k(void *user, uint32_t addr) { (void)user; return *mem_ptr(
 
 void native_quit(void) { longjmp(out, 1); }
 
+/* where the snapshot's 68k was: the rest of what it was doing, before the game loop goes on */
+static void resume(void)
+{
+    const uint8_t *p = snapshot + sizeof snapshot - 20;
+    uint32_t pc = snapshot_len >= sizeof snapshot ? (uint32_t)(p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24) : 0;
+    if (pc >= SYM_setvideo && pc < SYM_setvideo + 12) {   /* in setvideo's wait for dfok, at a game frame's end */
+        setvideo();
+        demoread();
+        if (g.sflags & HI(sfpz)) Pausemode();
+    } else if (pc) {
+        fprintf(stderr, "%s: the 68k was at %06x, not a place the native game resumes from: it starts the game loop\n", snap, pc);
+    }
+}
+
 void native_game(mdrt *m, void *user)
 {
     (void)user;
     native_m = m;
     if (setjmp(out)) return;
     load_snapshot(m);
+    resume();
     run68k(Gameloop);
 }
 
@@ -128,6 +149,7 @@ static void write_ppm(const char *path)
 
 void native_frame_done(long frame)
 {
+    lockstep_check(frame);
     if (shots_dir && frame % shots_every == 0) {
         char path[512];
         snprintf(path, sizeof path, "%s/f%06ld.ppm", shots_dir, frame);
@@ -177,9 +199,10 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--every") && i + 1 < argc) shots_every = atol(argv[++i]);
         else if (!strcmp(argv[i], "--wav") && i + 1 < argc) wav_path = argv[++i];
         else if (!strcmp(argv[i], "--headless")) headless = 1;
+        else if (!strcmp(argv[i], "--lockstep") && i + 1 < argc) { lockstep_path = argv[++i]; headless = 1; }
         else {
             fprintf(stderr, "usage: %s [--rom FILE] [--snap FILE] [--scale N] [--aspect] [--sram FILE] [--headless]\n"
-                            "       [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE]\n", argv[0]);
+                            "       [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE] [--lockstep FILE]\n", argv[0]);
             return 2;
         }
     }
@@ -197,6 +220,7 @@ int main(int argc, char **argv)
     if (wav) wav_header(c.audio_rate);
     c.platform = (mdrt_platform){ NULL, NULL, wav_audio, NULL, NULL };
     mdrt *m = mdrt_new(&c);
+    if (lockstep_path && !lockstep_load(lockstep_path, m)) return 1;
     FILE *f = fopen(sram, "rb");                          /* save RAM: as the window's platform keeps it */
     if (f) { if (fread(mdrt_get_sram(m)->bytes, 1, 0x2000, f) != 0x2000) fprintf(stderr, "%s: short\n", sram); fclose(f); }
     native_game(m, NULL);

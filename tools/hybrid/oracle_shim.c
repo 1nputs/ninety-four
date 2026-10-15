@@ -307,6 +307,10 @@ void oracle_chips_get(uint8_t *ym, uint8_t *psg) {
 }
 
 static void st_fm(unsigned int cycles, unsigned int address, unsigned int data);
+static FILE *ls;
+static uint32_t ls_vblank;
+static void lockstep_access(int write, int width, uint32_t a, uint32_t value);
+static void lockstep_vblank(void);
 
 static void hook(hook_type_t type, int width, unsigned int address, unsigned int value) {
   if (fm_write != chip_fm && fm_write != st_fm) {          /* GPGX set its chip up again: follow it */
@@ -317,6 +321,10 @@ static void hook(hook_type_t type, int width, unsigned int address, unsigned int
     uint32_t a = address & 0xFFFFFF;
     if (a >= 0xC00010 && a < 0xC00018 && (a & 1)) psg_shadow_write((uint8_t)value);
     else if ((a & ~1u) == 0xA11200) ym_shadow_reset(); /* GPGX resets the FM chip with the Z80, both ways */
+  }
+  if (ls) {
+    if (type == HOOK_M68K_R) lockstep_access(0, width, address & 0xFFFFFF, value);
+    else if (type == HOOK_M68K_E && address == ls_vblank) lockstep_vblank();
   }
   if (st && type == HOOK_M68K_W) {
     uint32_t a = address & 0xFFFFFF;
@@ -636,6 +644,9 @@ static void sndtrace_access(uint32_t a, uint32_t value) {
   else { st_u8(5); st_u32(t); st_u16((uint16_t)value); }
 }
 
+/* the I/O chip's 16 registers ($A10001-$A1001F, odd addresses) */
+void oracle_io_get(uint8_t *out) { memcpy(out, io_reg, 16); }
+
 /* the Z80 as a sound trace's header has it: PC u16, HL u16, C u8, bank u16, state u8 */
 void oracle_z80_get(uint8_t *out) {
   out[0] = (uint8_t)Z80.pc.w.l; out[1] = (uint8_t)(Z80.pc.w.l >> 8);
@@ -673,3 +684,102 @@ void oracle_sndtrace_close(void) {
   st = NULL;
   if (st_fm_orig) fm_write = st_fm_orig;
 }
+
+/* ---- lockstep vectors for the native game (.lockstep) ---------------------------------------
+ * "MDLS", version u32 = 2, the vblank handler's address u32; then a record at each vblank
+ * interrupt (before the handler's first instruction): tag u8 = 1, flags u8 (bit 0: the 68k was
+ * in a vblank wait loop, as the native game would be; bit 1: the whole state follows the record,
+ * at the first such interrupt after one that was not), the frame u32, the address the 68k was
+ * interrupted at u32, the pad buttons u16 (as oracle_lockstep_buttons last set them: MDRT_PAD_*
+ * bits), the HV counter reads since the last record (n u16, then address u8 (0 $C00008 V,
+ * 1 $C00009 H, 2 a word) and value u16 each), the hashes (FNV-1a 64) of work RAM (68k order)
+ * below the stack ($0000-$DEFF) and of the VDP's 24 registers, VRAM, CRAM and VSRAM (as
+ * oracle_vdp_get gives them); with bit 1: work RAM 64K, the 24 registers, VRAM 64K, CRAM 128 and
+ * VSRAM 80 bytes, the 68k's D0-D7 and A0-A7 u32 each. End: tag u8 = 2.
+ * A wait loop, as test/replay.c tells it: a conditional Bcc.s back (within 16 bytes, over code
+ * reading vcount, palcount or disflags by absolute short address) at or just after the address. */
+static uint16_t ls_buttons, ls_nhv, ls_waitvars[3];
+static uint8_t ls_hv_addr[8192];
+static uint16_t ls_hv[8192];
+static int ls_last_wait = 1;
+
+static int in_wait_loop(uint32_t pc) {
+  for (uint32_t b = pc; b <= pc + 12; b += 2) {
+    uint8_t op = READ_BYTE(cart.rom, b), disp = READ_BYTE(cart.rom, b + 1);
+    if (op < 0x62 || op > 0x6F || !(disp & 0x80) || disp == 0xFF) continue;
+    uint32_t target = b + 2 - (uint32_t)(0x100 - disp);
+    if (target > pc || pc - target > 16) continue;
+    for (uint32_t a = target; a < b; a += 2) {
+      uint16_t w = (uint16_t)(READ_BYTE(cart.rom, a) << 8 | READ_BYTE(cart.rom, a + 1));
+      if (w == ls_waitvars[0] || w == ls_waitvars[1] || w == ls_waitvars[2]) return 1;
+    }
+  }
+  return 0;
+}
+
+static uint64_t fnv64(uint64_t h, const uint8_t *p, size_t n) {
+  for (size_t i = 0; i < n; i++) h = (h ^ p[i]) * 0x100000001B3ull;
+  return h;
+}
+
+static void ls_u8(uint8_t v) { fputc(v, ls); }
+static void ls_u16(uint16_t v) { fputc(v & 0xFF, ls); fputc(v >> 8, ls); }
+static void ls_u32(uint32_t v) { ls_u16((uint16_t)v); ls_u16((uint16_t)(v >> 16)); }
+static void ls_u64(uint64_t v) { ls_u32((uint32_t)v); ls_u32((uint32_t)(v >> 32)); }
+
+void oracle_lockstep_buttons(uint32_t b) { ls_buttons = (uint16_t)b; }
+
+/* also write work RAM (64K, 68k order) to path at record n (counting from 0) */
+static uint32_t ls_records, ls_dump_at = 0xFFFFFFFFu;
+static char ls_dump_path[512];
+void oracle_lockstep_dump(uint32_t n, const char *path) { ls_dump_at = n; snprintf(ls_dump_path, sizeof ls_dump_path, "%s", path); }
+
+/* vcount, palcount, disflags: the work RAM words the game's wait loops read ($FFxxxx short addresses) */
+int oracle_lockstep_open(const char *path, uint32_t vcount, uint32_t palcount, uint32_t disflags) {
+  oracle_install();
+  ls_waitvars[0] = (uint16_t)vcount; ls_waitvars[1] = (uint16_t)palcount; ls_waitvars[2] = (uint16_t)disflags;
+  ls_last_wait = 1;
+  if (ls) fclose(ls);
+  ls = fopen(path, "wb");
+  if (!ls) return 0;
+  ls_vblank = (uint32_t)(READ_BYTE(cart.rom, 0x78) << 24 | READ_BYTE(cart.rom, 0x79) << 16 | READ_BYTE(cart.rom, 0x7A) << 8 | READ_BYTE(cart.rom, 0x7B));
+  fwrite("MDLS", 1, 4, ls); ls_u32(2); ls_u32(ls_vblank);
+  ls_nhv = 0;
+  ls_records = 0;
+  return 1;
+}
+
+static void lockstep_access(int write, int width, uint32_t a, uint32_t value) {
+  if (write || a < 0xC00008 || a > 0xC0000F || ls_nhv >= 8192) return;
+  ls_hv_addr[ls_nhv] = width == 2 ? 2 : (uint8_t)(a & 1);
+  ls_hv[ls_nhv++] = (uint16_t)value;
+}
+
+static void lockstep_vblank(void) {
+  static uint8_t ram[0x10000], v[0x10000], c[128], s[80], r[32], z[0x2000];
+  uint32_t sp = m68k_get_reg(M68K_REG_A7);
+  uint32_t at = (uint32_t)(bus_byte(sp + 2) << 24 | bus_byte(sp + 3) << 16 | bus_byte(sp + 4) << 8 | bus_byte(sp + 5));
+  int wait = in_wait_loop(at & 0xFFFFFF), full = wait && !ls_last_wait;
+  ls_last_wait = wait;
+  ls_u8(1); ls_u8((uint8_t)(wait | full << 1)); ls_u32(frame_no); ls_u32(at & 0xFFFFFF); ls_u16(ls_buttons);
+  ls_u16(ls_nhv);
+  for (int i = 0; i < ls_nhv; i++) { ls_u8(ls_hv_addr[i]); ls_u16(ls_hv[i]); }
+  ls_nhv = 0;
+  ram_copy_be(ram);
+  if (ls_records++ == ls_dump_at) {
+    FILE *f = fopen(ls_dump_path, "wb");
+    if (f) { fwrite(ram, 1, sizeof ram, f); fclose(f); }
+  }
+  oracle_vdp_get(v, c, s, r, z);
+  ls_u64(fnv64(0xCBF29CE484222325ull, ram, 0xDF00));     /* (not the stack above: the native's is C's) */
+  uint64_t h = fnv64(0xCBF29CE484222325ull, r, 24);
+  h = fnv64(h, v, sizeof v); h = fnv64(h, c, sizeof c); h = fnv64(h, s, sizeof s);
+  ls_u64(h);
+  if (full) {
+    fwrite(ram, 1, sizeof ram, ls); fwrite(r, 1, 24, ls); fwrite(v, 1, sizeof v, ls); fwrite(c, 1, sizeof c, ls); fwrite(s, 1, sizeof s, ls);
+    for (int i = 0; i < 8; i++) ls_u32(m68k_get_reg(M68K_REG_D0 + i));   /* (the native keeps some in C) */
+    for (int i = 0; i < 8; i++) ls_u32(m68k_get_reg(M68K_REG_A0 + i));
+  }
+}
+
+void oracle_lockstep_close(void) { if (ls) { ls_u8(2); fclose(ls); ls = NULL; } }

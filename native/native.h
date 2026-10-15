@@ -14,3 +14,7 @@ void native_quit(void);
 void native_frame_done(long frame);
 /* the HAL from master clock `start` of the relay's time (hal_native.c) */
 void native_hal_start(mdrt *m, uint64_t start);
+
+/* lockstep against the oracle (lockstep.c) */
+int lockstep_load(const char *path, mdrt *m);
+void lockstep_check(long frame);

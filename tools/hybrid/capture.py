@@ -2,7 +2,7 @@
 """Record function-level captures from the oracle during scripted play.
 
 usage: capture.py ROM --fn NAME[,NAME...] --out FILE [--state STATE] [--frames N] [--script S]
-                  [--max N] [--stride N] [--coverage FILE]
+                  [--max N] [--stride N] [--coverage FILE] [--from N]
 """
 import argparse, os, sys
 sys.path.insert(0, os.path.dirname(__file__))
@@ -26,6 +26,7 @@ def main():
     ap.add_argument('--poke', default='', help='RAM words to write: "FRAME:ADDR=VAL,...;FRAME:..." (hex)')
     ap.add_argument('--max-log', type=int, default=128, help='MB of call log per record; a longer capture is dropped (memory)')
     ap.add_argument('--spread', action='store_true', help='capture call numbers 1,2,3,4,6,8,12,16,... of each routine instead of the first N')
+    ap.add_argument('--from', dest='from_frame', type=int, default=0, help='capture from this frame on')
     a = ap.parse_args()
 
     o = Oracle()
@@ -35,9 +36,12 @@ def main():
     fns = []
     for f in filter(None, a.fn.split(',')):
         try:
-            o.bp(f); fns.append(f)
+            o.addr(f); fns.append(f)
         except ValueError:
             print(f'skipping {f}: no address known')
+    if not a.from_frame:
+        for f in fns:
+            o.bp(f)
     if not a.no_calls:
         print(f'logging nested calls into {o.fn_set_all()} routines')
     if a.coverage:
@@ -48,6 +52,9 @@ def main():
     script = parse_script(a.script); si = 0
     pokes = parse_pokes(a.poke)
     for f in range(a.frames):
+        if a.from_frame and f == a.from_frame:
+            for fn in fns:
+                o.bp(fn)
         while si < len(script) and script[si][0] <= f:
             o.set_buttons(0, script[si][1]); si += 1
         for ad, v in pokes.get(f, ()):

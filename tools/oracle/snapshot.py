@@ -12,7 +12,8 @@ File: 'NHLS', version 2 (u32 le), RAM 64K (68k order), VRAM 64K (VDP order), CRA
 VSRAM 40 words (big-endian bus words), 32 VDP registers, Z80 RAM 8K, then flags u32 (bit 0: the
 chips' registers are valid), the YM2612's registers (part I 256 bytes, part II 256), the PSG's
 eight registers (u16 le) and its latch u8, the Z80: PC u16, HL u16, C u8, bank u16 (68k address
->> 15), state u8 (bit 0 running, bit 1 bus taken).
+>> 15), state u8 (bit 0 running, bit 1 bus taken); the 68k's PC u32 (where the native game
+resumes: it knows the places a snapshot is taken at); the I/O chip's 16 registers ($A10001 on).
 faceoff.snap is power on, tools/oracle/scripts/boot_to_game.txt, 3401 frames (= faceoff.state).
 """
 import argparse, ctypes as C, os, struct, sys
@@ -54,6 +55,10 @@ def main():
         f.write(struct.pack('<I', 0 if a.state else 1))
         for buf in (ym, psg, z80):
             f.write(bytes(buf))
+        regs = (C.c_uint32 * 18)(); o.lib.oracle_regs_get(regs)
+        f.write(struct.pack('<I', regs[16]))
+        io = (C.c_uint8 * 16)(); o.lib.oracle_io_get(io)
+        f.write(bytes(io))
     print(f'{a.out}: snapshot after {a.frames} frames')
 
 
