@@ -264,8 +264,14 @@ static void enter_frame(uint32_t pc) {
 static void vdptrace_access(int write, int width, uint32_t a, uint32_t value);
 static void vdptrace_tick(void);
 static FILE *vt;
+static FILE *pt;
+static void padtrace_access(int write, int width, uint32_t a, uint32_t value);
 
 static void hook(hook_type_t type, int width, unsigned int address, unsigned int value) {
+  if (pt && (type == HOOK_M68K_R || type == HOOK_M68K_W)) {
+    uint32_t a = address & 0xFFFFFF;
+    if (a >= 0xA10000 && a < 0xA10020) padtrace_access(type == HOOK_M68K_W, width, a, value);
+  }
   if (vt) {
     if (type == HOOK_M68K_R || type == HOOK_M68K_W) {
       uint32_t a = address & 0xFFFFFF;
@@ -382,6 +388,7 @@ void oracle_vdp_get(uint8_t *out_vram, uint8_t *out_cram, uint8_t *out_vsram, ui
 static uint8_t vt_pending;
 static uint16_t vt_first;
 static uint16_t vt_last_vc;
+static int vt_top;          /* a frame was begun under tracing: the next FRAME is whole */
 
 static void vt_u8(uint8_t v) { fputc(v, vt); }
 static void vt_u16(uint16_t v) { fputc(v & 0xFF, vt); fputc(v >> 8, vt); }
@@ -457,7 +464,8 @@ static void vdptrace_access(int write, int width, uint32_t a, uint32_t value) {
 static void vdptrace_tick(void) {
   uint16_t vc = v_counter;
   uint16_t h = (uint16_t)bitmap.viewport.h;
-  if (vt_last_vc < h && vc >= h && vc < lines_per_frame) {
+  if (vc < vt_last_vc) vt_top = 1;                    /* the counter wrapped: a new frame */
+  if (vt_top && vt_last_vc < h && vc >= h && vc < lines_per_frame) {
     uint16_t w = (uint16_t)bitmap.viewport.w;
     vt_u8(10);
     vt_state();
@@ -482,7 +490,7 @@ int oracle_vdptrace_open(const char *path) {
   if (!vt) return 0;
   fwrite("MDVT", 1, 4, vt); vt_u32(1); vt_u8(0); vt_u8(0); vt_u8(0); vt_u8(0);
   vt_state();
-  vt_pending = 0; vt_last_vc = v_counter;
+  vt_pending = 0; vt_last_vc = v_counter; vt_top = 0;
   return 1;
 }
 
@@ -492,3 +500,34 @@ void oracle_vdptrace_close(void) {
   fclose(vt);
   vt = NULL;
 }
+
+/* ---- pad port test vectors for md-runtime (.padtrace) --------------------------------------
+ * "MDPT", version u32 = 1, the 16 I/O registers at the start (io_reg: version, data 1-3, control
+ * 1-3, serial ...); then records: tag u8
+ *   1 FRAME  buttons u16 port 1, buttons u16 port 2 (bits: 0 up, 1 down, 2 left, 3 right, 4 B,
+ *            5 C, 6 A, 7 start) held from here on
+ *   2 WRITE  address u32, width u8, value u32 (a write to $A10000-$A1001F)
+ *   3 READ   address u32, width u8, value u32 (the value the oracle returned)
+ *   4 END
+ */
+static void pt_u8(uint8_t v) { fputc(v, pt); }
+static void pt_u32(uint32_t v) { for (int i = 0; i < 4; i++) fputc((v >> (8 * i)) & 0xFF, pt); }
+
+static void padtrace_access(int write, int width, uint32_t a, uint32_t value) {
+  pt_u8(write ? 2 : 3); pt_u32(a); pt_u8((uint8_t)width); pt_u32(value);
+}
+
+int oracle_padtrace_open(const char *path) {
+  oracle_install();
+  if (pt) fclose(pt);
+  pt = fopen(path, "wb");
+  if (!pt) return 0;
+  fwrite("MDPT", 1, 4, pt); pt_u32(1);
+  fwrite(io_reg, 1, 16, pt);
+  return 1;
+}
+void oracle_padtrace_frame(uint32_t b1, uint32_t b2) {
+  if (!pt) return;
+  pt_u8(1); fputc(b1 & 0xFF, pt); fputc((b1 >> 8) & 0xFF, pt); fputc(b2 & 0xFF, pt); fputc((b2 >> 8) & 0xFF, pt);
+}
+void oracle_padtrace_close(void) { if (pt) { pt_u8(4); fclose(pt); pt = NULL; } }
