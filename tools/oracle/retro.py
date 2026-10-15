@@ -188,6 +188,8 @@ class Core:
 
     def _audio_batch(self, data, frames):
         self.audio_samples += frames
+        if getattr(self, 'audio_keep', None) is not None:
+            self.audio_keep += C.string_at(data, frames * 4)
         return frames
 
     def _input_state(self, port, device, index, id_):

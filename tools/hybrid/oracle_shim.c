@@ -266,8 +266,15 @@ static void vdptrace_tick(void);
 static FILE *vt;
 static FILE *pt;
 static void padtrace_access(int write, int width, uint32_t a, uint32_t value);
+static FILE *st;
+static void sndtrace_access(uint32_t a, uint32_t value);
 
 static void hook(hook_type_t type, int width, unsigned int address, unsigned int value) {
+  if (st && type == HOOK_M68K_W) {
+    uint32_t a = address & 0xFFFFFF;
+    if ((a >= 0xC00010 && a < 0xC00018) || (a >= 0xA00000 && a < 0xA02000) || (a & ~1u) == 0xA11100 || (a & ~1u) == 0xA11200)
+      sndtrace_access(a, value);
+  }
   if (pt && (type == HOOK_M68K_R || type == HOOK_M68K_W)) {
     uint32_t a = address & 0xFFFFFF;
     if (a >= 0xA10000 && a < 0xA10020) padtrace_access(type == HOOK_M68K_W, width, a, value);
@@ -531,3 +538,61 @@ void oracle_padtrace_frame(uint32_t b1, uint32_t b2) {
   pt_u8(1); fputc(b1 & 0xFF, pt); fputc((b1 >> 8) & 0xFF, pt); fputc(b2 & 0xFF, pt); fputc((b2 >> 8) & 0xFF, pt);
 }
 void oracle_padtrace_close(void) { if (pt) { pt_u8(4); fclose(pt); pt = NULL; } }
+
+/* ---- sound test vectors for md-runtime and the Z80 relay (.sndtrace) -----------------------
+ * "MDST", version u32 = 1, the oracle's audio rate u32 (Hz), Z80 RAM at the start [8192];
+ * then events: tag u8, time u32 (master clocks since the trace started; 3420 a line, 262 lines a
+ * frame), and
+ *   1 YM     address u8 (0 / 1 address / data of part I, 2 / 3 of part II), value u8
+ *   2 PSG    value u8                     (68k writes to $C00011)
+ *   3 Z80RAM address u16, value u8        (68k byte writes to $A00000-$A01FFF)
+ *   4 BUSREQ value u16 | 5 Z80RESET value u16
+ *   6 AUDIO  n u32, n stereo frames of s16 (the oracle's output for the frame just run)
+ *   7 END
+ */
+static void (*st_fm_orig)(unsigned int, unsigned int, unsigned int);
+static uint32_t st_base;
+
+static void st_u8(uint8_t v) { fputc(v, st); }
+static void st_u16(uint16_t v) { fputc(v & 0xFF, st); fputc(v >> 8, st); }
+static void st_u32(uint32_t v) { st_u16((uint16_t)v); st_u16((uint16_t)(v >> 16)); }
+
+static void st_fm(unsigned int cycles, unsigned int address, unsigned int data) {
+  if (st) { st_u8(1); st_u32(st_base + cycles); st_u8((uint8_t)(address & 3)); st_u8((uint8_t)data); }
+  st_fm_orig(cycles, address, data);
+}
+
+static void sndtrace_access(uint32_t a, uint32_t value) {
+  uint32_t t = st_base + m68k.cycles;
+  if (a >= 0xC00010 && a < 0xC00018) { st_u8(2); st_u32(t); st_u8((uint8_t)value); }
+  else if (a < 0xA02000) { st_u8(3); st_u32(t); st_u16((uint16_t)(a & 0x1FFF)); st_u8((uint8_t)value); }
+  else if ((a & ~1u) == 0xA11100) { st_u8(4); st_u32(t); st_u16((uint16_t)value); }
+  else { st_u8(5); st_u32(t); st_u16((uint16_t)value); }
+}
+
+int oracle_sndtrace_open(const char *path, uint32_t rate) {
+  oracle_install();
+  if (st) fclose(st);
+  st = fopen(path, "wb");
+  if (!st) return 0;
+  fwrite("MDST", 1, 4, st); st_u32(1); st_u32(rate);
+  fwrite(zram, 1, 0x2000, st);
+  st_base = 0;
+  st_fm_orig = fm_write;
+  fm_write = st_fm;
+  return 1;
+}
+/* after each frame: its audio, and the time base moves on a frame */
+void oracle_sndtrace_frame(const int16_t *samples, uint32_t frames) {
+  if (!st) return;
+  st_u8(6); st_u32(st_base + lines_per_frame * MCYCLES_PER_LINE); st_u32(frames);
+  fwrite(samples, 4, frames, st);
+  st_base += lines_per_frame * MCYCLES_PER_LINE;
+}
+void oracle_sndtrace_close(void) {
+  if (!st) return;
+  st_u8(7);
+  fclose(st);
+  st = NULL;
+  if (st_fm_orig) fm_write = st_fm_orig;
+}
