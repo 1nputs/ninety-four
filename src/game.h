@@ -156,8 +156,6 @@ void eraser(uint16_t w, uint16_t h, uint16_t attr);             /* d0, d1, d2 at
 void Framer(uint16_t w, uint16_t h);                            /* d0, d1 */
 uint16_t DecompressGraphicsPlain(uint32_t tiles, uint16_t start); /* a2, d4 -> d4 = end char */
 uint16_t dobitmap(uint32_t pal, uint32_t map, uint32_t tiles, uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t start, uint16_t palbits); /* a0 a1 a2 d0-d5 -> d4 */
-void play_sfx_or_music_track(uint16_t n);  /* sound94: d0 */
-void stop_current_song(void);              /* sound94 */
 /* checks94 */
 typedef uint16_t (*skate_aux)(uint16_t dir, struct SortObj *o);   /* a0 callback of skateto: d0 -> d0 */
 void asswingo(uint8_t *tm, struct SortObj *o);        /* a2 = team, a3 = player */
@@ -586,6 +584,39 @@ uint16_t DrawMenuScreen(void);                          /* -> d1 */
 int HandleMenuInput(uint16_t *d1);                      /* d1 = pad -> Z (1 = leave the menu), d1 */
 void PutTeamBlock(uint16_t off);                        /* d0 */
 void vcountwait(void);
+/* sound94: channel structs and voice table entries are raw RAM bytes (see sound.c) */
+void p_turnoff(void);
+void rtsfx(void);
+void rtscmd10(void);
+void play_sfx_or_music_track(uint16_t n);  /* d0 */
+void stop_current_song(uint16_t d0);       /* d0 = the caller's d0 (its high byte leaks into an index) */
+void ReadJoyData(void);
+uint8_t ReadPad4Way1(void);                /* -> d0 */
+uint8_t ReadPad4Way2(void);
+uint8_t ReadPad4Way3(void);
+uint8_t ReadPad4Way4(void);
+uint8_t ReadPad4WayPort1(void);
+uint8_t ReadPad1(void);
+uint8_t ReadPad2(void);
+uint8_t ReadPadA0(uint32_t port);          /* a0 -> d0 */
+uint8_t ReadPad3Button(uint32_t port);     /* a0 -> d0 */
+void ResetZ80Bus(void);
+void p_music_vblank(void);
+void z80_bus_release_delay(void);
+void UploadCommandBufferToZ80(void);
+void ProcessOneMusicTrack(uint8_t *slot, uint16_t track);        /* a5, d7 */
+void handle_command_00(uint32_t ev, uint16_t track);             /* a0 = event, d7 */
+void handle_command_10(uint32_t ev, uint16_t track);
+void handle_command_30(uint32_t ev, uint16_t track);
+void handle_command_40(uint32_t ev, uint16_t track);
+void handle_command_60(uint32_t ev, uint16_t track);
+void handle_command_skip(uint32_t ev, uint16_t track);
+void ReleaseChannelAndNote(uint8_t *ch);                         /* a2 */
+void StopPCMChannel(void);
+void UpdateChannelFrequencyAndVolume(uint8_t *ch, const uint8_t *voices);   /* a2, a3 */
+void SetChannelVolume(uint8_t *ch, const uint8_t *voices);                  /* a2, a3 */
+void p_initialZ80(void);
+void ClearAllTrackAndSFXSlots(void);
 /* jsr (a0) to a 68k routine address kept in RAM (dispatch.c) */
 void call68k(uint32_t addr);
 void call68k_missing(uint32_t addr);
@@ -614,7 +645,6 @@ void DoDMA(uint32_t src, uint16_t words, uint16_t vram);   /* video94: a0, d0, d
 void Vmaddr(uint16_t vram);                             /* video94: d0 = VRAM address -> a0 = Vdata */
 void cramfade(void);                                    /* video94 */
 void forceblack2(void);                                 /* video94 */
-void p_music_vblank(void);                              /* sound94 */
 void ReadJoy1(uint16_t *d0, uint16_t *d1, uint16_t *d2, uint16_t *d3);   /* video94 */
 void ReadJoy2(uint16_t *d0, uint16_t *d1, uint16_t *d2, uint16_t *d3);
 void ReadJoy3(uint16_t *d0, uint16_t *d1, uint16_t *d2, uint16_t *d3);

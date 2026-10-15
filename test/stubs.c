@@ -37,7 +37,6 @@ STUB(checkwallcoll) void checkwallcoll(int16_t x, int16_t y, struct SortObj *o)
 }
 #define ARG32(reg, v, name) if (c->regs_in[reg] != (uint32_t)(v)) replay_fail(#name ": " #reg " = %08x, recorded %08x", (uint32_t)(v), c->regs_in[reg])
 #define ARGTEAM(reg, p, name) ARGPTR(reg, p, name)
-STUB(stop_current_song) void stop_current_song(void) { TAKE(stop_current_song); replay_apply(c); }
 STUB(assreplace) void assreplace(uint16_t ass, struct SortObj *o) { TAKE(assreplace); ARG16(R_D0, ass, assreplace); ARGPTR(R_A3, o, assreplace); replay_apply(c); }
 STUB(assinsert) void assinsert(uint16_t ass, struct SortObj *o) { TAKE(assinsert); ARG16(R_D0, ass, assinsert); ARGPTR(R_A3, o, assinsert); replay_apply(c); }
 
@@ -50,9 +49,6 @@ static uint32_t stk32(const Call *c, int off) { return (uint32_t)c->stack[off] <
     if (memcmp(rom_ptr(ret), s, n) != 0) replay_fail(#name ": inline string differs from the ROM at %06x", ret); } while (0)
 STUB(ExitToOpening) void ExitToOpening(void) { TAKE(ExitToOpening); replay_apply(c); }
 /* video94 / sound94 / title94 / setup94 / menu94 helpers of the display and replay modules */
-STUB(p_music_vblank) void p_music_vblank(void) { TAKE(p_music_vblank); replay_apply(c); }
-/* sound94 / menu94 callees of video94 */
-STUB(play_sfx_or_music_track) void play_sfx_or_music_track(uint16_t n) { TAKE(play_sfx_or_music_track); ARG16(R_D0, n, play_sfx_or_music_track); replay_apply(c); }
 /* frame drivers of setup94 (ported with the game loop) */
 STUB(IntermissionStart) void IntermissionStart(void) { TAKE(IntermissionStart); replay_apply(c); }
 /* call68k to a routine that is not ported yet: its recorded call */

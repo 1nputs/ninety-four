@@ -155,7 +155,7 @@ void clockcont(void)
     if (g.gmode & (1 << gmclock)) return;
     if (g.gameclock != 0) return;
     g.disflags |= HI(3);
-    stop_current_song();
+    stop_current_song(0);                                /* periodicevents' d0 is not followed (HANDOFF: register leaks) */
     sfx(SYM_SFXhorn);
     freezewindow();
     clockcont_0();

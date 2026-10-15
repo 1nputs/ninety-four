@@ -321,6 +321,7 @@ void Stop4Pen(const uint8_t *a0, struct SortObj *o)
 {
     int was = g.gmode & (1 << gmclock);
     g.gmode |= 1 << gmclock;
+    uint16_t leak = 0;                                    /* d0 for stop_current_song (the caller's when the clock was stopped: not followed) */
     if (!was) {
         int16_t d0 = 0, d1 = 0;
         uint8_t pen = a0[-2];
@@ -343,11 +344,12 @@ void Stop4Pen(const uint8_t *a0, struct SortObj *o)
         if (d1 <= -0xA6) { d1 = -0xCE; d0 = x0 < 0 ? -0x46 : 0x46; }
         g.fox = (uint16_t)d0;
         g.foy = (uint16_t)d1;
-        limitfo();
+        limitfo();                                        /* keeps d0 */
+        leak = (uint16_t)d0;
     }
     g.Pencntdwn = 0;
     g.gmode |= 1 << gmpen;
-    stop_current_song();
+    stop_current_song(leak);
     sfx(SYM_SFXwhistle);
     SetPA(0xA);                                           /* the whistle */
 }

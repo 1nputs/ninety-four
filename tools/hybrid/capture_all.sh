@@ -34,4 +34,7 @@ run video        --state $S1 --script "$SCRIPT" --max 32 --fn "$(fns video94)" &
 HELPERS="$(tr -s ' \n' ',' < tools/hybrid/helpers_fns.txt)"
 run helpers1p    --state $S1 --script "$SCRIPT" --max 24 --frames 80000 --fn "$HELPERS" &
 run helpers      --state $S2 --max 24 --frames 80000 --fn "$HELPERS" &
+# sound94: the sequencer runs every vblank (p_music_vblank); songs at faceoffs, goals and period ends
+run sound        --state $S2 --max 32 --frames 40000 --fn "$(fns sound94)" &
+run sound1p      --state $S1 --script "$SCRIPT" --max 32 --frames 40000 --fn "$(fns sound94)" &
 wait

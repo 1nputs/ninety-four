@@ -460,6 +460,29 @@ V(ChooseSong) V(CheckScoreLeader) V(LeadSong) V(ClearLeadSong) V(rtsChgplayer) V
 V(PenaltyShotBox) V(ShowThreeStars) V(ShowInjuryBox) V(CountGoalies) V(ReloadRinkGraphics) V(PeriodOver) V(resetplstuff) V(SprSort)
 V(setupEASNmap) V(setupIceRinkPal) V(setplayercolors) V(ShootoutModeBox) V(CountShootoutGoals) V(ShootoutWonBy) V(SetMenuPrintX) V(vcountwait)
 
+
+/* ---- sound94 ---- */
+#define SLOT(reg) ((uint8_t *)ram_ptr(r->regs_in[reg]))
+static void run_play_sfx_or_music_track(const Record *r) { play_sfx_or_music_track(R16(R_D0)); }
+static void run_ReadPad4Way1(const Record *r) { expect_reg16(r, R_D0, ReadPad4Way1(), "d0"); }
+static void run_ReadPad4Way2(const Record *r) { expect_reg16(r, R_D0, ReadPad4Way2(), "d0"); }
+static void run_ReadPad4Way3(const Record *r) { expect_reg16(r, R_D0, ReadPad4Way3(), "d0"); }
+static void run_ReadPad4Way4(const Record *r) { expect_reg16(r, R_D0, ReadPad4Way4(), "d0"); }
+static void run_ReadPad4WayPort1(const Record *r) { expect_reg16(r, R_D0, ReadPad4WayPort1(), "d0"); }
+static void run_ReadPad1(const Record *r) { expect_reg16(r, R_D0, (r->regs_out[R_D0] & 0xFF00) | ReadPad1(), "d0"); }
+static void run_ReadPad2(const Record *r) { expect_reg16(r, R_D0, (r->regs_out[R_D0] & 0xFF00) | ReadPad2(), "d0"); }
+static void run_ReadPadA0(const Record *r) { expect_reg16(r, R_D0, (r->regs_out[R_D0] & 0xFF00) | ReadPadA0(r->regs_in[R_A0] & 0xFFFFFF), "d0"); }
+static void run_ReadPad3Button(const Record *r) { expect_reg16(r, R_D0, (r->regs_out[R_D0] & 0xFF00) | ReadPad3Button(r->regs_in[R_A0] & 0xFFFFFF), "d0"); }
+static void run_ProcessOneMusicTrack(const Record *r) { ProcessOneMusicTrack(SLOT(R_A5), R16(R_D7)); }
+#define CMDH(name) static void run_##name(const Record *r) { name(r->regs_in[R_A0], R16(R_D7)); }
+CMDH(handle_command_00) CMDH(handle_command_10) CMDH(handle_command_30) CMDH(handle_command_40) CMDH(handle_command_60) CMDH(handle_command_skip)
+static void run_ReleaseChannelAndNote(const Record *r) { ReleaseChannelAndNote(SLOT(R_A2)); }
+static void run_UpdateChannelFrequencyAndVolume(const Record *r) { UpdateChannelFrequencyAndVolume(SLOT(R_A2), SLOT(R_A3)); }
+static void run_SetChannelVolume(const Record *r) { SetChannelVolume(SLOT(R_A2), SLOT(R_A3)); }
+V(p_turnoff) V(rtsfx) V(rtscmd10) V(ReadJoyData)
+static void run_stop_current_song(const Record *r) { stop_current_song(R16(R_D0)); } V(ResetZ80Bus) V(p_music_vblank) V(z80_bus_release_delay)
+V(UploadCommandBufferToZ80) V(StopPCMChannel) V(p_initialZ80) V(ClearAllTrackAndSFXSlots)
+
 const Port ports[] = {
     { SYM_checkwallcoll, "checkwallcoll", run_checkwallcoll },
     { SYM_checkgoal, "checkgoal", run_checkgoal },
@@ -947,5 +970,37 @@ const Port ports[] = {
     { SYM_ShootoutWonBy, "ShootoutWonBy", run_ShootoutWonBy },
     { SYM_SetMenuPrintX, "SetMenuPrintX", run_SetMenuPrintX },
     { SYM_vcountwait, "vcountwait", run_vcountwait },
+    { SYM_play_sfx_or_music_track, "play_sfx_or_music_track", run_play_sfx_or_music_track },
+    { SYM_ReadPad4Way1, "ReadPad4Way1", run_ReadPad4Way1 },
+    { SYM_ReadPad4Way2, "ReadPad4Way2", run_ReadPad4Way2 },
+    { SYM_ReadPad4Way3, "ReadPad4Way3", run_ReadPad4Way3 },
+    { SYM_ReadPad4Way4, "ReadPad4Way4", run_ReadPad4Way4 },
+    { SYM_ReadPad4WayPort1, "ReadPad4WayPort1", run_ReadPad4WayPort1 },
+    { SYM_ReadPad1, "ReadPad1", run_ReadPad1 },
+    { SYM_ReadPad2, "ReadPad2", run_ReadPad2 },
+    { SYM_ReadPadA0, "ReadPadA0", run_ReadPadA0 },
+    { SYM_ReadPad3Button, "ReadPad3Button", run_ReadPad3Button },
+    { SYM_ProcessOneMusicTrack, "ProcessOneMusicTrack", run_ProcessOneMusicTrack },
+    { SYM_handle_command_00, "handle_command_00", run_handle_command_00 },
+    { SYM_handle_command_10, "handle_command_10", run_handle_command_10 },
+    { SYM_handle_command_30, "handle_command_30", run_handle_command_30 },
+    { SYM_handle_command_40, "handle_command_40", run_handle_command_40 },
+    { SYM_handle_command_60, "handle_command_60", run_handle_command_60 },
+    { SYM_handle_command_skip, "handle_command_skip", run_handle_command_skip },
+    { SYM_ReleaseChannelAndNote, "ReleaseChannelAndNote", run_ReleaseChannelAndNote },
+    { SYM_UpdateChannelFrequencyAndVolume, "UpdateChannelFrequencyAndVolume", run_UpdateChannelFrequencyAndVolume },
+    { SYM_SetChannelVolume, "SetChannelVolume", run_SetChannelVolume },
+    { SYM_p_turnoff, "p_turnoff", run_p_turnoff },
+    { SYM_rtsfx, "rtsfx", run_rtsfx },
+    { SYM_rtscmd10, "rtscmd10", run_rtscmd10 },
+    { SYM_stop_current_song, "stop_current_song", run_stop_current_song },
+    { SYM_ReadJoyData, "ReadJoyData", run_ReadJoyData },
+    { SYM_ResetZ80Bus, "ResetZ80Bus", run_ResetZ80Bus },
+    { SYM_p_music_vblank, "p_music_vblank", run_p_music_vblank },
+    { SYM_z80_bus_release_delay, "z80_bus_release_delay", run_z80_bus_release_delay },
+    { SYM_UploadCommandBufferToZ80, "UploadCommandBufferToZ80", run_UploadCommandBufferToZ80 },
+    { SYM_StopPCMChannel, "StopPCMChannel", run_StopPCMChannel },
+    { SYM_p_initialZ80, "p_initialZ80", run_p_initialZ80 },
+    { SYM_ClearAllTrackAndSFXSlots, "ClearAllTrackAndSFXSlots", run_ClearAllTrackAndSFXSlots },
     { 0, NULL, NULL }
 };

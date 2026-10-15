@@ -9,6 +9,8 @@
 #define PSG_PORT      0xC00011u
 #define Z80_BUSREQ    0xA11100u
 #define SRAM_BASE     0x200000u
+#define Z80_RESET     0xA11200u
+#define Z80_RAM_BASE  0xA00000u
 uint8_t vdp_hv8(void);       /* move.b (VDP_CNTR).l: V counter */
 uint16_t vdp_hv16(void);     /* move.w (VDP_CNTR).l: HV counter word */
 uint16_t vdp_status(void);   /* move.w (VDP_CTRL).l: status word (bit 1 = DMA busy) */
@@ -23,3 +25,8 @@ void z80_busreq(uint16_t v); /* move.w to IO_Z80BUS: $100 requests the bus, 0 re
 uint8_t z80_busack(void);    /* move.b (IO_Z80BUS).l: bit 0 set while the Z80 still has the bus */
 uint8_t sram_read8(uint32_t off);              /* move.b from save RAM: $200000 + off */
 void sram_write16(uint32_t off, uint16_t v);   /* move.w to save RAM (the byte is the odd half) */
+uint8_t z80_ram_read8(uint16_t off);           /* move.b from Z80 RAM ($A00000 + off), bus held */
+void z80_ram_write8(uint16_t off, uint8_t v);  /* move.b to Z80 RAM */
+void z80_reset(uint16_t v);                    /* move.w to IO_Z80RES: 0 holds the Z80 in reset, $100 runs it */
+uint8_t pad_read(uint32_t port);               /* move.b from a pad data port ($A10003 / $A10005) */
+void pad_write(uint32_t port, uint8_t v);      /* move.b to a pad data port (TH select, 4 way adaptor select) */
