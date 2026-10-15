@@ -1,0 +1,100 @@
+;	vasm version of macros/genesis.mac. Same bytes, no org backpatching: the length words
+;	are forward references and the SNASM @-locals are vasm \@ unique labels.
+
+VmInc MACRO ;set video auto inc. mode
+	move	#$8f00+(\1&255),Vctrl
+	ENDM
+
+String  MACRO    ; nine parameters at most: tools/asm/expand_strings.py expands the real calls
+begin\@ = *
+        dc.w    end\@-begin\@
+        dc.b    \1
+    IF \#>1
+        dc.b    \2
+    ENDIF
+    IF \#>2
+        dc.b    \3
+    ENDIF
+    IF \#>3
+        dc.b    \4
+    ENDIF
+    IF \#>4
+        dc.b    \5
+    ENDIF
+    IF \#>5
+        dc.b    \6
+    ENDIF
+    IF \#>6
+        dc.b    \7
+    ENDIF
+    IF \#>7
+        dc.b    \8
+    ENDIF
+    IF \#>8
+        dc.b    \9
+    ENDIF
+    IF \#>9
+        dc.b    \10
+    ENDIF
+    IF \#>10
+        dc.b    \11
+    ENDIF
+    IF \#>11
+        dc.b    \12
+    ENDIF
+    IF \#>12
+        dc.b    \13
+    ENDIF
+    IF \#>13
+        dc.b    \14
+    ENDIF
+    IF \#>14
+        dc.b    \15
+    ENDIF
+    IF *&1
+        dc.b    0
+    ENDIF
+end\@ = *
+    ENDM
+
+HEX2 MACRO    ; macro for hex data
+    dc.w    $\1,$\2,$\3,$\4
+    ENDM
+
+; Player record: length-prefixed name (0, length; name; 0 pad to even), then 4 rating words
+PLAYER MACRO
+begin\@ = *
+    dc.b $00,end\@-begin\@
+    dc.b \1
+    IF *&1
+        dc.b $00
+    ENDIF
+end\@ = *
+    dc.w $\2,$\3,$\4,$\5
+    ENDM
+
+PIX     MACRO
+        IF      \1=1111
+            dc.b    $55
+        ELSEIF  \1=2131
+            dc.b    $9D
+        ELSEIF  \1=3111
+            dc.b    $D5
+        ENDIF
+        IF      NARG>1
+            IF      \2=1111
+                dc.b    $55
+            ELSEIF  \2=2131
+                dc.b    $9D
+            ELSEIF  \2=3300
+                dc.b    $F0
+            ELSEIF  \2=1311
+                dc.b    $75
+            ENDIF
+        ENDIF
+        IF      NARG>2
+            IF      \3=1213
+                dc.b    $67
+            ENDIF
+        ENDIF
+    ENDM

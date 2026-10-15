@@ -1,0 +1,14 @@
+# ROMs are never committed; the build extracts assets from the user's own copy
+*.gen
+*.bin
+*.smd
+*.md.idb
+*.idb
+# reference material fetched by tools/fetch_refs.sh
+/ref/
+# build products and run output
+/build/
+/out/
+__pycache__/
+*.o
+*.so

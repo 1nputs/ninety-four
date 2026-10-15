@@ -1,0 +1,4 @@
+# Retail ROM, default options: Los Angeles at Montreal, one player (home), 10 minute periods,
+# manual goalies. Start presses walk title -> game setup -> matchups -> pregame -> faceoff.
+# Faceoff is on the ice from about frame 3400.
+900:START,910:,1500:START,1510:,2100:START,2110:,2700:START,2710:,3300:START,3310:
