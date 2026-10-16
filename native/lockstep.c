@@ -14,8 +14,13 @@
  * screens load for frames with the vblank on) the player compares the native state with the
  * oracle's there, but for what the oracle's vblank code changed in the lag frames (the
  * recording's lag mask, version 4), then takes the oracle's state in place and goes on.
+ * Better, from version 5 the recording counts the game's port accesses (the C port makes the same
+ * accesses in the same order): outside the game the player runs each of the oracle's lag
+ * interrupts in the native game's work right after the same access (or, when it came while the
+ * interrupts were masked, at the unmask that follows), so the waits after it are checked exactly.
  * A difference while in step stops the run, with work RAM in out/lockstep-native.ram for diffing
  * against the oracle's (lockstep.py --dump). */
+#define _GNU_SOURCE                                       /* dladdr */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,8 +32,9 @@
 #define STATE_SIZE (0x10000 + 24 + 0x10000 + 128 + 80 + 64 + 0x2000 + 8)
 #define MASK_SIZE (0x2000 + 4 + 0x2000 + 16 + 16)
 typedef struct record {
-    uint8_t flags;              /* 1: in a wait loop, 2: the whole state follows */
-    uint32_t frame, at;
+    uint8_t flags;              /* 1: in a wait loop, 2: the whole state follows, 4: at an unmask */
+    uint32_t frame, at, writes;
+    uint32_t routine;           /* the 68k routine (the last global label) at */
     uint16_t buttons, nhv;
     const uint8_t *hv, *state, *mask;
     uint64_t ram, vdp;
@@ -39,7 +45,7 @@ static size_t nrecs, next;              /* the oracle's next record */
 static size_t span_lo, span_hi;         /* the records whose HV reads this span replays */
 static size_t hv_rec, hv_used;
 static int hv_over;
-static long checked, lagged, resynced, skipped, masked;
+static long checked, lagged, resynced, skipped, masked, placed;
 static int insync = 1;                  /* checking: the native game and the oracle are in step */
 static int restarted;                   /* the wait after a restart is the same moment again */
 
@@ -64,13 +70,24 @@ static uint16_t hv_source(void *user)
     return e[0] == 0 ? (uint16_t)(v << 8) : v;
 }
 
+/* the 68k routine holding address a: the last global label at or below it */
+static uint32_t routine_at(uint32_t a)
+{
+    uint32_t best = 0;
+    for (size_t i = 0; i < sizeof rom_syms / sizeof *rom_syms; i++)
+        if (rom_syms[i].addr <= a && rom_syms[i].addr > best) best = rom_syms[i].addr;
+    return best;
+}
+
 static uint16_t buttons;
 static void pad_source(void *user, uint16_t b[2]) { (void)user; b[0] = buttons; b[1] = 0; }
+
+static size_t lag_next;                 /* the span's next lag interrupt to place */
 
 /* the span up to the oracle's next interrupt in a wait loop */
 static void next_span(void)
 {
-    span_lo = hv_rec = next;
+    lag_next = span_lo = hv_rec = next;
     hv_used = 0;
     hv_over = 0;
     while (next < nrecs && !(recs[next].flags & 1)) next++;
@@ -85,8 +102,8 @@ int lockstep_load(const char *path, mdrt *m)
     long len = ftell(f);
     fseek(f, 0, SEEK_SET);
     uint8_t *d = malloc((size_t)len);
-    if (!d || fread(d, 1, (size_t)len, f) != (size_t)len || len < 12 || memcmp(d, "MDLS", 4) || le32(d + 4) < 3 || le32(d + 4) > 4) {
-        fclose(f); fprintf(stderr, "%s: not a version 3 or 4 lockstep file\n", path); return 0;
+    if (!d || fread(d, 1, (size_t)len, f) != (size_t)len || len < 12 || memcmp(d, "MDLS", 4) || le32(d + 4) < 3 || le32(d + 4) > 5) {
+        fclose(f); fprintf(stderr, "%s: not a version 3 to 5 lockstep file\n", path); return 0;
     }
     fclose(f);
     version = (int)le32(d + 4);
@@ -96,11 +113,15 @@ int lockstep_load(const char *path, mdrt *m)
         if (nrecs == cap) recs = realloc(recs, (cap *= 2) * sizeof *recs);
         record *r = &recs[nrecs++];
         r->flags = d[o + 1]; r->frame = le32(d + o + 2); r->at = le32(d + o + 6);
-        r->buttons = le16(d + o + 10); r->nhv = le16(d + o + 12);
+        r->buttons = le16(d + o + 10);
+        r->writes = 0xFFFFFFFFu;
+        if (version >= 5) { r->writes = le32(d + o + 12); o += 4; }
+        r->nhv = le16(d + o + 12);
         r->hv = d + o + 14;
         o += 14 + 3 * (size_t)r->nhv;
         r->ram = le64(d + o); r->vdp = le64(d + o + 8);
         o += 16;
+        r->routine = routine_at(r->at);
         r->state = r->mask = NULL;
         if (r->flags & 2) { r->state = d + o; o += STATE_SIZE; }
         if ((r->flags & 2) && version >= 4) { r->mask = d + o; o += MASK_SIZE; }
@@ -144,8 +165,13 @@ static const char *masked_diff(const record *r)
     static char what[160];
     const uint8_t *p = r->state, *m = r->mask, *ram = ram_ptr(RAM_BASE);
     #define MASKED(mask, i) ((mask)[(i) >> 3] & (1 << ((i) & 7)))
+    /* the game's copy of vcount (its waits keep it: oldvcount = vcount) differs with it */
+    int vc = MASKED(m, RAM_OFF_vcount) || MASKED(m, RAM_OFF_vcount + 1);
     int n = 0, first = -1;
-    for (int i = 0; i < 0xDF00; i++) if (ram[i] != p[i] && !MASKED(m, i)) { if (first < 0) first = i; n++; }
+    for (int i = 0; i < 0xDF00; i++) {
+        if (vc && (i == RAM_OFF_oldvcount || i == RAM_OFF_oldvcount + 1)) continue;
+        if (ram[i] != p[i] && !MASKED(m, i)) { if (first < 0) first = i; n++; }
+    }
     if (n) { snprintf(what, sizeof what, "work RAM (%d bytes, the first at %04x: %02x, the oracle's %02x)", n, first, ram[first], p[first]); return what; }
     mdrt_vdp_state s;
     mdrt_vdp_get_state(mdrt_get_vdp(native_m), &s);
@@ -193,6 +219,15 @@ static void differs(const char *what, long frame, const record *r)
            what, frame, r->frame, r->at, hv_used, r->nhv, checked, lagged);
     FILE *f = fopen("out/lockstep-native.ram", "wb");
     if (f) { fwrite(ram_ptr(RAM_BASE), 1, 0x10000, f); fclose(f); }
+    if ((f = fopen("out/lockstep-native.ram.vdp", "wb"))) {   /* as lockstep.py --dump writes the oracle's */
+        mdrt_vdp_state s;
+        mdrt_vdp_get_state(mdrt_get_vdp(native_m), &s);
+        fwrite(s.reg, 1, 24, f);
+        fwrite(s.vram, 1, 0x10000, f);
+        for (int i = 0; i < 64; i++) { fputc(s.cram[i] >> 8, f); fputc(s.cram[i] & 0xFF, f); }
+        for (int i = 0; i < 40; i++) { fputc(s.vsram[i] >> 8, f); fputc(s.vsram[i] & 0xFF, f); }
+        fclose(f);
+    }
     native_quit();
 }
 
@@ -204,14 +239,124 @@ void lockstep_report(void)
     printf("lockstep: %zu of %zu vblanks: %ld of the game's vblank waits checked, all the same as the oracle's; %ld lag "
            "frames (the oracle's vblank in the game's logic); the oracle's state taken %ld times in the game loop "
            "(%ld times out of step until a point in the game loop) and %ld times elsewhere after a check but for "
-           "what its lag frames' vblank code changed\n",
-           span_lo, nrecs, checked, lagged, resynced, skipped, masked);
+           "what its lag frames' vblank code changed; %ld lag frames placed in the game's work (by its port accesses)\n",
+           span_lo, nrecs, checked, lagged, resynced, skipped, masked, placed);
+}
+
+/* the span done: on to the next */
+static void advance(const record *r)
+{
+    lagged += (long)(span_hi - span_lo - 1);
+    buttons = r->buttons;
+    next = span_hi;
+    next_span();
+}
+
+/* ---- where the native game is: the routine it is in --------------------------------------------
+ * build/nhl94 compiles src/ with -finstrument-functions: each of its functions' entries and exits
+ * comes here. The C functions have the 68k routines' names (rom_syms gives their addresses), so
+ * the top of this stack is the 68k routine the native game is in (0: a C helper of its own). */
+#include <dlfcn.h>
+#define NI __attribute__((no_instrument_function))
+static struct { void *fn; uint32_t routine; } fncache[4096];
+static uint32_t where[512];
+static int depth, run68k_depth;
+
+static NI uint32_t routine_of(void *fn)
+{
+    size_t h = ((uintptr_t)fn >> 4) & 4095;
+    while (fncache[h].fn && fncache[h].fn != fn) h = (h + 1) & 4095;
+    if (fncache[h].fn) return fncache[h].routine;
+    uint32_t r = 0;
+    Dl_info info;
+    if (dladdr(fn, &info) && info.dli_saddr == fn && info.dli_sname)
+        for (size_t i = 0; i < sizeof rom_syms / sizeof *rom_syms; i++)
+            if (!strcmp(rom_syms[i].name, info.dli_sname)) { r = rom_syms[i].addr; break; }
+    fncache[h].fn = fn;
+    fncache[h].routine = r;
+    return r;
+}
+
+static void try_place(void);
+static int armed;                       /* the next lag frame's access count has come: waiting for its routine */
+
+void NI __cyg_profile_func_enter(void *fn, void *site)
+{
+    (void)site;
+    if (!recs || native_in_vblank()) return;
+    if (depth < 512) where[depth] = routine_of(fn);
+    depth++;
+    if (fn == (void *)run68k) run68k_depth = depth;
+    if (armed) try_place();
+}
+
+/* restart_at's longjmp back into run68k: the frames above it are gone */
+void NI run68k_unwind(void) { depth = run68k_depth; }
+
+void NI __cyg_profile_func_exit(void *fn, void *site)
+{
+    (void)fn; (void)site;
+    if (!recs || native_in_vblank()) return;
+    if (depth > 0) depth--;
+    if (armed) try_place();
+}
+
+/* the oracle's lag interrupts, placed in the native game's work outside the game (version 5): once
+ * the game has made as many of the counted port accesses as the oracle had, in the routine the
+ * oracle was interrupted in (or, failing that, before the next access or at the next wait); one
+ * that came while the interrupts were masked at the unmask after as many */
+static NI void place_next(const char *how)
+{
+    const record *l = &recs[lag_next++];
+    buttons = l->buttons;
+    placed++;
+    armed = 0;
+    if (getenv("LOCKSTEP_DEBUG")) printf("  lag frame %u (68k at %06x, %u accesses) placed %s\n", l->frame, l->at, l->writes, how);
+    native_vblank_now();
+}
+static NI int due(uint32_t n, int unmask)
+{
+    if (!recs || lag_next + 1 >= span_hi || g.vbint == SYM_VBlank) return 0;
+    const record *l = &recs[lag_next];
+    return !!(l->flags & 4) == unmask && l->writes <= n;
+}
+static uint32_t accesses_now;
+static NI void try_place(void)
+{
+    while (armed && depth > 0 && depth <= 512 && where[depth - 1] == recs[lag_next].routine) {
+        place_next("in its routine");
+        armed = due(accesses_now, 0);
+    }
+}
+void NI lockstep_access(uint32_t n)
+{
+    accesses_now = n;
+    if (!armed) armed = due(n, 0);
+    try_place();
+}
+void NI lockstep_before_access(void)
+{
+    while (armed) {                                       /* not in its routine before the next access: here */
+        place_next("before the next access");
+        armed = due(accesses_now, 0);
+    }
+}
+void NI lockstep_unmask(uint32_t n)
+{
+    accesses_now = n;
+    while (due(n, 1)) place_next("at an unmask");
+    if (!armed) armed = due(n, 0);
+    try_place();
 }
 
 /* at the game's vblank wait: the check against the oracle's interrupt the span ended at */
 void lockstep_check(long frame)
 {
     if (!recs) return;
+    while (armed) {                                       /* not placed before the wait: at it */
+        place_next("at the wait");
+        armed = due(accesses_now, 0);
+    }
     const record *r = span_lo < nrecs ? &recs[span_hi - 1] : NULL;
     if (!r || !(r->flags & 1)) {                          /* the recording's end (perhaps in lag frames) */
         if (r) lagged += (long)(span_hi - span_lo);
@@ -220,13 +365,10 @@ void lockstep_check(long frame)
         native_quit();
     }
     if (restarted) { restarted = 0; return; }             /* the same wait, from the restart */
-    int lag = span_hi - span_lo > 1;
-    if (lag) lagged += (long)(span_hi - span_lo - 1);
+    int lag = span_hi - span_lo > 1 && lag_next + 1 < span_hi;   /* lag frames not placed */
     if (lag || !insync) {
-        buttons = r->buttons;
-        next = span_hi;
-        next_span();
         if (at_game_loop(r)) {                            /* take the oracle's state and go on from there */
+            advance(r);
             take_state(r, 1);
             resynced++;
             insync = 1;
@@ -236,21 +378,20 @@ void lockstep_check(long frame)
         if (r->mask && g.vbint != SYM_VBlank) {           /* outside the game: check, then take it here */
             const char *bad = masked_diff(r);
             if (bad) differs(bad, frame, r);
+            advance(r);
             take_state(r, 0);
             masked++;
             insync = 1;
             return;
         }
+        advance(r);
         if (insync) skipped++;
         insync = 0;
         return;
-    } else {
-        uint64_t rh = fnv64(0xCBF29CE484222325ull, ram_ptr(RAM_BASE), 0xDF00), vh = vdp_hash();
-        const char *bad = rh != r->ram ? "work RAM" : vh != r->vdp ? "VDP state" : hv_over || hv_used != r->nhv ? "HV reads" : NULL;
-        if (bad) differs(bad, frame, r);
-        checked++;
     }
-    buttons = r->buttons;
-    next = span_hi;
-    next_span();
+    uint64_t rh = fnv64(0xCBF29CE484222325ull, ram_ptr(RAM_BASE), 0xDF00), vh = vdp_hash();
+    const char *bad = rh != r->ram ? "work RAM" : vh != r->vdp ? "VDP state" : hv_over || hv_used != r->nhv ? "HV reads" : NULL;
+    if (bad) differs(bad, frame, r);
+    checked++;
+    advance(r);
 }

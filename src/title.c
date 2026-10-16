@@ -400,6 +400,7 @@ void HiScoreScreen(void)
     p = picture(SYM_HiScoreImg);
     dobitmap(p.pal, p.map, p.tiles, 0, 0, p.w, p.h, c, 0);
     g.palcount = 0x18;
+    cpu_set_sr(0x2500);
     uint8_t *count = RAM_W(RAM_OFF_seed);                 /* (the seed's high word counts down) */
     wr16(count, 0x50);
     do {
@@ -408,6 +409,7 @@ void HiScoreScreen(void)
         if (d1) break;
         wr16(count, (uint16_t)(rd16(count) - 1));
     } while ((int16_t)rd16(count) >= 0);
+    cpu_set_sr(0x2700);
 }
 
 /* title94.asm:newTitleScreen. The title screen (TitleScreenImg, the NHL shield, the NHLPA logo,
@@ -416,6 +418,7 @@ void HiScoreScreen(void)
 void newTitleScreen(void)
 {
     static const uint8_t font[8] = { 0x0D, 0x10, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
+    cpu_set_sr(0x2700);
     wr16(RAM_W(RAM_OFF_seed), vdp_hv16());
     wr16(RAM_W(RAM_OFF_seed) + 2, vdp_hv16());
     g.vbint = SYM_VBlank_TitleScreen;
@@ -462,6 +465,7 @@ void newTitleScreen(void)
     g.palcount = 0x20;
     song(SYM_SngTitle);
     CreditsLineScroll();
+    cpu_set_sr(0x2500);
     do if (CreditsWait()) return; while (g.clampcounter != 0);
     for (int i = 0; i <= 0x3C; i++) if (CreditsWait()) return;
     printz(str_newTitleScreen_9, sizeof str_newTitleScreen_9);
@@ -566,4 +570,26 @@ void CreditsScrollStep(void)
             wr16(b, (int16_t)v < 0 ? 0 : v);
         }
     }
+}
+
+/* title94.asm:UnpackPicture. A picture a2 (a tile count, then 3 bytes a row of 8 pixels, 3 bits
+ * each) to 4-bit tiles at picturebuf (the count first), each pixel + 5. */
+void UnpackPicture(uint32_t pic)
+{
+    const uint8_t *in = mem_ptr(pic);
+    uint8_t *out = g.picturebuf;
+    uint16_t n = rd16(in);
+    in += 2;
+    wr16(out, n);
+    out += 2;
+    uint16_t rows = (uint16_t)((uint16_t)(n << 3) - 1);
+    do {
+        uint32_t b = (uint32_t)in[0] << 24 | in[1] << 16 | in[2] << 8, v = 0;
+        in += 3;
+        g.picturebits = b;
+        for (int px = 0; px < 8; px++)                    /* pixel px: bits 31-3px .. 29-3px to nibble 7-px */
+            v |= ((b & (0xE0000000u >> (3 * px))) >> (px + 1)) + (5u << (28 - 4 * px));
+        wr32(out, v);
+        out += 4;
+    } while (rows-- != 0);
 }

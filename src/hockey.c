@@ -402,6 +402,7 @@ void Pausemode(void)
  * data, the attract screen, the default options, then the title (Opening). */
 void Begin(void)
 {
+    cpu_set_sr(0x2700);
     memset(ram_ptr(RAM_BASE + RAM_OFF_VSCRLPM), 0, 0xDEF4 - RAM_OFF_VSCRLPM);
     uint8_t *palflag = ram_ptr(RAM_BASE + RAM_OFF_PALflag);
     wr16(palflag, 0);

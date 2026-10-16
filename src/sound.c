@@ -135,6 +135,8 @@ void play_sfx_or_music_track(uint16_t n)
  * pwddatabuffer) and leaves the channel's volume alone. */
 void stop_current_song(uint16_t d0)
 {
+    uint16_t sr = cpu_get_sr();
+    cpu_set_sr(0x2700);                                   /* no interrupts while the slots change */
     int32_t first = (int32_t)rd32(rom_ptr(SYM_SongPointerTable));
     uint8_t *slot = SLOTS;
     int16_t track = 7;
@@ -144,7 +146,7 @@ void stop_current_song(uint16_t d0)
         slot += 6;
         if (found || track-- == 0) break;
     }
-    if (!found) return;
+    if (!found) { cpu_set_sr(sr); return; }
     memset(CMD(0), 0, 5);
     wr32(slot - 6, 0xFFFFFFFF);
     uint8_t *ch = CHAN0;
@@ -157,6 +159,7 @@ void stop_current_song(uint16_t d0)
         bset(CMD(2), out);
     }
     UploadCommandBufferToZ80();
+    cpu_set_sr(sr);
 }
 
 /* sound94.asm:ResetZ80Bus. Reset the Z80 and wait for its bus. */

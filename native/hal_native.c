@@ -15,6 +15,9 @@
 
 mdrt *native_m;
 static uint64_t frame_base;             /* the relay's master clock at this frame's start */
+static uint16_t sr = 0x2700;            /* the 68k's status register: its interrupt mask */
+static uint32_t accesses;               /* the game's port accesses outside the vblank code (lockstep's clock) */
+static int in_vblank;                   /* running the vblank interrupt's code */
 static uint32_t t68k;                   /* master clocks the game has spent in this frame */
 static long frames;
 
@@ -65,12 +68,28 @@ uint8_t vdp_hv8(void) { return mdrt_vdp_hv8(vdp(), 0); }
 uint16_t vdp_hv16(void) { return mdrt_vdp_hv16(vdp()); }
 uint16_t vdp_status(void) { return mdrt_vdp_status(vdp()); }
 uint16_t vdp_read(void) { return mdrt_vdp_read16(vdp()); }
-void vdp_ctrl(uint32_t v) { mdrt_vdp_ctrl32(vdp(), v); }
-void vdp_ctrl16(uint16_t v) { mdrt_vdp_ctrl16(vdp(), v); }
-void vdp_data(uint16_t v) { mdrt_vdp_data16(vdp(), v); }
-void vdp_data32(uint32_t v) { mdrt_vdp_data32(vdp(), v); }
+/* each of the game's own port accesses whose number does not depend on timing (VDP writes, the
+ * PSG, save RAM, the I/O chip; not the polls): lockstep places the oracle's lag frames by their
+ * count */
+static void before(void) { if (!in_vblank) lockstep_before_access(); }
+static void counted(void) { if (!in_vblank) lockstep_access(++accesses); }
+int native_in_vblank(void) { return in_vblank; }
+void vdp_ctrl(uint32_t v) { before(); mdrt_vdp_ctrl32(vdp(), v); counted(); }
+void vdp_ctrl16(uint16_t v) { before(); mdrt_vdp_ctrl16(vdp(), v); counted(); }
+void vdp_data(uint16_t v) { before(); mdrt_vdp_data16(vdp(), v); counted(); }
+void vdp_data32(uint32_t v) { before(); mdrt_vdp_data32(vdp(), v); counted(); }
 
-void psg_write(uint8_t v) { t68k += PORT_ACCESS; mdrt_psg_port(native_m, t68k, v); }
+/* the interrupt mask: the native vblank runs at the game's waits, which never run masked; under
+ * lockstep, a vblank the oracle took at an unmask (it came while masked) is taken here */
+uint16_t cpu_get_sr(void) { return sr; }
+void cpu_set_sr(uint16_t v)
+{
+    int unmask = (sr & 0x700) >= 0x600 && (v & 0x700) < 0x600;
+    sr = v;
+    if (unmask && !in_vblank) lockstep_unmask(accesses);
+}
+
+void psg_write(uint8_t v) { before(); t68k += PORT_ACCESS; mdrt_psg_port(native_m, t68k, v); counted(); }
 
 void z80_busreq(uint16_t v) { t68k += BUS_ACCESS; relay_now(); z80_relay_busreq(v); }
 uint8_t z80_busack(void) { t68k += BUS_ACCESS; relay_now(); return 0; }   /* granted at once */
@@ -78,24 +97,33 @@ void z80_reset(uint16_t v) { t68k += BUS_ACCESS; relay_now(); z80_relay_reset(v)
 uint8_t z80_ram_read8(uint16_t off) { t68k += BUS_ACCESS; relay_now(); return z80_ram[off & 0x1FFF]; }
 void z80_ram_write8(uint16_t off, uint8_t v) { t68k += BUS_ACCESS; relay_now(); z80_ram[off & 0x1FFF] = v; }
 
-uint8_t pad_read(uint32_t port) { return mdrt_pad_read(mdrt_get_pads(native_m), port); }
-void pad_write(uint32_t port, uint8_t v) { mdrt_pad_write(mdrt_get_pads(native_m), port, v); }
-uint16_t io_read16(uint32_t addr) { uint8_t b = mdrt_pad_read(mdrt_get_pads(native_m), addr | 1); return (uint16_t)(b << 8 | b); }
-uint32_t io_read32(uint32_t addr) { return (uint32_t)io_read16(addr) << 16 | io_read16(addr + 2); }
+uint8_t pad_read(uint32_t port) { before(); uint8_t v = mdrt_pad_read(mdrt_get_pads(native_m), port); counted(); return v; }
+void pad_write(uint32_t port, uint8_t v) { before(); mdrt_pad_write(mdrt_get_pads(native_m), port, v); counted(); }
+static uint16_t io16(uint32_t addr) { uint8_t b = mdrt_pad_read(mdrt_get_pads(native_m), addr | 1); return (uint16_t)(b << 8 | b); }
+uint16_t io_read16(uint32_t addr) { before(); uint16_t v = io16(addr); counted(); return v; }
+uint32_t io_read32(uint32_t addr) { before(); uint32_t v = (uint32_t)io16(addr) << 16 | io16(addr + 2); counted(); return v; }
 void tmss_write(uint32_t v) { (void)v; }                 /* (no TMSS: the VDP is always unlocked) */
 
 /* save RAM: the bytes on the odd addresses */
-uint8_t sram_read8(uint32_t off) { return mdrt_sram_read8(mdrt_get_sram(native_m), off | 1); }
-void sram_write16(uint32_t off, uint16_t v) { mdrt_sram_write8(mdrt_get_sram(native_m), off | 1, (uint8_t)v); }
+uint8_t sram_read8(uint32_t off) { before(); uint8_t v = mdrt_sram_read8(mdrt_get_sram(native_m), off | 1); counted(); return v; }
+void sram_write16(uint32_t off, uint16_t v) { before(); mdrt_sram_write8(mdrt_get_sram(native_m), off | 1, (uint8_t)v); counted(); }
 
 /* the frame's end: the handshake, then the next frame begins with the vblank interrupt */
-void hal_wait_vblank(void)
+static void vblank(int wait)
 {
-    native_frame_done(++frames);
+    native_frame_done(++frames, wait);
     if (mdrt_wait_vblank(native_m)) native_quit();
     frame_base += mdrt_frame_mclks(native_m);
     t68k = 0;
     z80_relay_frame();                                    /* (the YM2612's busy grid) */
-    if (vdp()->s.reg[1] & 0x20) call68k(g.vbint);         /* the vblank interrupt */
+    if (vdp()->s.reg[1] & 0x20) {                         /* the vblank interrupt */
+        in_vblank = 1;
+        call68k(g.vbint);
+        in_vblank = 0;
+    }
     mdrt_vblank_end(native_m);
 }
+void hal_wait_vblank(void) { vblank(1); }
+
+/* a vblank in the middle of the game's work (lockstep: the oracle's lag frames) */
+void native_vblank_now(void) { vblank(0); }

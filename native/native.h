@@ -10,8 +10,12 @@ extern mdrt *native_m;                  /* the console */
 void native_game(mdrt *m, void *user);
 /* stop the session (the window closed, the front end is not ported): back out of the game */
 void native_quit(void);
-/* after each frame: the frame count, for shots and the stop (main.c) */
-void native_frame_done(long frame);
+/* after each frame: the frame count, for shots and the stop (main.c); wait: at one of the game's
+ * vblank waits (else a vblank lockstep placed in the middle of its work) */
+void native_frame_done(long frame, int wait);
+/* a vblank now, in the middle of the game's work (hal_native.c) */
+void native_vblank_now(void);
+int native_in_vblank(void);              /* running the vblank's code */
 /* the HAL from master clock `start` of the relay's time (hal_native.c) */
 void native_hal_start(mdrt *m, uint64_t start);
 
@@ -22,3 +26,6 @@ void native_resume_game_loop(void);
 int lockstep_load(const char *path, mdrt *m);
 void lockstep_check(long frame);
 void lockstep_report(void);              /* (at the session's end) */
+void lockstep_access(uint32_t n);        /* the game's port access n (hal_native.c: not the vblank code's) */
+void lockstep_before_access(void);       /* before the game's next one */
+void lockstep_unmask(uint32_t n);        /* the game unmasked the interrupts after port access n */

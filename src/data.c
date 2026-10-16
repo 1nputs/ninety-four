@@ -1,6 +1,7 @@
 /* data94.asm: the boxes shown over the rink during play (goal, penalty shot, injury, the three
  * stars) and the player name formatting they use. The front-end parts of data94 (playoffs,
  * passwords) come with the front end. */
+#include <string.h>
 #include "game.h"
 #include "hal.h"
 #include "rom.h"
@@ -360,4 +361,217 @@ void DefaultMenus(void)
     ST_W(g.demoflag);
     for (int i = 0; i < 9; i++)
         wr16(ram_ptr(RAM_BASE + RAM_OFF_OptPlayMode) + 2 * i, rd16(rom_ptr(SYM_defmenuoptions) + 2 * i));
+}
+
+/* ---- the playoff tree (game setup) ---------------------------------------------------------- */
+
+#define GS(n) (g.gsstruct + 0x10 * (n))                 /* gsstruct game n: gst1, gst2, gspotwins, gspobwins, gsper, gss1, gss2, gsflags (a byte) */
+enum { gst1 = 0, gst2 = 2, gspotwins = 4, gspobwins = 6, gsper = 8, gss1 = 0xA, gss2 = 0xC, gsflags = 0xE };
+
+/* data94.asm:SuperDiv. Divide the 5-word number at a3 by d0 in place -> the remainder. */
+uint16_t SuperDiv(uint8_t *bits, uint16_t div)
+{
+    uint32_t d2 = 0;
+    for (int i = 0; i < 5; i++) {
+        d2 = m68k_divu((d2 & 0xFFFF0000) | rd16(bits + 2 * i), div);   /* the remainder rides in the high word */
+        wr16(bits + 2 * i, (uint16_t)d2);
+    }
+    return (uint16_t)(d2 >> 16);
+}
+
+/* data94.asm:ReadPassBits. The playoff state from the 5 saved words at a3 (kept): each game's
+ * series wins (bit 2 of its flags: a series won), WinBits, pojoy (1 / 2 become 4 without
+ * FourWayPlay), potreeteam, gamelevel, bosgames, postarts. */
+void ReadPassBits(uint8_t *bits)
+{
+    uint16_t saved[5];
+    for (int i = 0; i < 5; i++) saved[i] = rd16(bits + 2 * i);
+    for (int n = 7; n >= 0; n--) {
+        uint8_t *gs = GS(n);
+        gs[gsflags] &= (uint8_t)~4;
+        uint16_t w = SuperDiv(bits, 5);
+        wr16(gs + gspobwins, w);
+        if (w == 4) gs[gsflags] |= 4;
+        w = SuperDiv(bits, 5);
+        wr16(gs + gspotwins, w);
+        if (w == 4) gs[gsflags] |= 4;
+    }
+    g.WinBits = SuperDiv(bits, 0x4000);
+    g.pojoy = SuperDiv(bits, 8);
+    if (!g.FourWayPlay && (g.pojoy == 1 || g.pojoy == 2)) g.pojoy = 4;
+    g.potreeteam = SuperDiv(bits, 0x10);
+    g.gamelevel = SuperDiv(bits, 4);
+    g.bosgames = SuperDiv(bits, 8);
+    g.postarts = SuperDiv(bits, 0x20);
+    for (int i = 0; i < 5; i++) wr16(bits + 2 * i, saved[i]);
+}
+
+/* data94.asm:GetRandomUnusedTeam. -> d0 = a random playoff team whose bit in d3 is clear; set it. */
+uint16_t GetRandomUnusedTeam(uint32_t *used)
+{
+    for (;;) {
+        uint16_t t = randomd0(SYM_NumPlayoffTeams);
+        uint32_t bit = 1u << (t & 31);
+        int was = (*used & bit) != 0;
+        *used |= bit;
+        if (!was) return t;
+    }
+}
+
+/* data94.asm:InitializeGameStructures. Random team pairs for the 8 gsstruct games, none of
+ * them HomeTeam or VisTeam. */
+void InitializeGameStructures(void)
+{
+    ST_W(g.gamenum);
+    uint32_t used = 1u << (g.HomeTeam & 31);
+    used |= 1u << (g.VisTeam & 31);
+    for (int n = 0; n < 8; n++) {
+        wr16(GS(n) + gst1, GetRandomUnusedTeam(&used));
+        wr16(GS(n) + gst2, GetRandomUnusedTeam(&used));
+    }
+}
+
+/* data94.asm:FigureJoy. The teams of the pads (cont1team ... cont4team). In the playoffs (not
+ * a shootout) find this round's game of the playoff team and take its teams and the pads from
+ * .pojoylist (.pojoylist2 with FourWayPlay) by pojoy; otherwise from .noplist by OptNOP, and
+ * random matchups for the other games (InitializeGameStructures), as after a demo. */
+void FigureJoy(void)
+{
+    static const uint8_t pojoylist[8] = { 0, 1, 0, 0, 0, 1, 0, 1 };      /* its first two pairs */
+    g.cont1team = g.cont2team = g.cont3team = g.cont4team = 0;
+    if (g.demoflag != 0) {
+        if (g.OptPlayMode != 0 && !(g.gmode2 & HI(0))) {
+            uint16_t first, n = GetShifter(&first);       /* (games this round - 1) */
+            uint16_t team = g.potree[g.potreeteam];
+            uint8_t *gs = g.gsstruct + (int16_t)(uint16_t)(0x10 * n);
+            uint16_t d0;
+            ST_W(g.gamenum);
+            for (;;) {
+                if (rd16(gs + gst1) == team) {
+                    d0 = 0;
+                    g.Opt2Team = rd16(gs + gst2);
+                    g.Opt1Team = rd16(gs + gst1);
+                    break;
+                }
+                if (rd16(gs + gst2) == team) {
+                    d0 = g.FourWayPlay ? 5 : 4;
+                    g.Opt2Team = rd16(gs + gst1);
+                    g.Opt1Team = rd16(gs + gst2);
+                    break;
+                }
+                gs -= 0x10;
+                if (n-- == 0) return;                     /* the playoff team is out */
+            }
+            d0 = (uint16_t)((d0 + g.pojoy) << 2);
+            g.gamenum = n;
+            g.HomeTeam = rd16(gs + gst1);
+            g.VisTeam = rd16(gs + gst2);
+            uint32_t list = rom_find(SYM_FigureJoy, SYM_InitializeGameStructures, pojoylist, 8);
+            if (g.FourWayPlay) list += 0x20;              /* .pojoylist2 follows */
+            g.cont1team = rd16(rom_ptr(list + d0));
+            g.cont2team = rd16(rom_ptr(list + d0 + 2));
+            if (g.FourWayPlay) {
+                if (d0 == 4 || d0 == 0x18) {
+                    g.cont3team = g.cont1team;
+                    g.cont4team = g.cont2team;
+                } else if (d0 == 8 || d0 == 0x1C) {
+                    g.cont3team = g.cont1team;
+                    g.cont4team = 0;
+                }
+            }
+            return;
+        }
+        uint16_t d0 = (uint16_t)(g.OptNOP << 2);          /* (past OptNOP 6: the code after the table) */
+        uint32_t list = SYM_InitializeGameStructures - 7 * 4;   /* .noplist, just before it */
+        g.cont1team = rd16(rom_ptr(list + d0));
+        g.cont2team = rd16(rom_ptr(list + d0 + 2));
+        if (d0 == 0x14) {                                 /* Three */
+            g.cont3team = g.cont1team;
+            g.cont4team = 0;
+        } else if (d0 == 0x18) {                          /* Four */
+            g.cont3team = g.cont1team;
+            g.cont4team = g.cont2team;
+        }
+    }
+    InitializeGameStructures();
+}
+
+/* data94.asm:maketree. The playoff tree (potree): the first round's 16 teams from playoffseats
+ * row postarts, each later round's winners by WinBits; then this round's games: scores
+ * cleared, their teams (in tree order for series games 2, 3 and 5, else flipped), FigureJoy. */
+void maketree(void)
+{
+    uint8_t *tree = g.potree;
+    const uint8_t *seats = rom_ptr(SYM_playoffseats) + (uint16_t)(g.postarts << 4);
+    memcpy(tree, seats, 16);
+    uint8_t *a0 = tree, *a1 = tree + 16;
+    uint16_t bits = g.WinBits;
+    for (int i = 0; i < 15; i++, a0 += 2, bits >>= 1) *a1++ = a0[bits & 1];
+    uint16_t first;
+    int16_t n = (int16_t)GetShifter(&first);
+    if (n < 0) return;                                    /* the playoffs are over */
+    a0 = tree + (int16_t)(first * 2);
+    for (uint8_t *gs = g.gsstruct; n >= 0; n--, gs += 0x10) {
+        wr16(gs + gss1, 0);
+        wr16(gs + gss2, 0);
+        wr16(gs + gsper, 0);
+        gs[gsflags] &= (uint8_t)~2;
+        if (g.bosgames == 2 || g.bosgames == 3 || g.bosgames == 5) {
+            gs[gsflags] &= (uint8_t)~1;
+            gs[gst1 + 1] = *a0++;
+            gs[gst2 + 1] = *a0++;
+        } else {
+            gs[gsflags] |= 1;                             /* the teams flipped */
+            gs[gst2 + 1] = *a0++;
+            gs[gst1 + 1] = *a0++;
+        }
+    }
+    FigureJoy();
+}
+
+/* data94.asm:NewPO. New playoffs: a random tree row (from the one after a random one) that holds
+ * Team 1 (the all-stars count as the last playoff team), series wins cleared unless
+ * best-of-one; falls into maketree. */
+void NewPO(void)
+{
+    uint16_t row = randomd0(SYM_PlayoffRows), d1;
+    uint16_t team = g.Opt1Team > SYM_NumPlayoffTeams - 1 ? SYM_NumPlayoffTeams - 1 : g.Opt1Team;
+    for (;;) {
+        row = (row + 1) & (SYM_PlayoffRows - 1);
+        const uint8_t *a0 = rom_ptr(SYM_playoffseats) + (row << 4);
+        for (d1 = SYM_PlayoffRowTeams - 1; *a0++ != (uint8_t)team; )   /* dbeq */
+            if (d1-- == 0) break;
+        if (d1 != 0xFFFF) break;
+    }
+    g.potreeteam = d1 ^ (SYM_PlayoffRowTeams - 1);
+    g.postarts = row;
+    g.gamelevel = 0;
+    g.bosgames = 7;
+    if (g.OptPlayMode != 2) {
+        g.bosgames = 0;
+        for (int n = 0; n < 8; n++) {
+            wr16(GS(n) + gspotwins, 0);
+            wr16(GS(n) + gspobwins, 0);
+        }
+    }
+    maketree();
+}
+
+/* data94.asm:ContinuePlayoffs. The playoff state saved at pwddatabuffer (ReadPassBits); when a
+ * game has been played, the tree (maketree) and OptNOP from pojoy (7 or $B - pojoy, pojoy
+ * moved to the pad set-ups). */
+void ContinuePlayoffs(void)
+{
+    ReadPassBits(g.pwddatabuffer);
+    if ((g.gamelevel | g.bosgames) == 0) return;          /* nothing played yet */
+    maketree();
+    uint16_t d0 = g.FourWayPlay ? 0xB : 7;
+    if (!g.FourWayPlay) {
+        if ((int16_t)g.pojoy >= 2) g.pojoy -= 2;
+    } else if (g.pojoy == 1) {
+        g.pojoy = 3;
+    } else if (g.pojoy == 2) {
+        g.pojoy = 4;
+    }
+    g.OptNOP = (uint16_t)(d0 - g.pojoy);
 }

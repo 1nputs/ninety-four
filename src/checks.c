@@ -1656,9 +1656,10 @@ void puckfaceoff2(uint8_t *tm, struct SortObj *o)
     g.DelayedPen &= (uint8_t)~7;
     forceblack();
     while (g.disflags & HI(dfok)) hal_wait_vblank();      /* wait for dfok clear */
+    uint16_t sr = cpu_get_sr();
     g.holdreset = 0x3C;
     if (g.fox == 0 && g.foy == 0) g.faceoffanim[0] = 0xFFFF;   /* center ice: no arena animation */
-    /* (else interrupts are masked until the end of the setup) */
+    else cpu_set_sr(0x2700);                              /* (masked until the end of the setup) */
     if (g.crowdlevel > 0x258) g.crowdlevel = 0x258;
     g.disflags |= HI(3);                                  /* dfclock */
     g.sflags &= (uint16_t)~HI(sfpz);
@@ -1799,6 +1800,7 @@ void puckfaceoff2(uint8_t *tm, struct SortObj *o)
         song((int16_t)g.SongNum);
     }
     g.palcount = 0x18;
+    cpu_set_sr(sr);
 }
 
 /* checks94.asm:ResetAndSelectPlayers. c1playernum / c2playernum = -1, then changeplayer for

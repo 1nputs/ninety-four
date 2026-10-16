@@ -12,6 +12,7 @@ static const struct { uint32_t addr; void (*fn)(void); } routines[] = {
     { SYM_vb2, vb2 },
     { SYM_VBcount, VBcount },
     { SYM_VBlank_TitleScreen, VBlank_TitleScreen },
+    { SYM_VBlank_SetOptions, VBlank_SetOptions },
     { SYM_ReplayMode, ReplayMode },
     { SYM_PeriodStatsScreen, PeriodStatsScreen },
     { SYM_GameStatisticsScreen, GameStatisticsScreen },
@@ -47,9 +48,13 @@ void run68k(void (*entry)(void))
     for (;;) next_entry();                                /* the game never returns */
 }
 
+/* the longjmp drops the C frames above run68k (lockstep follows the frames the native game is in) */
+__attribute__((weak)) void run68k_unwind(void) {}
+
 void restart_at(void (*entry)(void))
 {
     if (!running) { fprintf(stderr, "restart_at: run68k is not running\n"); abort(); }
+    run68k_unwind();
     next_entry = entry;
     longjmp(top, 1);
 }

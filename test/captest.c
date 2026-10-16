@@ -20,6 +20,14 @@ void expect_reg16(const Record *r, int reg, uint32_t got, const char *what)
     }
 }
 
+void expect_reg32(const Record *r, int reg, uint32_t got, const char *what)
+{
+    if (got != r->regs_out[reg]) {
+        printf("    %s: got %08x, 68k returned %08x\n", what, got, r->regs_out[reg]);
+        reg_fail++;
+    }
+}
+
 static int is_ported(uint32_t pc)
 {
     for (const Port *p = ports; p->name; p++) if (p->pc == pc) return 1;

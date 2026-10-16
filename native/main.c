@@ -170,9 +170,9 @@ static void write_ppm(const char *path)
     fclose(f);
 }
 
-void native_frame_done(long frame)
+void native_frame_done(long frame, int wait)
 {
-    lockstep_check(frame);
+    if (wait) lockstep_check(frame);
     if (shots_dir && frame % shots_every == 0) {
         char path[512];
         snprintf(path, sizeof path, "%s/f%06ld.ppm", shots_dir, frame);

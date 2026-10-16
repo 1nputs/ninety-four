@@ -694,9 +694,69 @@ void CreditsScrollStep(void);
 void Opening(void);                                     /* setup94: none of the three returns */
 void Opening2(void);
 void Opening3(void);
+void GameSetUp(void);                                   /* optsetup94: the setup screen */
+void GoNewPlayoffs(void);
+void GoContinuePlayoffs(void);
+uint16_t MoveMenuFrame(uint16_t line, int16_t by);      /* d7, d0 -> d7 */
+void SetMenuArea(uint16_t *w, uint16_t *h);             /* -> d0, d1 */
+void SetFrameRect(uint16_t line, uint16_t *w, uint16_t *h);   /* d3 -> d0, d1 */
+void rtsSetup(void);
+void FixModeOptions(uint16_t line);                     /* d7 */
+void ChangeOption(uint16_t line, int16_t by);           /* d7, d2 */
+uint16_t WrapOption(uint16_t v, int16_t by, uint16_t hi, uint16_t lo);   /* d3, d2, d4, d5 -> d3 */
+void PrintOptions(uint16_t line);                       /* d7 */
+void PrintOptionValue(uint16_t line);                   /* d7 */
+void PrintScrollMarks(void);
+void PrintOptTeamName(uint16_t line);                   /* d7 */
+void PrintOptionNames(void);
+void setoptions(void);
+uint16_t ReadSetupPads(void);                           /* -> d1 */
+void SetupDemo(void);
+void SetupStart(void);
+uint16_t LoadSetupTiles(void);                          /* -> d4 */
+void UpdateRosterPlayers(void);
+void EraseCard(void);
+void DrawHomeBlock(void);
+void DrawVisBlock(void);
+void DrawTeamLogo(void);
+void LogoBoxRight(void);
+void LogoBoxHome(void);
+void LogoBoxLeft(void);
+void LogoBoxVis(void);
+void DrawLogoBox(uint16_t chars);                       /* d4 */
+uint16_t SuperDiv(uint8_t *bits, uint16_t div);         /* data94: a3, d0 -> d0 */
+void ReadPassBits(uint8_t *bits);                       /* a3 */
+uint16_t GetRandomUnusedTeam(uint32_t *used);           /* d3 -> d0 */
+void InitializeGameStructures(void);
+void FigureJoy(void);
+void maketree(void);
+void NewPO(void);
+void ContinuePlayoffs(void);
+void InitShooters(void);                                /* shootout94 */
+void ClearShootout(void);
+void UpdatePlayoffLevel(void);                          /* attract94 */
+void DrawMatchupBitmaps(void);
+uint16_t DrawTeamBitmap(uint16_t team, uint16_t chars); /* d1, d4 -> d4 */
+void VBlank_SetOptions(void);
+void UnpackPicture(uint32_t pic);                       /* title94: a2 */
+void ResetCardTimer(void);                              /* cards94 */
+void PlayerCardTimer(void);
+void PlayerCardScreen(void);
+void PrintRecordValue(uint32_t buf, uint16_t team, uint16_t player);   /* a1, d0, d1 */
+void CopyString(uint32_t src, uint32_t dst);            /* a1, a3 */
+void AppendNumber(uint16_t n, uint32_t buf);            /* d0, a1 */
+uint16_t GetRecordValue(uint16_t team, uint16_t player, uint16_t *goalie);   /* d0, d1 -> d0, d1 */
+void PrintRecordHolder(uint32_t buf, uint16_t team, uint16_t player, uint32_t rec);   /* a1, d0, d1, a0 */
+void PrintRecordVs(uint32_t buf, uint16_t team, uint16_t player, uint32_t rec);
+void AppendRecordHolder(uint32_t buf, uint16_t team, uint16_t player, uint32_t rec);
+void AppendRecordVs(uint32_t buf, uint16_t team, uint16_t player, uint32_t rec);
+void ReadNameLog(void);
+void NameLogIO(void);
+void AppendUserName(uint32_t buf, uint16_t user);       /* a1, d2 */
+void AppendTeamName(uint16_t team, uint32_t buf);       /* d0, a1 */
+void TrimSpaces(uint32_t str);                          /* a2 */
 /* not ported yet (front end) */
 void GameOver(void);                                    /* setup94: passwords, playoff screens, back to the front end */
-void GameSetUp(void);                                   /* optsetup94: the options screens */
 void UserNameEntry(void);                               /* records94 */
 void PlayoffScreen(void);                               /* setup94 */
 void ScoutingReport(void);                              /* scout94 */

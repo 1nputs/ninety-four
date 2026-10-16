@@ -75,13 +75,16 @@ void remap(uint32_t src, uint32_t table, uint16_t words, uint16_t vram)
  * doing: the fades-only vblank (vb2) steps it until palcount goes negative. */
 void forcefade(void)
 {
+    uint16_t sr = cpu_get_sr();
     uint32_t vbint = g.vbint;
     uint16_t saved = g.disflags;
     g.disflags &= (uint16_t)~HI(dfng);
     g.vbint = SYM_vb2;
+    cpu_set_sr(0x2500);
     while ((int16_t)g.palcount >= 0) hal_wait_vblank();
     g.disflags = saved;
     g.vbint = vbint;
+    cpu_set_sr(sr);
 }
 
 /* forceblack / forceblack2: fade to black over palcount frames, keeping palfadenew */
@@ -406,6 +409,8 @@ static void dma_68k(uint32_t src, uint16_t words, uint16_t vram)
     vdp_ctrl16((uint16_t)(SYM_VDPR_DMASRCH | ((s >> 16) & 0x7F)));
     uint32_t split = (uint32_t)(vram >> 14) << 16 | (vram & 0x3FFF);
     g.dmaram = split | 0x804000;
+    uint16_t sr = cpu_get_sr();
+    cpu_set_sr(0x2700);
     z80_busreq(0x100);
     while (z80_busack() & 1) {}
     vdp_ctrl16((uint16_t)g.dmaram);
@@ -417,6 +422,7 @@ static void dma_68k(uint32_t src, uint16_t words, uint16_t vram)
         vdp_ctrl(vram_write_cmd(vram));
         vdp_data(rd16(mem_ptr(src)));
     }
+    cpu_set_sr(sr);
 }
 
 /* video94.asm:DoDMA. a0 = source, d0 = words, d1 = VRAM address: DMA to VRAM. A source that

@@ -7,6 +7,9 @@ uint16_t vdp_read(void) { return (uint16_t)replay_io_read(VDP_DATA_PORT, 2); }
 uint8_t z80_busack(void) { return (uint8_t)replay_io_read(Z80_BUSREQ, 1); }
 uint8_t z80_ram_read8(uint16_t off) { return (uint8_t)replay_io_read(Z80_RAM_BASE + off, 1); }
 uint8_t pad_read(uint32_t port) { return (uint8_t)replay_io_read(port, 1); }
+static uint16_t sr = 0x2700;
+uint16_t cpu_get_sr(void) { return sr; }
+void cpu_set_sr(uint16_t v) { sr = v; }                                   /* (the captures place the interrupts) */
 uint32_t io_read32(uint32_t addr) { return (uint32_t)replay_io_read(addr, 4); }
 uint16_t io_read16(uint32_t addr) { return (uint16_t)replay_io_read(addr, 2); }
 uint8_t sram_read8(uint32_t off) { return (uint8_t)replay_io_read(SRAM_BASE + off, 1); }

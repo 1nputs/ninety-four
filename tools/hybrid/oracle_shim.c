@@ -312,9 +312,18 @@ static FILE *ls;
 static uint32_t ls_vblank;
 static void lockstep_access(int write, int width, uint32_t a, uint32_t value);
 static void lockstep_vblank(void);
-static int ls_lag_open;
-static uint32_t ls_lag_ret, ls_lag_sp;
+static int ls_lag_open, ls_in_irq;
+static uint32_t ls_lag_ret, ls_lag_sp, ls_writes;
 static void lockstep_lag_end(void);
+/* the port accesses the native game makes as many of, in the same order (lockstep's clock): VDP
+ * data and control writes, PSG writes, save RAM and I/O chip accesses; not the polls, whose count
+ * depends on timing (the VDP status, the Z80's bus and RAM) */
+static int ls_counted(int type, uint32_t a) {
+  if (type == HOOK_M68K_W && (a & 0xFFFFF8) == 0xC00000) return 1;
+  if (type == HOOK_M68K_W && a >= 0xC00010 && a < 0xC00018) return 1;
+  if ((type == HOOK_M68K_R || type == HOOK_M68K_W) && ((a >= 0x200000 && a < 0x210000) || (a >= 0xA10000 && a < 0xA10020))) return 1;
+  return 0;
+}
 
 static void hook(hook_type_t type, int width, unsigned int address, unsigned int value) {
   if (fm_write != chip_fm && fm_write != st_fm) {          /* GPGX set its chip up again: follow it */
@@ -327,9 +336,13 @@ static void hook(hook_type_t type, int width, unsigned int address, unsigned int
     else if ((a & ~1u) == 0xA11200) ym_shadow_reset(); /* GPGX resets the FM chip with the Z80, both ways */
   }
   if (ls) {
+    if (!ls_in_irq && ls_counted(type, address & 0xFFFFFF)) ls_writes++;   /* the game's port accesses */
     if (type == HOOK_M68K_R) lockstep_access(0, width, address & 0xFFFFFF, value);
     else if (type == HOOK_M68K_E && address == ls_vblank) lockstep_vblank();
-    else if (type == HOOK_M68K_E && ls_lag_open && address == ls_lag_ret && m68k_get_reg(M68K_REG_A7) == ls_lag_sp) lockstep_lag_end();
+    else if (type == HOOK_M68K_E && ls_in_irq && address == ls_lag_ret && m68k_get_reg(M68K_REG_A7) == ls_lag_sp) {
+      ls_in_irq = 0;                                    /* the vblank code returned */
+      if (ls_lag_open) lockstep_lag_end();
+    }
   }
   if (st && type == HOOK_M68K_W) {
     uint32_t a = address & 0xFFFFFF;
@@ -691,12 +704,15 @@ void oracle_sndtrace_close(void) {
 }
 
 /* ---- lockstep vectors for the native game (.lockstep) ---------------------------------------
- * "MDLS", version u32 = 4, the vblank handler's address u32; then a record at each vblank
+ * "MDLS", version u32 = 5, the vblank handler's address u32; then a record at each vblank
  * interrupt (before the handler's first instruction): tag u8 = 1, flags u8 (bit 0: the 68k was
  * in a vblank wait loop, as the native game would be; bit 1: the whole state follows the record,
- * at the first such interrupt after one that was not), the frame u32, the address the 68k was
- * interrupted at u32, the pad buttons u16 (as oracle_lockstep_buttons last set them: MDRT_PAD_*
- * bits), the HV counter reads since the last record (n u16, then address u8 (0 $C00008 V,
+ * at the first such interrupt after one that was not; bit 2: taken just after the interrupts
+ * were unmasked by move #x,sr or move (sp)+,sr, so it came while they were masked), the frame
+ * u32, the address the 68k was interrupted at u32, the pad buttons u16 (as
+ * oracle_lockstep_buttons last set them: MDRT_PAD_* bits), the game's port accesses so far u32
+ * (not the vblank code's; ls_counted: the native game places a lag frame after the same one),
+ * the HV counter reads since the last record (n u16, then address u8 (0 $C00008 V,
  * 1 $C00009 H, 2 a word) and value u16 each), the hashes (FNV-1a 64) of work RAM (68k order)
  * below the stack ($0000-$DEFF) and of the VDP's 24 registers, VRAM, CRAM and VSRAM (as
  * oracle_vdp_get gives them); with bit 1: work RAM 64K, the 24 registers, VRAM 64K, CRAM 128 and
@@ -753,7 +769,9 @@ int oracle_lockstep_open(const char *path, uint32_t vcount, uint32_t palcount, u
   ls = fopen(path, "wb");
   if (!ls) return 0;
   ls_vblank = (uint32_t)(READ_BYTE(cart.rom, 0x78) << 24 | READ_BYTE(cart.rom, 0x79) << 16 | READ_BYTE(cart.rom, 0x7A) << 8 | READ_BYTE(cart.rom, 0x7B));
-  fwrite("MDLS", 1, 4, ls); ls_u32(4); ls_u32(ls_vblank);
+  fwrite("MDLS", 1, 4, ls); ls_u32(5); ls_u32(ls_vblank);
+  ls_writes = 0;
+  ls_in_irq = 0;
   ls_nhv = 0;
   ls_records = 0;
   ls_lag_open = 0;
@@ -789,17 +807,23 @@ static void lockstep_vblank(void) {
   uint32_t sp = m68k_get_reg(M68K_REG_A7);
   uint32_t at = (uint32_t)(bus_byte(sp + 2) << 24 | bus_byte(sp + 3) << 16 | bus_byte(sp + 4) << 8 | bus_byte(sp + 5));
   int wait = in_wait_loop(at & 0xFFFFFF), full = wait && !ls_last_wait;
+  uint32_t pc = at & 0xFFFFFF;
+  int unmask = (READ_BYTE(cart.rom, pc - 4) == 0x46 && READ_BYTE(cart.rom, pc - 3) == 0xFC) ||
+               (READ_BYTE(cart.rom, pc - 2) == 0x46 && READ_BYTE(cart.rom, pc - 1) == 0xDF);
   ls_last_wait = wait;
-  ls_u8(1); ls_u8((uint8_t)(wait | full << 1)); ls_u32(frame_no); ls_u32(at & 0xFFFFFF); ls_u16(ls_buttons);
+  ls_u8(1); ls_u8((uint8_t)(wait | full << 1 | unmask << 2)); ls_u32(frame_no); ls_u32(pc); ls_u16(ls_buttons); ls_u32(ls_writes);
   ls_u16(ls_nhv);
   for (int i = 0; i < ls_nhv; i++) { ls_u8(ls_hv_addr[i]); ls_u16(ls_hv[i]); }
   ls_nhv = 0;
   ram_copy_be(ram);
-  if (ls_records++ == ls_dump_at) {
+  oracle_vdp_get(v, c, s, r, z);
+  if (ls_records++ == ls_dump_at) {                     /* work RAM; FILE.vdp: registers 24, VRAM, CRAM, VSRAM */
     FILE *f = fopen(ls_dump_path, "wb");
     if (f) { fwrite(ram, 1, sizeof ram, f); fclose(f); }
+    char vp[600];
+    snprintf(vp, sizeof vp, "%s.vdp", ls_dump_path);
+    if ((f = fopen(vp, "wb"))) { fwrite(r, 1, 24, f); fwrite(v, 1, sizeof v, f); fwrite(c, 1, sizeof c, f); fwrite(s, 1, sizeof s, f); fclose(f); }
   }
-  oracle_vdp_get(v, c, s, r, z);
   ls_u64(fnv64(0xCBF29CE484222325ull, ram, 0xDF00));     /* (not the stack above: the native's is C's) */
   uint64_t h = fnv64(0xCBF29CE484222325ull, r, 24);
   h = fnv64(h, v, sizeof v); h = fnv64(h, c, sizeof c); h = fnv64(h, s, sizeof s);
@@ -819,8 +843,9 @@ static void lockstep_vblank(void) {
   if (!wait) {                                          /* lag: follow what the vblank code changes */
     memcpy(ls_l_ram, ram, sizeof ram); memcpy(ls_l_v, v, sizeof v); memcpy(ls_l_c, c, sizeof c);
     memcpy(ls_l_s, s, sizeof s); memcpy(ls_l_r, r, sizeof r);
-    ls_lag_open = 1; ls_lag_ret = at & 0xFFFFFF; ls_lag_sp = sp + 6;
+    ls_lag_open = 1;
   }
+  ls_in_irq = 1; ls_lag_ret = pc; ls_lag_sp = sp + 6;   /* until the vblank code returns there */
 }
 
 void oracle_lockstep_close(void) { if (ls) { ls_u8(2); fclose(ls); ls = NULL; } }

@@ -290,6 +290,7 @@ void setupice(void)
     g.disflags = saved;
     g.vbint = SYM_VBlank;
     g.disflags &= (uint16_t)~(HI(dfok) | HI(dfng));
+    cpu_set_sr(0x2300);
 }
 
 /* setup94.asm:InitTeamStructure. Team struct a2 for team d0: the team number ($28), its data
@@ -378,6 +379,7 @@ void setupice_highlight(void)
     g.disflags = saved;
     g.vbint = SYM_VBlank;
     g.disflags &= (uint16_t)~(HI(dfok) | HI(dfng));
+    cpu_set_sr(0x2300);
 }
 
 /* setup94.asm:ExitToOpening. The title song, then the options again (Opening2, with a new
@@ -401,6 +403,7 @@ void Opening(void)
 void Opening2(void)
 {
     KillCrowd();
+    cpu_set_sr(0x2700);
     memset(RAM_W(RAM_OFF_VSCRLPM), 0, 0xD03E - RAM_OFF_VSCRLPM);
     GameSetUp();
     UserNameEntry();

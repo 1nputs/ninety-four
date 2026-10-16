@@ -5,7 +5,7 @@ SRC     := $(wildcard src/*.c)
 TESTSRC := test/captest.c test/replay.c test/stubs.c test/ports.c test/hal_replay.c
 CAPS    := $(wildcard out/captures/*.cap)
 
-build/captest: $(SRC) $(TESTSRC) src/ram.h src/game.h src/symbols_gen.h src/anim_gen.h src/collide_tables_gen.h src/checks_tables_gen.h src/input_tables_gen.h src/penalty_tables_gen.h src/hockey_tables_gen.h src/display_tables_gen.h src/setup_tables_gen.h src/checks_strings_gen.h src/period_strings_gen.h src/hockey_strings_gen.h src/input_strings_gen.h src/penalty_strings_gen.h src/display_strings_gen.h src/replay_strings_gen.h src/title_strings_gen.h src/data_strings_gen.h src/shootout_strings_gen.h src/menu_strings_gen.h src/stats_strings_gen.h src/attract_strings_gen.h test/replay.h test/ports.h
+build/captest: $(SRC) $(TESTSRC) src/ram.h src/game.h src/symbols_gen.h src/anim_gen.h src/collide_tables_gen.h src/checks_tables_gen.h src/input_tables_gen.h src/penalty_tables_gen.h src/hockey_tables_gen.h src/display_tables_gen.h src/setup_tables_gen.h src/checks_strings_gen.h src/period_strings_gen.h src/hockey_strings_gen.h src/input_strings_gen.h src/penalty_strings_gen.h src/display_strings_gen.h src/replay_strings_gen.h src/title_strings_gen.h src/data_strings_gen.h src/shootout_strings_gen.h src/menu_strings_gen.h src/stats_strings_gen.h src/attract_strings_gen.h src/cards_strings_gen.h src/optsetup_strings_gen.h test/replay.h test/ports.h
 	@mkdir -p build
 	$(CC) $(CFLAGS) -Isrc -Itest -o $@ $(SRC) $(TESTSRC)
 
@@ -21,8 +21,8 @@ src/checks_tables_gen.h: tools/gen_tables.py
 src/input_tables_gen.h: tools/gen_tables.py
 	python3 -I tools/gen_tables.py ref/NHL94Genesis/src/input94.asm "getlchoice/.tab:lchoice_tab" shotsets -o $@
 
-src/checks_strings_gen.h src/input_strings_gen.h src/penalty_strings_gen.h src/period_strings_gen.h src/hockey_strings_gen.h src/display_strings_gen.h src/replay_strings_gen.h src/title_strings_gen.h src/data_strings_gen.h src/shootout_strings_gen.h src/menu_strings_gen.h src/stats_strings_gen.h src/attract_strings_gen.h: tools/gen_strings.py build/asm/symbols.json
-	for f in checks input penalty period hockey display replay title data shootout menu stats attract; do python3 -I tools/gen_strings.py build/asm/src/$${f}94.asm -o src/$${f}_strings_gen.h; done
+src/checks_strings_gen.h src/input_strings_gen.h src/penalty_strings_gen.h src/period_strings_gen.h src/hockey_strings_gen.h src/display_strings_gen.h src/replay_strings_gen.h src/title_strings_gen.h src/data_strings_gen.h src/shootout_strings_gen.h src/menu_strings_gen.h src/stats_strings_gen.h src/attract_strings_gen.h src/cards_strings_gen.h src/optsetup_strings_gen.h: tools/gen_strings.py build/asm/symbols.json
+	for f in checks input penalty period hockey display replay title data shootout menu stats attract cards optsetup; do python3 -I tools/gen_strings.py build/asm/src/$${f}94.asm -o src/$${f}_strings_gen.h; done
 
 src/hockey_tables_gen.h: tools/gen_tables.py
 	python3 -I tools/gen_tables.py ref/NHL94Genesis/src/hockey94.asm "GetPeriodTime/.timetab:periodtimes" -o $@
@@ -55,7 +55,8 @@ MDRTLIBS := $(MDRT)/build/release/libmdrt_sdl2.a $(MDRT)/build/release/libmdrt.a
 nhl94: build/nhl94
 build/nhl94: $(SRC) $(NATIVE) native/native.h src/game.h src/ram.h src/hal.h src/z80.h build/captest mdrt
 	@mkdir -p build
-	$(CC) $(CFLAGS) -O2 -Isrc -Inative -I$(MDRT)/include $(shell pkg-config --cflags sdl2) -o $@ $(SRC) $(NATIVE) $(MDRTLIBS) $(shell pkg-config --libs sdl2) -lm
+	$(CC) $(CFLAGS) -O2 -Isrc -Inative -I$(MDRT)/include $(shell pkg-config --cflags sdl2) -finstrument-functions \
+	    -finstrument-functions-exclude-file-list=native/ -rdynamic -o $@ $(SRC) $(NATIVE) $(MDRTLIBS) $(shell pkg-config --libs sdl2) -lm -ldl
 mdrt:
 	$(MAKE) -C $(MDRT) MODE=release sdl
 

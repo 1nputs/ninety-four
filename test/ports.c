@@ -541,6 +541,80 @@ static void run_VBlank_TitleScreen(const Record *r) { VBlank_TitleScreen(); }
 static void run_CreditsLineScroll(const Record *r) { CreditsLineScroll(); }
 static void run_CreditsScrollStep(const Record *r) { CreditsScrollStep(); }
 
+/* ---- the game setup screen (optsetup94 and its helpers in data94 / cards94 / attract94 ...) ---- */
+#define A(reg) (r->regs_in[reg])
+static void run_SuperDiv(const Record *r) { expect_reg16(r, R_D0, SuperDiv(ram_ptr(A(R_A3)), R16(R_D0)), "d0"); }
+static void run_ReadPassBits(const Record *r) { ReadPassBits(ram_ptr(A(R_A3))); }
+static void run_GetRandomUnusedTeam(const Record *r)
+{
+    uint32_t used = A(R_D3);
+    expect_reg16(r, R_D0, GetRandomUnusedTeam(&used), "d0");
+    expect_reg32(r, R_D3, used, "d3");
+}
+static void run_InitializeGameStructures(const Record *r) { InitializeGameStructures(); }
+static void run_FigureJoy(const Record *r) { FigureJoy(); }
+static void run_maketree(const Record *r) { maketree(); }
+static void run_NewPO(const Record *r) { NewPO(); }
+static void run_ContinuePlayoffs(const Record *r) { ContinuePlayoffs(); }
+static void run_InitShooters(const Record *r) { InitShooters(); }
+static void run_ClearShootout(const Record *r) { ClearShootout(); }
+static void run_UpdatePlayoffLevel(const Record *r) { UpdatePlayoffLevel(); }
+static void run_DrawMatchupBitmaps(const Record *r) { DrawMatchupBitmaps(); }
+static void run_DrawTeamBitmap(const Record *r) { expect_reg16(r, R_D4, DrawTeamBitmap(R16(R_D1), R16(R_D4)), "d4"); }
+static void run_VBlank_SetOptions(const Record *r) { VBlank_SetOptions(); }
+static void run_UnpackPicture(const Record *r) { UnpackPicture(A(R_A2)); }
+static void run_ResetCardTimer(const Record *r) { ResetCardTimer(); }
+static void run_PlayerCardTimer(const Record *r) { PlayerCardTimer(); }
+static void run_PlayerCardScreen(const Record *r) { PlayerCardScreen(); }
+static void run_PrintRecordValue(const Record *r) { PrintRecordValue(A(R_A1), R16(R_D0), R16(R_D1)); }
+static void run_CopyString(const Record *r) { CopyString(A(R_A1), A(R_A3)); }
+static void run_AppendNumber(const Record *r) { AppendNumber(R16(R_D0), A(R_A1)); }
+static void run_GetRecordValue(const Record *r)
+{
+    uint16_t goalie, v = GetRecordValue(R16(R_D0), R16(R_D1), &goalie);
+    expect_reg16(r, R_D0, v, "d0");
+    expect_reg16(r, R_D1, goalie, "d1");
+}
+static void run_PrintRecordHolder(const Record *r) { PrintRecordHolder(A(R_A1), R16(R_D0), R16(R_D1), A(R_A0)); }
+static void run_PrintRecordVs(const Record *r) { PrintRecordVs(A(R_A1), R16(R_D0), R16(R_D1), A(R_A0)); }
+static void run_AppendRecordHolder(const Record *r) { AppendRecordHolder(A(R_A1), R16(R_D0), R16(R_D1), A(R_A0)); }
+static void run_AppendRecordVs(const Record *r) { AppendRecordVs(A(R_A1), R16(R_D0), R16(R_D1), A(R_A0)); }
+static void run_ReadNameLog(const Record *r) { ReadNameLog(); }
+static void run_NameLogIO(const Record *r) { NameLogIO(); }
+static void run_AppendUserName(const Record *r) { AppendUserName(A(R_A1), R16(R_D2)); }
+static void run_AppendTeamName(const Record *r) { AppendTeamName(R16(R_D0), A(R_A1)); }
+static void run_TrimSpaces(const Record *r) { TrimSpaces(A(R_A2)); }
+static void run_GameSetUp(const Record *r) { GameSetUp(); }
+static void run_GoNewPlayoffs(const Record *r) { GoNewPlayoffs(); }
+static void run_GoContinuePlayoffs(const Record *r) { GoContinuePlayoffs(); }
+static void run_MoveMenuFrame(const Record *r) { expect_reg16(r, R_D7, MoveMenuFrame(R16(R_D7), D16(R_D0)), "d7"); }
+static void run_SetMenuArea(const Record *r) { uint16_t w, h; SetMenuArea(&w, &h); expect_reg16(r, R_D0, w, "d0"); expect_reg16(r, R_D1, h, "d1"); }
+static void run_SetFrameRect(const Record *r) { uint16_t w, h; SetFrameRect(R16(R_D3), &w, &h); expect_reg16(r, R_D0, w, "d0"); expect_reg16(r, R_D1, h, "d1"); }
+static void run_rtsSetup(const Record *r) { rtsSetup(); }
+static void run_FixModeOptions(const Record *r) { FixModeOptions(R16(R_D7)); }
+static void run_ChangeOption(const Record *r) { ChangeOption(R16(R_D7), D16(R_D2)); }
+static void run_WrapOption(const Record *r) { expect_reg16(r, R_D3, WrapOption(R16(R_D3), D16(R_D2), R16(R_D4), R16(R_D5)), "d3"); }
+static void run_PrintOptions(const Record *r) { PrintOptions(R16(R_D7)); }
+static void run_PrintOptionValue(const Record *r) { PrintOptionValue(R16(R_D7)); }
+static void run_PrintScrollMarks(const Record *r) { PrintScrollMarks(); }
+static void run_PrintOptTeamName(const Record *r) { PrintOptTeamName(R16(R_D7)); }
+static void run_PrintOptionNames(const Record *r) { PrintOptionNames(); }
+static void run_setoptions(const Record *r) { setoptions(); }
+static void run_ReadSetupPads(const Record *r) { expect_reg16(r, R_D1, ReadSetupPads(), "d1"); }
+static void run_SetupDemo(const Record *r) { SetupDemo(); }
+static void run_SetupStart(const Record *r) { SetupStart(); }
+static void run_LoadSetupTiles(const Record *r) { expect_reg16(r, R_D4, LoadSetupTiles(), "d4"); }
+static void run_UpdateRosterPlayers(const Record *r) { UpdateRosterPlayers(); }
+static void run_EraseCard(const Record *r) { EraseCard(); }
+static void run_DrawHomeBlock(const Record *r) { DrawHomeBlock(); }
+static void run_DrawVisBlock(const Record *r) { DrawVisBlock(); }
+static void run_DrawTeamLogo(const Record *r) { DrawTeamLogo(); }
+static void run_LogoBoxRight(const Record *r) { LogoBoxRight(); }
+static void run_LogoBoxHome(const Record *r) { LogoBoxHome(); }
+static void run_LogoBoxLeft(const Record *r) { LogoBoxLeft(); }
+static void run_LogoBoxVis(const Record *r) { LogoBoxVis(); }
+static void run_DrawLogoBox(const Record *r) { DrawLogoBox(R16(R_D4)); }
+
 const Port ports[] = {
     { SYM_checkwallcoll, "checkwallcoll", run_checkwallcoll },
     { SYM_checkgoal, "checkgoal", run_checkgoal },
@@ -1124,6 +1198,67 @@ const Port ports[] = {
     { SYM_VBlank_TitleScreen, "VBlank_TitleScreen", run_VBlank_TitleScreen },
     { SYM_CreditsLineScroll, "CreditsLineScroll", run_CreditsLineScroll },
     { SYM_CreditsScrollStep, "CreditsScrollStep", run_CreditsScrollStep },
+    { SYM_SuperDiv, "SuperDiv", run_SuperDiv },
+    { SYM_ReadPassBits, "ReadPassBits", run_ReadPassBits },
+    { SYM_GetRandomUnusedTeam, "GetRandomUnusedTeam", run_GetRandomUnusedTeam },
+    { SYM_InitializeGameStructures, "InitializeGameStructures", run_InitializeGameStructures },
+    { SYM_FigureJoy, "FigureJoy", run_FigureJoy },
+    { SYM_maketree, "maketree", run_maketree },
+    { SYM_NewPO, "NewPO", run_NewPO },
+    { SYM_ContinuePlayoffs, "ContinuePlayoffs", run_ContinuePlayoffs },
+    { SYM_InitShooters, "InitShooters", run_InitShooters },
+    { SYM_ClearShootout, "ClearShootout", run_ClearShootout },
+    { SYM_UpdatePlayoffLevel, "UpdatePlayoffLevel", run_UpdatePlayoffLevel },
+    { SYM_DrawMatchupBitmaps, "DrawMatchupBitmaps", run_DrawMatchupBitmaps },
+    { SYM_DrawTeamBitmap, "DrawTeamBitmap", run_DrawTeamBitmap },
+    { SYM_VBlank_SetOptions, "VBlank_SetOptions", run_VBlank_SetOptions },
+    { SYM_UnpackPicture, "UnpackPicture", run_UnpackPicture },
+    { SYM_ResetCardTimer, "ResetCardTimer", run_ResetCardTimer },
+    { SYM_PlayerCardTimer, "PlayerCardTimer", run_PlayerCardTimer },
+    { SYM_PlayerCardScreen, "PlayerCardScreen", run_PlayerCardScreen },
+    { SYM_PrintRecordValue, "PrintRecordValue", run_PrintRecordValue },
+    { SYM_CopyString, "CopyString", run_CopyString },
+    { SYM_AppendNumber, "AppendNumber", run_AppendNumber },
+    { SYM_GetRecordValue, "GetRecordValue", run_GetRecordValue },
+    { SYM_PrintRecordHolder, "PrintRecordHolder", run_PrintRecordHolder },
+    { SYM_PrintRecordVs, "PrintRecordVs", run_PrintRecordVs },
+    { SYM_AppendRecordHolder, "AppendRecordHolder", run_AppendRecordHolder },
+    { SYM_AppendRecordVs, "AppendRecordVs", run_AppendRecordVs },
+    { SYM_ReadNameLog, "ReadNameLog", run_ReadNameLog },
+    { SYM_NameLogIO, "NameLogIO", run_NameLogIO },
+    { SYM_AppendUserName, "AppendUserName", run_AppendUserName },
+    { SYM_AppendTeamName, "AppendTeamName", run_AppendTeamName },
+    { SYM_TrimSpaces, "TrimSpaces", run_TrimSpaces },
+    { SYM_GameSetUp, "GameSetUp", run_GameSetUp },
+    { SYM_GoNewPlayoffs, "GoNewPlayoffs", run_GoNewPlayoffs },
+    { SYM_GoContinuePlayoffs, "GoContinuePlayoffs", run_GoContinuePlayoffs },
+    { SYM_MoveMenuFrame, "MoveMenuFrame", run_MoveMenuFrame },
+    { SYM_SetMenuArea, "SetMenuArea", run_SetMenuArea },
+    { SYM_SetFrameRect, "SetFrameRect", run_SetFrameRect },
+    { SYM_rtsSetup, "rtsSetup", run_rtsSetup },
+    { SYM_FixModeOptions, "FixModeOptions", run_FixModeOptions },
+    { SYM_ChangeOption, "ChangeOption", run_ChangeOption },
+    { SYM_WrapOption, "WrapOption", run_WrapOption },
+    { SYM_PrintOptions, "PrintOptions", run_PrintOptions },
+    { SYM_PrintOptionValue, "PrintOptionValue", run_PrintOptionValue },
+    { SYM_PrintScrollMarks, "PrintScrollMarks", run_PrintScrollMarks },
+    { SYM_PrintOptTeamName, "PrintOptTeamName", run_PrintOptTeamName },
+    { SYM_PrintOptionNames, "PrintOptionNames", run_PrintOptionNames },
+    { SYM_setoptions, "setoptions", run_setoptions },
+    { SYM_ReadSetupPads, "ReadSetupPads", run_ReadSetupPads },
+    { SYM_SetupDemo, "SetupDemo", run_SetupDemo },
+    { SYM_SetupStart, "SetupStart", run_SetupStart },
+    { SYM_LoadSetupTiles, "LoadSetupTiles", run_LoadSetupTiles },
+    { SYM_UpdateRosterPlayers, "UpdateRosterPlayers", run_UpdateRosterPlayers },
+    { SYM_EraseCard, "EraseCard", run_EraseCard },
+    { SYM_DrawHomeBlock, "DrawHomeBlock", run_DrawHomeBlock },
+    { SYM_DrawVisBlock, "DrawVisBlock", run_DrawVisBlock },
+    { SYM_DrawTeamLogo, "DrawTeamLogo", run_DrawTeamLogo },
+    { SYM_LogoBoxRight, "LogoBoxRight", run_LogoBoxRight },
+    { SYM_LogoBoxHome, "LogoBoxHome", run_LogoBoxHome },
+    { SYM_LogoBoxLeft, "LogoBoxLeft", run_LogoBoxLeft },
+    { SYM_LogoBoxVis, "LogoBoxVis", run_LogoBoxVis },
+    { SYM_DrawLogoBox, "DrawLogoBox", run_DrawLogoBox },
     { 0, NULL, NULL }
 };
 

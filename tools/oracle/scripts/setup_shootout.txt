@@ -1,0 +1,2 @@
+# power on: Start at the title, Play Mode to Shootout on the setup screen, Start (tools/oracle/lockstep.py, capture.py)
+1200:START,1206:,1320:LEFT,1326:,1360:START,1366:

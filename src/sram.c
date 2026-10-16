@@ -44,6 +44,7 @@ void MakeSRAMChecksum(void)
 void InitSaveRAM(void)
 {
     g.vbint = SYM_VBcount;
+    cpu_set_sr(0x2500);
     g.ValidSRAM = 0;
     uint16_t d0, d1, d2, held;
     ReadJoy1(&d0, &d1, &d2, &held);

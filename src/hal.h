@@ -30,6 +30,8 @@ void z80_ram_write8(uint16_t off, uint8_t v);  /* move.b to Z80 RAM */
 void z80_reset(uint16_t v);                    /* move.w to IO_Z80RES: 0 holds the Z80 in reset, $100 runs it */
 uint8_t pad_read(uint32_t port);               /* move.b from a pad data port ($A10003 / $A10005) */
 void pad_write(uint32_t port, uint8_t v);      /* move.b to a pad data port (TH select, 4 way adaptor select) */
+uint16_t cpu_get_sr(void);                     /* move sr,-(sp): the status register (its interrupt mask) */
+void cpu_set_sr(uint16_t sr);                  /* move #sr,sr / move (sp)+,sr: a vblank that came while masked is taken at the unmask */
 uint32_t io_read32(uint32_t addr);             /* tst.l of the I/O chip's registers ($A10000-$A1001F) */
 uint16_t io_read16(uint32_t addr);             /* tst.w of them */
 void tmss_write(uint32_t v);                   /* move.l to $A14000 (TMSS: 'SEGA' unlocks the VDP) */

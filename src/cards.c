@@ -1,7 +1,12 @@
 /* cards94.asm: player cards and the save RAM records. Only the parts the game play calls are
  * here so far; the card and record screens come with the front end. */
+#include <string.h>
 #include "game.h"
 #include "symbols_gen.h"
+#include "hal.h"
+#include "cards_strings_gen.h"
+
+#define RAM_W(off) ram_ptr(RAM_BASE + (off))
 
 /* cards94.asm:wallcollduringcheck. During a check, skater a2 (not a goalie) is tested against
  * the corners and walls at his position with his size + $17. */
@@ -181,4 +186,287 @@ void UpdateRecords(void)
     UpdateTeamRecord(buf, g.homeuser, g.awayuser, g.HomeTeam, g.VisTeam, team_struct(0), team_struct(1));
     UpdateTeamRecord(buf, g.awayuser, g.homeuser, g.VisTeam, g.HomeTeam, team_struct(1), team_struct(0));
     MakeSRAMChecksum();
+}
+
+/* ---- the player cards of the setup screen --------------------------------------------------- */
+
+#define CARD(n) HI(n)                                    /* setupcardflags bits (see optsetup.c) */
+#define MESAREA (RAM_BASE + RAM_OFF_mesarea)
+#define TEMPBUF (RAM_BASE + RAM_OFF_TempBuffer)
+
+/* cards94.asm:ResetCardTimer. The player card timer to $AA ($53 when C was pressed). */
+void ResetCardTimer(void)
+{
+    g.cardtimer = (g.setupcardflags & CARD(5)) ? 0x53 : 0xAA;
+}
+
+/* cards94.asm:PlayerCardTimer. Each frame of the setup screen's first minute: once carddelay has
+ * run out a card is up (bit 0); count cardtimer down (C skips $50 of it); at $52 the next card,
+ * on the other side, with both blocks and logos forgotten (PlayerCardScreen); below 0 the timer
+ * starts again. */
+void PlayerCardTimer(void)
+{
+    if ((int16_t)--g.carddelay >= 0) return;
+    g.carddelay = 0xFFFF;
+    g.setupcardflags |= CARD(0);
+    if ((g.setupcardflags & CARD(5)) && (int16_t)g.cardtimer < 0x52) g.cardtimer -= 0x50;
+    if ((int16_t)--g.cardtimer < 0) { ResetCardTimer(); return; }
+    if (g.cardtimer != 0x52) return;
+    g.setupcardflags &= (uint16_t)~(CARD(2) | CARD(3));
+    g.setupcardflags ^= CARD(1);
+    ST_W(g.setuphome);
+    ST_W(g.setupvis);
+    g.setupcardflags &= (uint16_t)~(CARD(6) | CARD(7));
+    PlayerCardScreen();
+}
+
+/* printsmall in the setup font (sflags6 bit 3) */
+static void print_setup(uint32_t s)
+{
+    g.sflags6 |= HI(3);
+    printsmall(s);
+    g.sflags6 &= (uint16_t)~HI(3);
+}
+
+/* cards94.asm:PlayerCardScreen. A player card on one side (bit 1: the visitors' on the left,
+ * else the home team's on the right): the team block erased, a logo box with the picture of the
+ * team's featured player (FeaturedPictures; the next one after each visitors' card), a framed
+ * box with his number and name and, with save RAM, his user records. */
+void PlayerCardScreen(void)
+{
+    int vis = (g.setupcardflags & CARD(1)) != 0;
+    printz(str_PlayerCardScreen_1, sizeof str_PlayerCardScreen_1);
+    g.printx = vis ? 0x1C : 3;
+    g.printy = 5;
+    eraser(8, 8, 0x7FF);
+    printz(str_PlayerCardScreen_2, sizeof str_PlayerCardScreen_2);
+    g.printx = vis ? 3 : 0xB;
+    g.printy = 5;
+    eraser(0x19, 8, 0x7FF);
+    if (!vis) {
+        LogoBoxRight();
+    } else {
+        LogoBoxLeft();
+        g.featuredplayer++;
+    }
+    printz(str_PlayerCardScreen_3, sizeof str_PlayerCardScreen_3);
+    if ((int16_t)g.featuredplayer >= 6) g.featuredplayer = 0;
+    uint16_t team = vis ? g.VisTeam : g.HomeTeam;
+    g.printx = vis ? 4 : 0x1D;
+    g.printy = 6;
+    uint16_t chars = g.homepicchars, d3 = (uint16_t)(g.featuredplayer * 6);
+    uint32_t list = rd32(rom_ptr(SYM_FeaturedPictures + (uint32_t)(int16_t)(uint16_t)(team << 2)));
+    g.cardroster = rd16(rom_ptr(list + (int16_t)d3 + 4));
+    uint32_t pic = rd32(rom_ptr(list + (int16_t)d3));
+    uint32_t pal = SYM_PicturePalette + rd32(rom_ptr(SYM_PicturePalette)), map;
+    if (rd32(rom_ptr(pic + 4)) == 0) map = SYM_PicturePalette + rd32(rom_ptr(SYM_PicturePalette + 4));   /* no map: the common one */
+    else map = pic + rd32(rom_ptr(pic + 4));
+    UnpackPicture(pic + 8);
+    uint16_t v = g.vcount;
+    while (g.vcount == v) hal_wait_vblank();
+    uint8_t keep[8];
+    memcpy(keep, RAM_W(RAM_OFF_palfadenew + 0x22), 8);
+    dobitmap(pal, map, RAM_BASE + RAM_OFF_picturebuf, 0, 0, 6, 6, chars, 2);
+    memcpy(RAM_W(RAM_OFF_palfadenew + 0x22), keep, 8);
+    printz(str_PlayerCardScreen_4, sizeof str_PlayerCardScreen_4);
+    g.printa = 0x6000;
+    g.printx = vis ? 0xB : 3;
+    g.printy = 5;
+    g.cardprintx = (uint16_t)(g.printx + 1);
+    g.cardprinty = (uint16_t)(g.printy + 1);
+    Framer(0x19, 8);                                      /* 25 x 8 */
+    g.printx = g.cardprintx;
+    g.printy = g.cardprinty;
+    g.printa = 0;
+    g.printm = 0;
+    team = vis ? g.VisTeam : g.HomeTeam;
+    g.cardteamnum = team;
+    uint32_t a2 = rd32(rom_ptr(SYM_TeamList + (uint32_t)(int16_t)(uint16_t)(team << 2)));
+    a2 += (uint32_t)(int16_t)rd16(rom_ptr(a2));          /* the roster: name String, then 8 bytes */
+    for (uint16_t n = g.cardroster; n-- != 0;) a2 += (uint32_t)(int16_t)rd16(rom_ptr(a2)) + 8;
+    uint8_t *mes = RAM_W(RAM_OFF_mesarea);
+    wr16(mes, 6);
+    ConvertByteToDigits((uint16_t)(int16_t)(int8_t)*rom_ptr(a2 + (int16_t)rd16(rom_ptr(a2))), mes + 2);   /* the uniform number */
+    wr16(mes + 4, 0x2000);
+    appstring(a2, MESAREA);                               /* and the name */
+    print_setup(MESAREA);
+    if ((int16_t)g.ValidSRAM >= 0) {                      /* the user records */
+        PrintRecordValue(MESAREA, g.cardteamnum, g.cardroster);
+        if (rd16(mes) != 2) {
+            g.printx = g.cardprintx;
+            g.printy += 2;
+            print_setup(MESAREA);
+            PrintRecordHolder(MESAREA, g.cardteamnum, g.cardroster, RAM_BASE);
+            g.printx = g.cardprintx;
+            if (rd16(mes) != 2) {
+                g.printy++;
+                print_setup(MESAREA);
+            }
+            PrintRecordVs(MESAREA, g.cardteamnum, g.cardroster, RAM_BASE);
+            g.printx = g.cardprintx;
+            g.printy++;
+            print_setup(MESAREA);
+        }
+    }
+    g.palcount = 0x64;
+}
+
+/* cards94.asm:PrintRecordValue. The record line of player d1 of team d0 at a1: "Record " (a copy
+ * of RecordTxt), the value (GetRecordValue) and goals / goal or saves / save; an empty String
+ * when there is no value. */
+void PrintRecordValue(uint32_t buf, uint16_t team, uint16_t player)
+{
+    CopyString(SYM_RecordTxt, buf);
+    uint16_t goalie;
+    uint16_t v = GetRecordValue(team, player, &goalie);
+    if (v == 0) { wr16(mem_ptr(buf), 2); return; }
+    g.TempWord2 = v;
+    AppendNumber(v, TEMPBUF);
+    appstring(TEMPBUF, buf);
+    v = g.TempWord2;
+    uint32_t a1 = v == 1 ? SYM_RecSaveTxt : SYM_RecSavesTxt;
+    if (!goalie) a1 = v == 1 ? SYM_RecGoalTxt : SYM_RecGoalsTxt;
+    appstring(a1, buf);
+}
+
+/* cards94.asm:CopyString. Copy String a1 (its length word first) to a3. */
+void CopyString(uint32_t src, uint32_t dst)
+{
+    const uint8_t *s = mem_ptr(src);
+    uint8_t *d = mem_ptr(dst);
+    uint16_t n = (uint16_t)(rd16(s) - 1);
+    do *d++ = *s++; while (n-- != 0);
+}
+
+/* cards94.asm:AppendNumber. d0 (0-999, no leading zeros) as a String at a1, padded to an even
+ * length. */
+void AppendNumber(uint16_t n, uint32_t buf)
+{
+    uint8_t *start = mem_ptr(buf), *p = start + 2;
+    uint16_t len = 0;
+    uint32_t d0 = m68k_divu((uint32_t)(int32_t)(int16_t)n, 100);
+    if ((uint16_t)d0 != 0) { *p++ = (uint8_t)((uint16_t)d0 + '0'); len++; }
+    d0 = m68k_divu((uint32_t)(int32_t)(int16_t)(d0 >> 16), 10);
+    uint8_t tens = (uint8_t)((uint16_t)d0 + '0');
+    if (tens != '0' || (int16_t)n >= 10) { *p++ = tens; len++; }
+    *p++ = (uint8_t)((uint16_t)(d0 >> 16) + '0');
+    len++;
+    if (len & 1) { *p++ = 0; len++; }
+    wr16(start, (uint16_t)(len + 2));
+}
+
+/* cards94.asm:GetRecordValue. Player d1 of team d0's record from save RAM (ReadPlayerRecord to
+ * $FFFF0000) -> d0 = its value byte, d1 = 1 when he is one of the team's goalies (the first
+ * entries, as many as the nibbles of its .sodds word). */
+uint16_t GetRecordValue(uint16_t team, uint16_t player, uint16_t *goalie)
+{
+    ReadPlayerRecord((uint32_t)(int32_t)(int16_t)player, team, RAM_BASE);
+    uint16_t v = (uint16_t)(int16_t)(int8_t)ram_ptr(RAM_BASE)[0];
+    uint32_t blk = rd32(rom_ptr(SYM_TeamList + (uint32_t)(int16_t)(uint16_t)(team << 2)));
+    uint16_t odds = rd16(rom_ptr(blk + (int16_t)rd16(rom_ptr(blk + 0xA))));
+    int16_t goalies = 0;
+    do { goalies++; odds = (uint16_t)(odds << 4); } while (odds != 0);
+    *goalie = goalies > (int16_t)player;
+    return v;
+}
+
+/* cards94.asm:PrintRecordHolder. "by " (RecByTxt) and the record holder's user name
+ * (AppendRecordHolder) at a1; an empty String when there is none. */
+void PrintRecordHolder(uint32_t buf, uint16_t team, uint16_t player, uint32_t rec)
+{
+    CopyString(SYM_RecByTxt, buf);
+    AppendRecordHolder(TEMPBUF, team, player, rec);
+    if (rd16(mem_ptr(TEMPBUF)) == 2) wr16(mem_ptr(buf), 2);
+    else appstring(TEMPBUF, buf);
+}
+
+/* cards94.asm:PrintRecordVs. "vs. " (RecVsTxt), the user name and the opponent (AppendRecordVs)
+ * at a1. */
+void PrintRecordVs(uint32_t buf, uint16_t team, uint16_t player, uint32_t rec)
+{
+    CopyString(SYM_RecVsTxt, buf);
+    AppendRecordVs(TEMPBUF, team, player, rec);
+    appstring(TEMPBUF, buf);
+}
+
+/* the player record a0, or (a0 = 0) player d1 of team d0's read to $FFFF0000 */
+static const uint8_t *player_record(uint16_t team, uint16_t player, uint32_t rec)
+{
+    if (rec == 0) {
+        ReadPlayerRecord((uint32_t)(int32_t)(int16_t)player, (uint16_t)(int16_t)team, RAM_BASE);
+        rec = RAM_BASE;
+    }
+    return mem_ptr(rec);
+}
+
+/* cards94.asm:AppendRecordHolder. The user name of the record holder (byte 1 of record a0) as a
+ * String at a1 (AppendUserName, trimmed). */
+void AppendRecordHolder(uint32_t buf, uint16_t team, uint16_t player, uint32_t rec)
+{
+    const uint8_t *r = player_record(team, player, rec);
+    g.sflags6 |= HI(7);
+    AppendUserName(buf, (uint16_t)(int16_t)(int8_t)r[1]);
+}
+
+/* cards94.asm:AppendRecordVs. The user name (byte 3 of record a0), a space and the opponent's
+ * city (byte 2, AppendTeamName) as a String at a1. */
+void AppendRecordVs(uint32_t buf, uint16_t team, uint16_t player, uint32_t rec)
+{
+    const uint8_t *r = player_record(team, player, rec);
+    g.sflags6 |= HI(7);
+    AppendUserName(buf, (uint16_t)(int16_t)(int8_t)r[3]);
+    appstring(SYM_RecSpaceTxt, buf);
+    AppendTeamName(r[2], buf);
+}
+
+/* cards94.asm:ReadNameLog. The user name log from save RAM to namelog (NameLogIO). */
+void ReadNameLog(void)
+{
+    g.sflags6 &= (uint16_t)~HI(6);
+    NameLogIO();
+}
+
+/* cards94.asm:NameLogIO. Read (sflags6 bit 6 clear) or write the name log: NameLogBytes at save
+ * RAM NameLogBase. */
+void NameLogIO(void)
+{
+    if (g.sflags6 & HI(6)) WriteSRAM(SYM_NameLogBase, SYM_NameLogBytes, RAM_BASE + RAM_OFF_namelog);
+    else ReadSRAM(SYM_NameLogBase, SYM_NameLogBytes, RAM_BASE + RAM_OFF_namelog);
+}
+
+/* cards94.asm:AppendUserName. User d2's name (12 bytes of namelog, a 0 as a space) as a String at
+ * a1, trimmed (TrimSpaces) with sflags6 bit 7; user 0: an empty String (NoNameTxt). */
+void AppendUserName(uint32_t buf, uint16_t user)
+{
+    uint8_t *b = mem_ptr(buf);
+    if (user == 0) {
+        CopyString(SYM_NoNameTxt, buf);
+        TrimSpaces(buf);
+        return;
+    }
+    const uint8_t *name = mem_ptr(RAM_BASE + RAM_OFF_namelog + (uint32_t)user * 0xC);   /* (mulu.w: any byte) */
+    for (int i = 0; i < 12; i++) b[2 + i] = name[i] ? name[i] : ' ';
+    wr16(b, 0xE);
+    if (g.sflags6 & HI(7)) TrimSpaces(buf);
+}
+
+/* cards94.asm:AppendTeamName. Append team d0's city (its TeamList block String) to a1. */
+void AppendTeamName(uint16_t team, uint32_t buf)
+{
+    uint32_t blk = rd32(rom_ptr(SYM_TeamList + (uint32_t)(int16_t)(uint16_t)((int16_t)(int8_t)team << 2)));
+    blk += (uint32_t)(int32_t)(int16_t)rd16(rom_ptr(blk + 4));
+    blk += (uint32_t)(int16_t)rd16(rom_ptr(blk));
+    appstring(blk, buf);
+}
+
+/* cards94.asm:TrimSpaces. Drop the trailing spaces of String a2 (zeroed) and pad its length to
+ * even. */
+void TrimSpaces(uint32_t str)
+{
+    uint8_t *s = mem_ptr(str), *p = s + rd16(s);
+    while (*--p == ' ') {
+        *p = 0;
+        wr16(s, (uint16_t)(rd16(s) - 1));
+    }
+    wr16(s, (uint16_t)((rd16(s) + 1) & 0xFE));
 }

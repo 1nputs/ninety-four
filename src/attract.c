@@ -32,6 +32,7 @@ void EASportsScreen(void)
     g.palfadenew[0] = 0xEEE;
     g.palfadenew[7] = 0;
     g.palcount = 0x18;                                    /* fade in */
+    cpu_set_sr(0x2500);
     uint8_t *count = RAM_W(RAM_OFF_seed);                 /* (the seed's high word counts down) */
     wr16(count, 0x50);
     do {
@@ -40,4 +41,58 @@ void EASportsScreen(void)
         if (d1) break;
         wr16(count, (uint16_t)(rd16(count) - 1));
     } while ((int16_t)rd16(count) >= 0);
+    cpu_set_sr(0x2700);
+}
+
+/* attract94.asm:UpdatePlayoffLevel. In the new playoffs: pojoy = 7 (or $B with FourWayPlay) -
+ * OptNOP. */
+void UpdatePlayoffLevel(void)
+{
+    if ((int16_t)g.OptPlayMode < 2 || g.OptPlayMode == 4) return;
+    g.pojoy = (uint16_t)((g.FourWayPlay ? 0xB : 7) - g.OptNOP);
+}
+
+/* attract94.asm:DrawMatchupBitmaps. The visitors' and the home team's bitmaps (DrawTeamBitmap)
+ * with their colours from TeamPalettes (the menu's teams in Regular Season and Shootout), then
+ * the team structs (setteams) and the palette at once. */
+void DrawMatchupBitmaps(void)
+{
+    if (g.OptPlayMode == 4 || g.OptPlayMode == 0) {
+        g.HomeTeam = g.Opt1Team;
+        g.VisTeam = g.Opt2Team;
+    }
+    printz(str_DrawMatchupBitmaps_1, sizeof str_DrawMatchupBitmaps_1);
+    uint16_t t = g.VisTeam;
+    memcpy(RAM_W(RAM_OFF_palfadenew + 0x26), rom_ptr(SYM_TeamPalettes + (uint32_t)(int16_t)(uint16_t)(t << 6) + 0x26), 4);
+    DrawTeamBitmap(t, g.teambitmapchars);
+    printz(str_DrawMatchupBitmaps_2, sizeof str_DrawMatchupBitmaps_2);
+    t = g.HomeTeam;
+    memcpy(RAM_W(RAM_OFF_palfadenew + 0x22), rom_ptr(SYM_TeamPalettes + (uint32_t)(int16_t)(uint16_t)(t << 6) + 2), 4);
+    g.palfadenew[0x15] = 0xEEE;
+    DrawTeamBitmap(t, 2);
+    setteams();
+    g.palcount = 0x64;
+}
+
+/* attract94.asm:DrawTeamBitmap. Rows d1 * 2 and the next of TeamBitmaps' map (no tiles) at
+ * printx / printy from char d4 -> d4. */
+uint16_t DrawTeamBitmap(uint16_t team, uint16_t chars)
+{
+    uint32_t img = SYM_TeamBitmaps, map = img + rd32(rom_ptr(img + 4));
+    return dobitmap(img + rd32(rom_ptr(img)), map, SYM_NoTiles, 0, (uint16_t)(team << 1), rd16(rom_ptr(map)), 2, chars, 0);
+}
+
+/* attract94.asm:VBlank_SetOptions. The setup screen's vblank: unless dfng, the sprites (when
+ * dfok) and the fade; then vcount and the music. */
+void VBlank_SetOptions(void)
+{
+    if (!(g.disflags & HI(dfng))) {
+        if (g.disflags & HI(dfok)) {
+            g.disflags &= (uint16_t)~HI(dfok);
+            DumpSprites2();
+        }
+        cramfade();
+    }
+    g.vcount++;
+    p_music_vblank();
 }

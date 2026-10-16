@@ -1,5 +1,6 @@
 /* shootout94.asm: the shootout. Only the parts the game play calls are here so far; setting a
  * shootout up comes with the front end. */
+#include <string.h>
 #include "game.h"
 #include "rom.h"
 #include "symbols_gen.h"
@@ -75,4 +76,36 @@ void ShootoutWonBy(void)
     uint32_t data = rd32(rom_ptr(SYM_TeamList + (int16_t)(team << 2)));
     g.printx = 2;
     printbig(data + (int16_t)rd16(rom_ptr(data + 4)));
+}
+
+/* shootout94.asm:InitShooters. The six starters of the home team (shootoutteam 0: the list
+ * below homeshootnum) or the away team (below shootoutteam), roster index - 1 each. */
+void InitShooters(void)
+{
+    uint16_t team = g.HomeTeam, at = RAM_OFF_homeshootnum;
+    if (g.shootoutteam) { team = g.VisTeam; at = RAM_OFF_shootoutteam; }
+    uint32_t data = rd32(rom_ptr(SYM_TeamList + (uint16_t)(team << 2)));
+    const uint8_t *a1 = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 6)));
+    for (int i = 0; i < 6; i++) {
+        at -= 2;
+        wr16(ram_ptr(RAM_BASE + at), (uint16_t)(*a1++ - 1));
+    }
+}
+
+/* shootout94.asm:ClearShootout. Clear the player structs ($800 bytes from SortCords) and the
+ * shootout state: round 1, no goals, both shooter lists. */
+void ClearShootout(void)
+{
+    memset(ram_ptr(RAM_BASE + RAM_OFF_SortCords), 0, 0x800);
+    g.shootoutdelay = 0;
+    g.shootoutround = 1;
+    g.gmode2 &= (uint16_t)~HI(3);
+    g.homeshootgoals = 0;
+    g.awayshootgoals = 0;
+    g.homeshootnum = 0;
+    g.shootoutteam = 0;
+    InitShooters();
+    g.shootoutteam = 1;
+    InitShooters();
+    g.shootoutteam = 0;
 }
