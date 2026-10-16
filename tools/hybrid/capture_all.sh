@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Record the standard capture sessions for `make test`. Needs build/nhl_oracle.so, the saved
 # states out/states/demo_faceoff.state (CPU vs CPU, penalties / offsides / line changes on,
-# 5 minute periods) and out/states/demo1p_faceoff.state (one human player, same options), and
-# the random input script out/captures/checks_script.txt.
+# 5 minute periods) and out/states/demo1p_faceoff.state (one human player, same options), which
+# `make vectors` records (tools/oracle/vectors.py), and the random input script
+# tools/oracle/scripts/random_seed94.txt.
 set -e
 # at most CAPTURE_JOBS sessions at once (memory: a session can hold a few hundred MB of call log)
 JOBS="${CAPTURE_JOBS:-4}"
@@ -15,7 +16,7 @@ cg = json.load(open('out/callgraph.json'))
 print(','.join(n for n, f in cg.items() if isinstance(f, dict) and f.get('file') in sys.argv[1:] and f.get('insns', 0) >= 2))
 PY
 }
-SCRIPT="$(cat out/captures/checks_script.txt)"
+SCRIPT="$(grep -v '^#' tools/oracle/scripts/random_seed94.txt)"
 S1=out/states/demo1p_faceoff.state
 S2=out/states/demo_faceoff.state
 run() { out=$1; shift; python3 tools/hybrid/capture.py "$ROM" --out "out/captures/$out.cap" --frames 40000 --spread "$@" > "out/captures/$out.log" 2>&1; echo "$out: $(grep -c . out/captures/$out.log) lines, $(tail -n 2 out/captures/$out.log | head -n 1)"; }
@@ -74,4 +75,7 @@ throttle; run shooters     --state "" --script "$(grep -v '^#' tools/oracle/scri
 SUMS=DrawScoringRow,DrawScoringRowUp,DrawScoringRowDown,PrintScorerName,DisplayPenaltyEntry,DisplayPenaltyLineUp,DisplayPenaltyLineDown,UpdateScoringScroll,UpdatePenaltyScroll,DrawScrollArrowsPenalty,AttribStatus,DisplayPlayerList
 throttle; run summaries    --state out/states/faceoff.state --script "$(grep -v '^#' tools/oracle/scripts/pause_menus2.txt)" --max 16 --frames 22200 --from 16000 --fn "$SUMS" &
 throttle; run summaries2   --state out/states/demo_faceoff.state --script "$(grep -v '^#' tools/oracle/scripts/pause_menus3.txt)" --max 16 --frames 10600 --from 7800 --fn "$SUMS" &
+# the instant replay's navigation helpers (the pause menu's Instant Replay: play, rewind, steps, the reverse angle)
+REPLAY=suba4,adda4,adda42,adda43,UpdateCameraPos,RevReplayAdj,RestoreReplayFrame,ClampReplayView,ShowReplayIcon,EraseReplayIcon,ShowReplayBanner,EraseReplayBanner
+throttle; run replay       --state out/states/faceoff.state --script "$(grep -v '^#' tools/oracle/scripts/replay_menu.txt)" --max 24 --frames 4700 --from 2500 --fn "$REPLAY" &
 wait

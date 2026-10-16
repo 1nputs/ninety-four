@@ -1,5 +1,5 @@
-/* setup94.asm: setting up the rink, the teams and the period. Only the parts the game play
- * calls are here so far; the screens come with the front end and the game loop. */
+/* setup94.asm: setting up the rink, the teams and the period; the front end's flow (Opening,
+ * the intermission, the game over and its password) and the playoff screen. */
 #include <string.h>
 #include "game.h"
 #include "hal.h"

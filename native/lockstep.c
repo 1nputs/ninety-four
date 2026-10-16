@@ -109,8 +109,8 @@ int lockstep_load(const char *path, mdrt *m)
     long len = ftell(f);
     fseek(f, 0, SEEK_SET);
     uint8_t *d = malloc((size_t)len);
-    if (!d || fread(d, 1, (size_t)len, f) != (size_t)len || len < 12 || memcmp(d, "MDLS", 4) || le32(d + 4) < 3 || le32(d + 4) > 6) {
-        fclose(f); fprintf(stderr, "%s: not a version 3 to 6 lockstep file\n", path); return 0;
+    if (!d || fread(d, 1, (size_t)len, f) != (size_t)len || len < 12 || memcmp(d, "MDLS", 4) || le32(d + 4) < 3 || le32(d + 4) > 7) {
+        fclose(f); fprintf(stderr, "%s: not a version 3 to 7 lockstep file\n", path); return 0;
     }
     fclose(f);
     version = (int)le32(d + 4);
@@ -213,7 +213,7 @@ static const char *masked_diff(const record *r)
     /* the game's copy of vcount (its waits keep it: oldvcount = vcount) differs with it */
     int vc = MASKED(m, RAM_OFF_vcount) || MASKED(m, RAM_OFF_vcount + 1);
     int n = 0, first = -1;
-    for (int i = 0; i < 0xDF00; i++) {
+    for (uint32_t i = 0; i < RAM_VARS_END; i++) {
         if (vc && (i == RAM_OFF_oldvcount || i == RAM_OFF_oldvcount + 1)) continue;
         if (ram[i] != p[i] && !MASKED(m, i)) { if (first < 0) first = i; n++; }
     }
@@ -257,8 +257,10 @@ static void take_state(const record *r, int game_loop)
     } else z80_relay_reset(0);
 }
 
+static int failed;                      /* a check differed */
 static void differs(const char *what, long frame, const record *r)
 {
+    failed = 1;
     printf("lockstep: %s differs at the game's vblank wait %ld (the oracle's frame %u, the 68k at %06x); "
            "%ld waits checked, %ld lag frames before\n", what, frame, r->frame, r->at, checked, lagged);
     FILE *f = fopen("out/lockstep-native.ram", "wb");
@@ -275,6 +277,21 @@ static void differs(const char *what, long frame, const record *r)
     native_quit();
 }
 
+/* the next interrupt came at the rte of the oracle's vblank code, which ran longer than a frame
+ * (version 7, flags bit 3): the native game, whose DMA takes no time, runs that vblank at once
+ * too, before any of its own work */
+int lockstep_vblank_again(void)
+{
+    return recs && span_lo < nrecs && span_hi - span_lo == 1 && (recs[span_lo].flags & 9) == 9;
+}
+
+/* 0: every vblank of the recording passed, 1: a check differed, 2: the run stopped first */
+int lockstep_result(void)
+{
+    if (!recs) return 0;
+    return failed ? 1 : span_lo < nrecs ? 2 : 0;
+}
+
 static int reported;
 void lockstep_report(void)
 {
@@ -288,6 +305,9 @@ void lockstep_report(void)
 }
 
 static uint32_t accesses_now;            /* the game's port accesses so far */
+
+static int due(uint32_t n, int unmask);
+static int armed;                       /* the next lag frame's access count has come: waiting for its routine */
 
 /* the span done: on to the next; the game's port access count is the oracle's from here (it
  * drifts in the game's logic, where lag frames are not placed, and over resyncs) */
@@ -303,6 +323,7 @@ static void advance(const record *r)
     buttons = r->buttons;
     next = span_hi;
     next_span();
+    armed = due(accesses_now, 0);                         /* (a lag frame due with no access first: in its routine) */
 }
 
 /* ---- where the native game is: the routine it is in --------------------------------------------
@@ -333,8 +354,6 @@ static NI uint32_t routine_of(void *fn)
 static void try_place(void);
 static void place_next(const char *how);
 static int in_game_logic(void);
-static int due(uint32_t n, int unmask);
-static int armed;                       /* the next lag frame's access count has come: waiting for its routine */
 
 void NI __cyg_profile_func_enter(void *fn, void *site)
 {
@@ -457,6 +476,9 @@ void lockstep_check(long frame)
         native_quit();
     }
     if (restarted) { restarted = 0; return; }             /* the same wait, from the restart */
+    if (getenv("LOCKSTEP_DEBUG"))
+        printf("  check: the oracle's frame %u (68k at %06x), the game in %06x, vcount %04x oldvcount %04x disflags %04x vbint %06x\n",
+               r->frame, r->at, depth > 0 && depth <= 512 ? where[depth - 1] : 0, g.vcount, g.oldvcount, g.disflags, g.vbint);
     if (logic_lags && r->state && !at_game_loop(r) && depth > 0 && depth <= 512 && where[depth - 1] == r->routine
         && r->routine && !in_game_logic()) {
         /* the span's lag frames fell in the game's logic, where their places are not exact, and it
@@ -496,7 +518,7 @@ void lockstep_check(long frame)
         insync = 0;
         return;
     }
-    uint64_t rh = fnv64(0xCBF29CE484222325ull, ram_ptr(RAM_BASE), 0xDF00), vh = vdp_hash();
+    uint64_t rh = fnv64(0xCBF29CE484222325ull, ram_ptr(RAM_BASE), RAM_VARS_END), vh = vdp_hash();
     size_t want = 0, used = hv_used;                      /* the HV reads of the whole span (its lag frames' too) */
     for (size_t i = span_lo; i < span_hi; i++) want += recs[i].nhv;
     for (size_t i = span_lo; i < hv_rec && i < span_hi; i++) used += recs[i].nhv;

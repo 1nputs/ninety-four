@@ -1,4 +1,5 @@
 #include "hal.h"
+#include "z80.h"
 #include "replay.h"
 uint8_t vdp_hv8(void) { return (uint8_t)replay_io_read(VDP_HV_PORT, 1); }
 uint16_t vdp_hv16(void) { return (uint16_t)replay_io_read(VDP_HV_PORT, 2); }

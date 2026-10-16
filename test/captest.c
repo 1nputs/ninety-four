@@ -9,7 +9,6 @@
 #include "ports.h"
 #include "rom.h"
 
-#define STACK_LO 0xDEF4u          /* nothing named lives from here to the top of RAM: the stack */
 static int verbose, reg_fail;
 
 void expect_reg16(const Record *r, int reg, uint32_t got, const char *what)
@@ -45,7 +44,7 @@ static int run_record(Record *r, const Port *p)
     p->run(r);
     int bad = 0;
     const uint8_t *got = (const uint8_t *)&g;
-    for (uint32_t i = 0; i < STACK_LO; i++) {
+    for (uint32_t i = 0; i < RAM_VARS_END; i++) {
         if (got[i] != r->ram_out[i]) {
             if (bad < 12) {
                 uint32_t base; const char *nm = ram_name(i, &base);
@@ -65,16 +64,9 @@ static int run_record(Record *r, const Port *p)
     return bad == 0 && replay_failures == 0 && reg_fail == 0 && left == 0;
 }
 
-int main(int argc, char **argv)
+/* the records of one capture: FAIL lines and a line per routine; adds to the totals */
+static void run_capture(Record *recs, size_t n, const char **only, int nonly, long *tested_all, long *failed_all, long *skipped_all)
 {
-    if (argc < 2) { fprintf(stderr, "usage: captest FILE.cap [routine ...] [-v]\n"); return 2; }
-    const char *rom = getenv("NHL94_ROM");
-    if (!rom_load(rom ? rom : "NHL 94 (UE) [!].gen")) { fprintf(stderr, "cannot load ROM (set NHL94_ROM)\n"); return 2; }
-    Record *recs; size_t n;
-    if (!cap_load(argv[1], &recs, &n)) { fprintf(stderr, "cannot load %s\n", argv[1]); return 2; }
-    const char *only[32]; int nonly = 0;
-    for (int i = 2; i < argc; i++) { if (!strcmp(argv[i], "-v")) verbose = 1; else if (nonly < 32) only[nonly++] = argv[i]; }
-    int total_fail = 0;
     for (const Port *p = ports; p->name; p++) {
         if (nonly) { int want = 0; for (int i = 0; i < nonly; i++) if (!strcmp(only[i], p->name)) want = 1; if (!want) continue; }
         int tested = 0, passed = 0, skipped = 0;
@@ -85,9 +77,39 @@ int main(int argc, char **argv)
             tested++;
             if (verbose) printf("  %s record %zu (frame %u, %u nested calls)\n", p->name, i, recs[i].frame, recs[i].n_calls);
             if (run_record(&recs[i], p)) passed++;
-            else { printf("  FAIL %s record %zu (frame %u)\n", p->name, i, recs[i].frame); total_fail++; }
+            else printf("  FAIL %s record %zu (frame %u)\n", p->name, i, recs[i].frame);
         }
         if (tested || skipped) printf("%-24s %d/%d passed (%d skipped: interrupted / abnormal exit)\n", p->name, passed, tested, skipped);
+        *tested_all += tested;
+        *failed_all += tested - passed;
+        *skipped_all += skipped;
     }
-    return total_fail ? 1 : 0;
+}
+
+int main(int argc, char **argv)
+{
+    const char *usage = "usage: captest FILE.cap... [routine ...] [-v]\n";
+    const char *rom = getenv("NHL94_ROM");
+    if (!rom_load(rom ? rom : "NHL 94 (UE) [!].gen")) { fprintf(stderr, "cannot load ROM (set NHL94_ROM)\n"); return 2; }
+    const char *caps[256], *only[32];
+    int ncaps = 0, nonly = 0;
+    for (int i = 1; i < argc; i++) {
+        size_t len = strlen(argv[i]);
+        if (!strcmp(argv[i], "-v")) verbose = 1;
+        else if (len > 4 && !strcmp(argv[i] + len - 4, ".cap")) { if (ncaps < 256) caps[ncaps++] = argv[i]; }
+        else if (nonly < 32) only[nonly++] = argv[i];
+    }
+    if (!ncaps) { fprintf(stderr, "%s", usage); return 2; }
+    long tested = 0, failed = 0, skipped = 0;
+    for (int c = 0; c < ncaps; c++) {
+        Record *recs; size_t n;
+        if (ncaps > 1) printf("== %s\n", caps[c]);
+        if (!cap_load(caps[c], &recs, &n)) { fprintf(stderr, "cannot load %s\n", caps[c]); return 2; }
+        run_capture(recs, n, only, nonly, &tested, &failed, &skipped);
+        cap_free(recs, n);
+    }
+    if (ncaps > 1 || nonly == 0)
+        printf("captest: %ld / %ld records passed, %ld failed, %ld skipped (interrupted), %d capture%s\n",
+               tested - failed, tested, failed, skipped, ncaps, ncaps == 1 ? "" : "s");
+    return failed ? 1 : 0;
 }

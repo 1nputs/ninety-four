@@ -61,6 +61,14 @@ int cap_load(const char *path, Record **out, size_t *n)
     return 1;
 }
 
+void cap_free(Record *recs, size_t n)
+{
+    for (size_t i = 0; i < n; i++) free(recs[i].calls);
+    free(recs);
+    free(cap_data);
+    cap_data = NULL;
+}
+
 void replay_begin(Record *r)
 {
     cur = r; cursor = 0;

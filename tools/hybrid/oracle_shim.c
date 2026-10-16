@@ -704,11 +704,13 @@ void oracle_sndtrace_close(void) {
 }
 
 /* ---- lockstep vectors for the native game (.lockstep) ---------------------------------------
- * "MDLS", version u32 = 6, the vblank handler's address u32; then a record at each vblank
+ * "MDLS", version u32 = 7, the vblank handler's address u32; then a record at each vblank
  * interrupt (before the handler's first instruction): tag u8 = 1, flags u8 (bit 0: the 68k was
  * in a vblank wait loop, as the native game would be; bit 1: the whole state follows the record,
  * at the first such interrupt after one that was not; bit 2: taken just after the interrupts
- * were unmasked by move #x,sr or move (sp)+,sr, so it came while they were masked), the frame
+ * were unmasked by move #x,sr or move (sp)+,sr, so it came while they were masked; bit 3,
+ * version 7: taken at the rte of the last one's vblank code, which ran longer than a frame (a
+ * long DMA list), before any instruction of the game's), the frame
  * u32, the address the 68k was interrupted at u32, the pad buttons u16 (as
  * oracle_lockstep_buttons last set them: MDRT_PAD_* bits), the game's port accesses so far u32
  * (not the vblank code's; ls_counted: the native game places a lag frame after the same one),
@@ -770,7 +772,7 @@ int oracle_lockstep_open(const char *path, uint32_t vcount, uint32_t palcount, u
   ls = fopen(path, "wb");
   if (!ls) return 0;
   ls_vblank = (uint32_t)(READ_BYTE(cart.rom, 0x78) << 24 | READ_BYTE(cart.rom, 0x79) << 16 | READ_BYTE(cart.rom, 0x7A) << 8 | READ_BYTE(cart.rom, 0x7B));
-  fwrite("MDLS", 1, 4, ls); ls_u32(6); ls_u32(ls_vblank);
+  fwrite("MDLS", 1, 4, ls); ls_u32(7); ls_u32(ls_vblank);
   ls_writes = 0;
   ls_in_irq = 0;
   ls_nhv = 0;
@@ -804,7 +806,8 @@ static void lockstep_lag_end(void) {
 
 static void lockstep_vblank(void) {
   static uint8_t ram[0x10000], v[0x10000], c[128], s[80], r[32], z[0x2000];
-  if (ls_lag_open) lockstep_lag_end();                  /* (the vblank code ran into the next interrupt) */
+  int b2b = ls_in_irq;                                  /* the vblank code ran into this interrupt: taken at its rte */
+  if (ls_lag_open) lockstep_lag_end();
   uint32_t sp = m68k_get_reg(M68K_REG_A7);
   uint32_t at = (uint32_t)(bus_byte(sp + 2) << 24 | bus_byte(sp + 3) << 16 | bus_byte(sp + 4) << 8 | bus_byte(sp + 5));
   int wait = in_wait_loop(at & 0xFFFFFF), full = wait && !ls_last_wait;
@@ -812,7 +815,7 @@ static void lockstep_vblank(void) {
   int unmask = (READ_BYTE(cart.rom, pc - 4) == 0x46 && READ_BYTE(cart.rom, pc - 3) == 0xFC) ||
                (READ_BYTE(cart.rom, pc - 2) == 0x46 && READ_BYTE(cart.rom, pc - 1) == 0xDF);
   ls_last_wait = wait;
-  ls_u8(1); ls_u8((uint8_t)(wait | full << 1 | unmask << 2)); ls_u32(frame_no); ls_u32(pc); ls_u16(ls_buttons); ls_u32(ls_writes);
+  ls_u8(1); ls_u8((uint8_t)(wait | full << 1 | unmask << 2 | b2b << 3)); ls_u32(frame_no); ls_u32(pc); ls_u16(ls_buttons); ls_u32(ls_writes);
   ls_u32((uint32_t)(bus_byte(sp + 6) << 24 | bus_byte(sp + 7) << 16 | bus_byte(sp + 8) << 8 | bus_byte(sp + 9)));
   ls_u16(ls_nhv);
   for (int i = 0; i < ls_nhv; i++) { ls_u8(ls_hv_addr[i]); ls_u16(ls_hv[i]); }
@@ -826,7 +829,7 @@ static void lockstep_vblank(void) {
     snprintf(vp, sizeof vp, "%s.vdp", ls_dump_path);
     if ((f = fopen(vp, "wb"))) { fwrite(r, 1, 24, f); fwrite(v, 1, sizeof v, f); fwrite(c, 1, sizeof c, f); fwrite(s, 1, sizeof s, f); fclose(f); }
   }
-  ls_u64(fnv64(0xCBF29CE484222325ull, ram, 0xDF00));     /* (not the stack above: the native's is C's) */
+  ls_u64(fnv64(0xCBF29CE484222325ull, ram, 0xDF00));     /* RAM_VARS_END in src/game.h: not the stack above (the native's is C's) */
   uint64_t h = fnv64(0xCBF29CE484222325ull, r, 24);
   h = fnv64(h, v, sizeof v); h = fnv64(h, c, sizeof c); h = fnv64(h, s, sizeof s);
   ls_u64(h);

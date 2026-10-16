@@ -1,7 +1,8 @@
 /* penalty94.asm: penalty logic. Calls penalties and the other stoppages of play, awards penalty
  * shots on breakaways, sends players to the penalty box, runs power plays, shows the referee's
- * messages and switches the rink between its horizontal and vertical views. Intermission,
- * DoHiLights, StartHL and StartHL2 run whole frames themselves and come with the game loop. */
+ * messages and switches the rink between its horizontal and vertical views; the intermission
+ * between periods and the highlights of the other games (Intermission, DoHiLights, StartHL,
+ * StartHL2). */
 #include <string.h>
 #include "game.h"
 #include "anim_gen.h"

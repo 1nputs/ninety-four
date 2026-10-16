@@ -31,9 +31,14 @@ static jmp_buf out;
 
 /* ---- the snapshot --------------------------------------------------------------------------- */
 
+/* "NHLS", version u32; work RAM, VRAM, CRAM, VSRAM, the VDP registers (32), Z80 RAM; version 2
+ * adds a flags word (bit 0: the sound chips' registers follow, a snapshot from power on), the
+ * YM2612's 512 and the PSG's 17 register bytes, the Z80's place (8), the 68k's PC (4) and the
+ * I/O chip's 16 registers (tools/oracle/snapshot.py writes it) */
 #define SNAP_BASE (8 + 0x10000 + 0x10000 + 128 + 80 + 32 + 0x2000)
 static uint8_t snapshot[SNAP_BASE + 4 + 512 + 17 + 8 + 4 + 16];
 static size_t snapshot_len;
+static int snapshot_full;                                 /* version 2 */
 
 static void read_snapshot(void)
 {
@@ -41,7 +46,12 @@ static void read_snapshot(void)
     if (!f) { fprintf(stderr, "cannot open %s (make one with tools/oracle/snapshot.py)\n", snap); exit(1); }
     snapshot_len = fread(snapshot, 1, sizeof snapshot, f);
     fclose(f);
-    if (snapshot_len < SNAP_BASE || memcmp(snapshot, "NHLS", 4)) { fprintf(stderr, "%s: not a snapshot\n", snap); exit(1); }
+    if (snapshot_len < 8 || memcmp(snapshot, "NHLS", 4)) { fprintf(stderr, "%s: not a snapshot\n", snap); exit(1); }
+    uint32_t version = (uint32_t)(snapshot[4] | snapshot[5] << 8 | snapshot[6] << 16 | (uint32_t)snapshot[7] << 24);
+    size_t want = version == 1 ? SNAP_BASE : version == 2 ? sizeof snapshot : 0;
+    if (!want) { fprintf(stderr, "%s: snapshot version %u (this build reads 1 and 2)\n", snap, version); exit(1); }
+    if (snapshot_len != want) { fprintf(stderr, "%s: %zu bytes, a version %u snapshot has %zu\n", snap, snapshot_len, version, want); exit(1); }
+    snapshot_full = version == 2;
 }
 
 /* the snapshot into the console: RAM, the VDP, Z80 RAM; the sound chips' registers written back
@@ -57,12 +67,12 @@ static void load_snapshot(mdrt *m)
     memcpy(s.reg, p, 24); p += 32;
     mdrt_vdp_set_state(mdrt_get_vdp(m), &s);
     memcpy(z80_ram, p, 0x2000); p += 0x2000;
-    if (snapshot_len >= sizeof snapshot) {                /* the I/O chip: the pads' TH direction and the rest */
+    if (snapshot_full) {                                  /* the I/O chip: the pads' TH direction and the rest */
         const uint8_t *io = snapshot + sizeof snapshot - 16;
         for (int i = 1; i < 16; i++) mdrt_pad_write(mdrt_get_pads(m), 0xA10001u + 2u * (unsigned)i, io[i]);
     }
     native_hal_start(m, 0);
-    int full = snapshot_len >= sizeof snapshot, chips = full && (p[0] & 1);
+    int full = snapshot_full, chips = full && (p[0] & 1);
     const uint8_t *ym = p + 4, *psg = p + 4 + 512, *zs = p + 4 + 512 + 17;
     if (full && !chips) fprintf(stderr, "%s: no sound chip registers (a snapshot from a saved state): the FM sounds start blank\n", snap);
     if (chips) {
@@ -129,7 +139,7 @@ void native_resume_game_loop(void)
 static void resume(void)
 {
     const uint8_t *p = snapshot + sizeof snapshot - 20;
-    uint32_t pc = snapshot_len >= sizeof snapshot ? (uint32_t)(p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24) : 0;
+    uint32_t pc = snapshot_full ? (uint32_t)(p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24) : 0;
     if (pc >= SYM_setvideo && pc < SYM_setvideo + 12) {   /* in setvideo's wait for dfok, at a game frame's end */
         native_set_sr(0x2300);                            /* the game plays unmasked, as setupice left it */
         run68k(resume_game_loop);
@@ -253,5 +263,6 @@ int main(int argc, char **argv)
     if (sram && mdrt_get_sram(m)->dirty && (f = fopen(sram, "wb"))) { fwrite(mdrt_get_sram(m)->bytes, 1, 0x2000, f); fclose(f); }
     if (wav) { wav_header(c.audio_rate); fclose(wav); }
     mdrt_free(m);
-    return 0;
+    int ls = lockstep_result();                           /* (a run cut short by --frames is not a failure) */
+    return ls == 1 || (ls == 2 && stop_after < 0) ? 1 : 0;
 }

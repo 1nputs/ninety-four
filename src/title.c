@@ -1,5 +1,6 @@
-/* title94.asm: despite the name, mostly helpers of the 94 additions the game play calls: songs,
- * the shootout skate paths, one-timers, the hot / cold icons, board falls and the pad switch. */
+/* title94.asm: the title screen and credits, the high score screen, the saved lines, and the
+ * helpers of the 94 additions: songs, the shootout skate paths, one-timers, the hot / cold icons,
+ * board falls, the pad switch, the matchups' "played by" lines, the crowd and win records. */
 #include <string.h>
 #include "game.h"
 #include "hal.h"

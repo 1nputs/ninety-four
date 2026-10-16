@@ -1,5 +1,7 @@
 /* jsr (a0) to a routine address the game keeps in RAM or in a table (menu handlers, the menu
- * draw routine): the C function of that 68k routine. Grows as the targets are ported. */
+ * draw routine, the vblank handler in vbint): the C function of that 68k routine. Every address
+ * the game stores there is in the table (the menu lists, the draw routines and the vbint stores
+ * were swept for it). Also run68k / restart_at, the C side of the stack resets. */
 #include <stdio.h>
 #include <stdlib.h>
 #include "game.h"
@@ -49,7 +51,7 @@ static const struct { uint32_t addr; void (*fn)(void); } routines[] = {
     { SYM_GameStatisticsScreen, GameStatisticsScreen },
 };
 
-/* a target that is not ported yet: the tests replay its recorded call instead */
+/* an address the table does not know: a bug in the port (the tests replay the recorded call) */
 __attribute__((weak)) void call68k_missing(uint32_t addr)
 {
     fprintf(stderr, "call68k: routine %06x is not ported\n", addr);

@@ -1,7 +1,6 @@
 /* period94.asm: period and game statistics. Ends a shootout, clears the game stats, animates
  * the arena sprites and shows the Period Stats and Game Statistics screens, with the power play
- * time and team ratings they report. The two screens themselves wait for the pad every frame
- * and come with the front end. */
+ * time and team ratings they report. */
 #include <string.h>
 #include "game.h"
 #include "hal.h"

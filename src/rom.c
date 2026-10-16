@@ -7,12 +7,19 @@ int rom_load(const char *path)
 {
     FILE *f = fopen(path, "rb");
     if (!f) return 0;
-    uint8_t *buf = malloc(0x100000);
-    size_t n = fread(buf, 1, 0x100000, f);
+    uint8_t *buf = malloc(ROM_SIZE);
+    size_t n = fread(buf, 1, ROM_SIZE, f);
     fclose(f);
-    if (n != 0x100000) { free(buf); return 0; }
+    if (n != ROM_SIZE) { free(buf); return 0; }
     rom_image = buf;
     return 1;
+}
+
+/* a ROM read past the cartridge (between its end and work RAM at $E00000): a bug in the port */
+void rom_bad_address(uint32_t addr)
+{
+    fprintf(stderr, "rom_ptr: $%06X is past the ROM\n", addr);
+    abort();
 }
 
 /* the ROM address of the first copy of bytes in [from, to), 0 if none: for data that sits

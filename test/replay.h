@@ -27,6 +27,7 @@ typedef struct {
 
 /* capture file */
 int cap_load(const char *path, Record **recs, size_t *n);
+void cap_free(Record *recs, size_t n);
 
 /* replay state for the record under test */
 void replay_begin(Record *r);

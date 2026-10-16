@@ -8,7 +8,7 @@ extern mdrt *native_m;                  /* the console */
 
 /* the game's session: from the snapshot into the game loop, until it stops */
 void native_game(mdrt *m, void *user);
-/* stop the session (the window closed, the front end is not ported): back out of the game */
+/* stop the session (the window closed, the run's frames done, lockstep finished): back out of the game */
 void native_quit(void);
 /* after each frame: the frame count, for shots and the stop (main.c); wait: at one of the game's
  * vblank waits (else a vblank lockstep placed in the middle of its work) */
@@ -28,6 +28,8 @@ void native_resume_game_loop(void);
 int lockstep_load(const char *path, mdrt *m);
 void lockstep_check(long frame);
 void lockstep_report(void);              /* (at the session's end) */
+int lockstep_vblank_again(void);         /* the oracle's next vblank came at the rte of this one's code: run it now */
+int lockstep_result(void);               /* 0 all passed, 1 a check differed, 2 stopped before the recording's end */
 void lockstep_access(uint32_t n);        /* the game's port access n (hal_native.c: not the vblank code's) */
 void lockstep_before_access(void);       /* before the game's next one */
 void lockstep_unmask(uint32_t n);        /* the game unmasked the interrupts after port access n */

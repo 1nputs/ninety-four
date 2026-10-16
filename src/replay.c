@@ -1,7 +1,6 @@
 /* replay94.asm: the replay recorder (updatereplay), the per-object update loop that drives
  * every assignment (updateplayers, updateanim), the camera (checkwindow, freezewindow) and the
- * replay navigation helpers. ReplayMode itself (the interactive replay) is not ported yet, so the
- * navigation helpers (suba4 .. ClampReplayView) have no captures and are untested. */
+ * instant replay (ReplayMode) with its navigation helpers. */
 #include <string.h>
 #include "game.h"
 #include "symbols_gen.h"

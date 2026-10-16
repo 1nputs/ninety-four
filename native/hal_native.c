@@ -124,6 +124,7 @@ static void vblank(int wait)
         in_vblank = 0;
     }
     mdrt_vblank_end(native_m);
+    if (wait && lockstep_vblank_again()) vblank(1);       /* (lockstep: the oracle's vblank code ran into the next one) */
 }
 void hal_wait_vblank(void) { vblank(1); }
 

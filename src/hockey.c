@@ -1,7 +1,7 @@
 /* hockey94.asm: main game code. Starts the game, runs the game loop from the opening faceoff
  * to the end of each period, handles the events that happen every so often and keeps the
- * clock. It also runs the pause mode and its screen. The frame drivers (StartPer, Gameloop,
- * DoGameFrame, Pausemode, Begin, StartGame) come with the standalone loop. */
+ * clock. It also runs the pause mode and its screen, and the start of the game from power on (Begin,
+ * StartGame). */
 #include <string.h>
 #include "game.h"
 #include "hal.h"

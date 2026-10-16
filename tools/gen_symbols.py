@@ -3,12 +3,15 @@
 RAM symbol offsets for naming bytes in diffs."""
 import json, pathlib, re, sys
 P = pathlib.Path(__file__).resolve().parents[1]
-syms = None
+syms = src = None
 for cand in (P / 'build/asm/symbols.json', P / 'out/symbols.json'):
     if cand.exists():
         syms = json.load(open(cand)); src = cand; break
-if src.name != 'symbols.json' or 'build' not in str(src):
-    pass
+if syms is None:
+    sys.exit('gen_symbols.py: no build/asm/symbols.json (tools/asm/build_vasm.sh writes it)')
+for need in ('out/callgraph.json', 'out/ramwidths.json'):
+    if not (P / need).exists():
+        sys.exit('gen_symbols.py: no %s (make gen makes it)' % need)
 # the segment stubs carry the retail address of every routine a segment calls outside itself
 for stub in (P / 'ref/NHL94Genesis/src/stubinc').glob('*_stub.asm'):
     for line in stub.read_text(errors='replace').splitlines():
