@@ -1,4 +1,4 @@
-# NHL '94 C port.
+# ninety-four: NHL '94 rebuilt in C.
 #   make nhl94          the native game (build/nhl94, on md-runtime at MDRT)
 #   make test           the function-level capture tests (out/captures/*.cap)
 #   make lockstep       the native game against the oracle at every vblank (out/vectors/*.lockstep)

@@ -1,4 +1,6 @@
-# NHL '94, rebuilt in C 🏒
+# ninety-four 🏒
+
+*NHL '94, rebuilt in C.*
 
 **The greatest hockey game ever made, running natively on your machine, with no emulator in
 sight.** All of the roughly 1,500 routines of EA's 1993 Sega Genesis classic have been rewritten
