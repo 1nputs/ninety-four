@@ -184,3 +184,9 @@ Big, big greets to everyone whose work this stands on:
   [SpritesMind](https://gendev.spritesmind.net) forum (Nemesis's YM2612 and VDP research).
 - **[Zig](https://ziglang.org)**, whose bundled Clang checks pulseman against a second
   compiler.
+
+## License
+
+MIT (`LICENSE`), for the code written for this project. It grants nothing over NHL '94 itself,
+its name or its data, which belong to Electronic Arts: bring your own copy of the game.
+pulseman is MIT too; its FM chip cores are Nuked-OPN2 (LGPL-2.1) and ymfm (BSD-3).
