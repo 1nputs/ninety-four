@@ -398,6 +398,8 @@ static NI void place_next(const char *how)
 /* follow the routines the native game is in from now on (states need to know where it waits;
  * call it before the game starts) */
 void NI native_track_routines(void) { tracking = 1; }
+/* a new game (the window's reset, a new ROM): the frames native_quit's longjmp left are gone */
+void NI native_tracking_reset(void) { depth = run68k_depth = 0; }
 
 /* the native game is at the game loop's wait: setvideo's, in DoGameFrame from Gameloop (the C
  * helpers between them aside). native_resume_game_loop goes on from there, so states are taken

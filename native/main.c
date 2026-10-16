@@ -8,7 +8,7 @@
  *              [--headless] [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE]
  *              [--input FILE] [--state FILE] [--load-state FILE] [--save-state FRAME:FILE]
  *              [--lockstep FILE | --golden FILE] [--record DIR] [--fm-core nuked|ymfm]
- *              [--fm-model ym2612|ym3438] [--watch ADDR,...]
+ *              [--fm-model ym2612|ym3438] [--watch ADDR,...] [--restart-at FRAME]
  *
  * --headless runs without a window or pacing (as fast as it goes): with --frames it stops, --shot
  * writes the last picture, --wav the sound, --input plays pad 1 from a script (tools/oracle/scripts)
@@ -16,15 +16,19 @@
  * (include/mdrt/platform_sdl2.h, all of them changeable in its settings file): pad 1 arrows,
  * Z / X / C = A / B / C, Enter = Start; pad 2 I J K L, Q / W / E, Tab; two game controllers; F1
  * mute, F2 / F3 volume, F5 slow motion, F6 held fast-forward, F9 a frame while paused, F10 pause,
- * F11 full screen, F12 a screenshot, Esc quit; F7 saves a state (into --state FILE,
+ * F11 full screen, F12 a screenshot, Esc the menu; F7 saves a state (into --state FILE,
  * out/nhl94.state), F8 loads it, F4 held steps back (state.c). The settings are settings.ini in
  * the working directory. --scale and --aspect set the window for this run (otherwise the
  * settings' size and aspect).
  * --load-state FILE starts from a native state; --save-state FRAME:FILE (headless) saves one at
  * the first game loop wait from that frame on. --record DIR has pulseman write the run's
  * .vdptrace, .padtrace and .sndtrace into DIR (make runtime-selfcheck replays them). --fm-core and
- * --fm-model choose pulseman's FM core (Nuked-OPN2 by default) and the chip (the YM2612 of the
- * first consoles by default, or the later YM3438). --watch prints work RAM words (hex addresses,
+ * --fm-model choose pulseman's FM core (Nuked-OPN2 by default, or the settings' in the window)
+ * and the chip (the YM2612 of the first consoles by default, or the later YM3438). In the window
+ * the ROM is --rom's, else the one chosen last in pulseman's menu (Esc), else "NHL 94 (UE) [!].gen"
+ * here; when none is the 1 MB US/Europe cartridge, the menu asks for one. --restart-at FRAME
+ * (headless) starts the game again at that frame on a new console, as the menu's reset does
+ * (tools/golden.py checks that it goes as a fresh run). --watch prints work RAM words (hex addresses,
  * e.g. FFC472) at frame 1 and whenever they change. */
 #include <setjmp.h>
 #include <stdio.h>
@@ -51,12 +55,14 @@ static const char *record_dir, *fm_core;
 static uint32_t watch[16];              /* --watch: work RAM words printed when they change */
 static uint16_t watched[16];
 static int nwatch;
-static int fm_model;
+static int fm_model, fm_model_given;
 static FILE *traces[3];                 /* --record: pulseman's .vdptrace, .padtrace, .sndtrace of the run */
 static long save_state_frame = -1;
 static int states, rewind_states;       /* states on (the window, or --save-state / --load-state); rewind (the window) */
 static long stop_after = -1, shots_every = 600;
 static int boot = 1;                    /* power on, unless --snap */
+static long restart_frame = -1;         /* --restart-at */
+static int restarting;
 static jmp_buf out;
 
 /* ---- the snapshot --------------------------------------------------------------------------- */
@@ -149,6 +155,29 @@ static void load_snapshot(mdrt *m)
 
 static uint8_t read68k(void *user, uint32_t addr) { (void)user; return *mem_ptr(addr); }
 
+/* the ROM in the window: pulseman's menu asks whether a file will do, then hands it over */
+#define ROM_CRC32 0x9438F5DDu                             /* "NHL 94 (UE) [!].gen" (SHA-1 7b1489ab...) */
+
+static uint32_t crc32_of(const uint8_t *b, size_t n)
+{
+    uint32_t c = 0xFFFFFFFFu;
+    while (n--) {
+        c ^= *b++;
+        for (int k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320u ^ (c >> 1) : c >> 1;
+    }
+    return ~c;
+}
+
+static const char *rom_check(const uint8_t *b, size_t n, void *user)
+{
+    static char why[64];
+    (void)user;
+    if (n != ROM_SIZE) { snprintf(why, sizeof why, "%u KB: NHL '94 is a 1 MB cartridge", (unsigned)(n >> 10)); return why; }
+    return crc32_of(b, n) == ROM_CRC32 ? NULL : "not the 1 MB US/Europe NHL '94 cartridge";
+}
+
+static void rom_use(const uint8_t *b, size_t n, void *user) { (void)n; (void)user; rom_image = b; }
+
 void native_quit(void) { longjmp(out, 1); }
 
 /* the game loop, from the 68k at setvideo's wait at the end of a frame of DoGameFrame: the rest
@@ -204,6 +233,7 @@ void native_game(mdrt *m, void *user)
 {
     (void)user;
     native_m = m;
+    native_tracking_reset();                              /* (the game may have run before: the window's reset) */
     if (setjmp(out)) { lockstep_report(); record(m, -1); return; }
     if (!load_state_path) record(m, MDRT_TRACE_SOUND);    /* (from the first frame: the chips' every write) */
     if (boot) { record(m, MDRT_TRACE_VDP); record(m, MDRT_TRACE_PADS); }
@@ -216,6 +246,7 @@ void native_game(mdrt *m, void *user)
         run68k(native_resume_game_loop);
     }
     if (boot) {                                           /* power on */
+        native_power_on();
         native_hal_start(m, 0);
         run68k(Start);
     }
@@ -376,6 +407,11 @@ void native_frame_done(long frame, int wait)
         snprintf(path, sizeof path, "%s/f%06ld.ppm", shots_dir, frame);
         write_ppm(path);
     }
+    if (restart_frame >= 0 && frame >= restart_frame) {   /* --restart-at: back to main, which starts it again */
+        restart_frame = -1;
+        restarting = 1;
+        native_quit();
+    }
     if (stop_after >= 0 && frame >= stop_after) {
         if (shot_path) write_ppm(shot_path);
         native_quit();
@@ -423,10 +459,10 @@ static void make_parent(const char *path)
 
 int main(int argc, char **argv)
 {
-    const char *rom = "NHL 94 (UE) [!].gen", *sram = "out/nhl94.srm";
+    const char *rom = "NHL 94 (UE) [!].gen", *rom_given = NULL, *sram = "out/nhl94.srm";
     int scale = 0, aspect = 0, headless = 0;
     for (int i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "--rom") && i + 1 < argc) rom = argv[++i];
+        if (!strcmp(argv[i], "--rom") && i + 1 < argc) rom = rom_given = argv[++i];
         else if (!strcmp(argv[i], "--snap") && i + 1 < argc) { snap = argv[++i]; boot = 0; }
         else if (!strcmp(argv[i], "--boot")) boot = 1;
         else if (!strcmp(argv[i], "--scale") && i + 1 < argc) scale = atoi(argv[++i]);
@@ -448,7 +484,8 @@ int main(int argc, char **argv)
                 watch[nwatch++] = (uint32_t)(strtoul(w, NULL, 16) | 0xFF0000) & ~1u;
         }
         else if (!strcmp(argv[i], "--fm-core") && i + 1 < argc) fm_core = argv[++i];
-        else if (!strcmp(argv[i], "--fm-model") && i + 1 < argc) fm_model = !strcmp(argv[++i], "ym3438") ? MDRT_FM_YM3438 : MDRT_FM_YM2612;
+        else if (!strcmp(argv[i], "--restart-at") && i + 1 < argc) restart_frame = atol(argv[++i]);
+        else if (!strcmp(argv[i], "--fm-model") && i + 1 < argc) { fm_model = !strcmp(argv[++i], "ym3438") ? MDRT_FM_YM3438 : MDRT_FM_YM2612; fm_model_given = 1; }
         else if (!strcmp(argv[i], "--load-state") && i + 1 < argc) { load_state_path = argv[++i]; boot = 0; }
         else if (!strcmp(argv[i], "--save-state") && i + 1 < argc && strchr(argv[i + 1], ':')) {
             save_state_frame = atol(argv[++i]);
@@ -458,11 +495,12 @@ int main(int argc, char **argv)
             fprintf(stderr, "usage: %s [--rom FILE] [--snap FILE | --boot] [--scale N] [--aspect] [--sram FILE] [--headless]\n"
                             "       [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE] [--input FILE]\n"
                             "       [--state FILE] [--load-state FILE] [--save-state FRAME:FILE] [--lockstep FILE | --golden FILE]\n"
-                            "       [--record DIR] [--fm-core nuked|ymfm] [--fm-model ym2612|ym3438] [--watch ADDR,...]\n", argv[0]);
+                            "       [--record DIR] [--fm-core nuked|ymfm] [--fm-model ym2612|ym3438] [--watch ADDR,...]\n"
+                            "       [--restart-at FRAME]\n", argv[0]);
             return 2;
         }
     }
-    if (!rom_load(rom)) { fprintf(stderr, "cannot load the ROM %s\n", rom); return 1; }
+    if (headless && !rom_load(rom)) { fprintf(stderr, "cannot load the ROM %s\n", rom); return 1; }   /* (the window: pulseman's menu) */
     if (sram) make_parent(sram);                          /* (a copy run outside the repository has no out/) */
     if (state_file) make_parent(state_file);
     if (input_path && (lockstep_path || !read_script(input_path))) { if (lockstep_path) fprintf(stderr, "--input: not with --lockstep\n"); return 1; }
@@ -471,13 +509,15 @@ int main(int argc, char **argv)
     states = !lockstep_path && (!headless || load_state_path || save_state_path || script_requests);
     rewind_states = !headless || script_requests;
     mdrt_config c = { 0 };
-    c.fm_core = fm_core;
+    c.fm_core = fm_core ? fm_core : fm_model_given ? mdrt_fm_core() : NULL;   /* (NULL: the window's settings) */
     c.fm_model = fm_model;
     c.audio_rate = 48000;
     c.sram_size = 0x2000;
     c.read68k = read68k;
     if (!headless) {
-        mdrt_sdl_options o = { .title = "NHL '94", .scale = scale, .aspect = aspect, .sram_path = sram, .app = "ninety-four" };
+        mdrt_sdl_options o = { .title = "NHL '94", .scale = scale, .aspect = aspect, .sram_path = sram, .app = "ninety-four",
+                               .rom_path = rom_given, .rom_default = rom, .rom_hint = "NHL '94: the 1 MB cartridge (US/Europe)",
+                               .rom_check = rom_check, .rom_use = rom_use };
         return mdrt_sdl_run(&c, &o, native_game, NULL);
     }
     if (wav_path && !(wav = fopen(wav_path, "wb"))) { fprintf(stderr, "cannot write %s\n", wav_path); return 1; }
@@ -494,6 +534,14 @@ int main(int argc, char **argv)
     FILE *f = sram ? fopen(sram, "rb") : NULL;            /* save RAM: as the window's platform keeps it */
     if (f) { if (fread(mdrt_get_sram(m)->bytes, 1, 0x2000, f) != 0x2000) fprintf(stderr, "%s: short\n", sram); fclose(f); }
     native_game(m, NULL);
+    while (restarting) {                                  /* --restart-at: the game again on a new console */
+        restarting = 0;
+        mdrt_free(m);
+        if (!(m = mdrt_new(&c))) return 1;
+        if (golden) mdrt_set_hv_source(m, golden_hv, m);
+        if (input_path) mdrt_set_pad_source(m, script_source, m);
+        native_game(m, NULL);
+    }
     if (sram && mdrt_get_sram(m)->dirty && (f = fopen(sram, "wb"))) { fwrite(mdrt_get_sram(m)->bytes, 1, 0x2000, f); fclose(f); }
     if (wav) { wav_header(c.audio_rate); fclose(wav); }
     if (golden) fclose(golden);

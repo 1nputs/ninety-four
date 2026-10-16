@@ -18,8 +18,11 @@ under [Build](#build)):
 ```
 git clone --recursive https://github.com/1nputs/ninety-four.git && cd ninety-four
 make nhl94
-./build/nhl94 --rom "/path/to/NHL 94.gen"   # the 1 MB retail ROM (US/Europe)
+./build/nhl94          # the first time, it asks for your ROM: the 1 MB retail cartridge (US/Europe)
 ```
+
+The first time, pick your ROM in the game's file browser (or give it with `--rom FILE`); it is
+remembered after that.
 
 | | Player 1 | Player 2 |
 |---|---|---|
@@ -41,12 +44,16 @@ Game controllers work too (the first two are players 1 and 2).
 | F10 | pause |
 | F11 or Alt+Enter | full screen |
 | F12 | screenshot (a PNG in `screenshots/`) |
-| Esc | quit |
+| Esc | the menu |
 
-Every key (both pads' too), the window, the scaling (sharp, integer or fit; square pixels or
-4:3), the sound and more are kept in `settings.ini`, in the folder you run the game from, beside
-its saves. Edit it while the game is closed. The game pauses when its window loses focus
-(`general.pause_on_focus_loss = 0` turns that off). On a Mac, hold Fn for the function keys.
+**The menu** (Esc, or a controller's Back button; arrows and Enter, or the d-pad, A and B) has the
+ROM, a reset, states, the video (sharp, integer or fit scaling; square pixels or 4:3; full
+screen), the sound (volume, and the FM sound core and chip: hear the difference as you play),
+options, and every key of both pads and the controls: pick one and press the new key.
+
+All of it is kept in `settings.ini`, in the folder you run the game from, beside its saves (you
+can also edit it while the game is closed). The game pauses when its window loses focus (an
+option in the menu). On a Mac, hold Fn for the function keys.
 
 ## Build
 
@@ -147,6 +154,7 @@ From the least ambitious to the most.
 - [x] Headless runs: screenshots, WAV, scripted input, RAM watch (`--watch`), trace recording (`--record`)
 - [x] Mute, volume, audio device and latency options
 - [x] A settings file (window, scaling, volume, keys), every key rebindable
+- [x] A menu: the ROM in a file browser, reset, video, sound and the FM chip live, key rebinding
 - [x] Integer and sharp-bilinear scaling, hi-DPI
 - [x] Screenshot key (PNG)
 - [x] Fast-forward, slow motion, frame step

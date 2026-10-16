@@ -103,6 +103,7 @@ void native_states_init(mdrt *console, const char *path, int rewind)
     m = console;
     file = path;
     rewind_on = rewind;
+    ring_first = ring_n = 0;                              /* (a new game: the last one's states are not its own) */
     mdrt_add_state_memory(m, "RAM ", ram_ptr(RAM_BASE), 0x10000);
     mdrt_add_state_part(m, "Z80 ", z80_save, z80_load, NULL);
     mdrt_add_state_part(m, "NHL ", nhl_save, nhl_load, NULL);

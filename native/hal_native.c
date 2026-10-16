@@ -56,6 +56,15 @@ static void sound_tick(void *user, uint32_t until)
     }
 }
 
+/* power on, as a new process has it (the window's reset starts the game again in this one) */
+void native_power_on(void)
+{
+    sr = 0x2700;
+    accesses = 0;
+    in_vblank = 0;
+    z80_relay_power_on();
+}
+
 void native_hal_start(mdrt *m, uint64_t start)
 {
     native_m = m;

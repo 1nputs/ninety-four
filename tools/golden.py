@@ -10,7 +10,9 @@ changes to the runtime's HV model do not show; everything else must match bit fo
 frame on), loads it in a new process and runs on: the frames after it must be the same as the
 run's own (a state holds everything the game goes on from). And it plays the window's keys from a
 script (states_faceoff.txt: F7, F8, F4 held): the frames after the load must be those after
-the save, and the rewind must step back three frames a frame through frames already shown.
+the save, and the rewind must step back three frames a frame through frames already shown. And it
+starts the game again in the same process (--restart-at, as the window menu's reset does): the
+frames after that must be a fresh power on's.
 
     tools/golden.py record [--force]     (make golden)
     tools/golden.py check                (make golden-check)
@@ -154,7 +156,8 @@ def main():
         sbad += d is not None
     print('golden: %d of %d states go on identically' % (len(STATES) - sbad, len(STATES)))
     kbad = keys(new)
-    sys.exit(1 if bad or sbad or kbad else 0)
+    rbad = restart(new)
+    sys.exit(1 if bad or sbad or kbad or rbad else 0)
 
 
 def keys(dirname):
@@ -174,6 +177,20 @@ def keys(dirname):
         err = None if same == 600 and back == 150 else \
             'the load: %d of 600 frames as after the save; the rewind: %d of 150 frames three back' % (same, back)
     print('%-15s %s' % ('keys', err or 'F7, F8: the 600 frames after the load as after the save; F4: 150 frames stepped back'))
+    return err is not None
+
+
+def restart(dirname):
+    """power on, started again at frame 1500 in the same process: the 1000 frames after it are
+    those of a fresh power on (the restart's own line is the fresh run's first)"""
+    fresh, again = os.path.join(dirname, 'restart.fresh'), os.path.join(dirname, 'restart.golden')
+    errs = [run('restart', 1000, [], fresh)[1], run('restart', 2500, ['--restart-at', '1500'], again)[1]]
+    err = next((e for e in errs if e), None)
+    if not err:
+        a, b = [l.split() for l in open(fresh)], [l.split() for l in open(again)]
+        same = sum(1 for k in range(len(a)) if 1499 + k < len(b) and a[k] == b[1499 + k])
+        err = None if same == len(a) and len(a) >= 990 else '%d of %d frames after it as a fresh power on\'s' % (same, len(a))
+    print('%-15s %s' % ('restart', err or 'the game started again: the %d frames after it as a fresh power on\'s' % sum(1 for _ in open(fresh))))
     return err is not None
 
 

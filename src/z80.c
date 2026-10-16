@@ -450,6 +450,13 @@ void z80_relay_busreq(uint16_t v)
 
 void z80_relay_frame(void) { z80.frame = z80.now; }
 
+void z80_relay_power_on(void)
+{
+    memset(z80_ram, 0, sizeof z80_ram);
+    memset(&z80, 0, sizeof z80);
+    ix_part = 0;
+}
+
 void z80_relay_seed(uint16_t pc, uint16_t hl, uint8_t c, uint8_t bank)
 {
     z80.running = 1;

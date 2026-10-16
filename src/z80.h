@@ -39,5 +39,6 @@ void z80_relay_run(uint32_t mclk);          /* time went by (master clocks; 15 a
 void z80_relay_reset(uint16_t v);           /* the 68k wrote IO_Z80RES: $100 runs the program */
 void z80_relay_busreq(uint16_t v);          /* the 68k wrote IO_Z80BUS: $100 takes the bus (the Z80 waits), 0 gives it back */
 void z80_relay_frame(void);                 /* a frame starts */
+void z80_relay_power_on(void);              /* as a new process has it: RAM and relay cleared (a game started again) */
 /* a Z80 running the program, caught at pc (a snapshot): its HL, C and bank register */
 void z80_relay_seed(uint16_t pc, uint16_t hl, uint8_t c, uint8_t bank);
