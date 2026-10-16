@@ -9,10 +9,11 @@ frames a second, without the cartridge's slowdown.
 And things the cartridge never had: **save in the middle of a game (F5), load it back (F9), and
 hold Backspace to rewind** the goal you just gave up.
 
-Bring your own cartridge dump and you're on the ice in a minute:
+Bring your own cartridge dump and you're on the ice in a minute (what to install first is
+under [Build](#build)):
 
 ```
-make nhl94                                  # needs gcc/g++, make, SDL2 and ../md-runtime beside this repo
+make nhl94
 ./build/nhl94 --rom "/path/to/NHL 94.gen"   # the 1 MB retail ROM (US/Europe)
 ```
 
@@ -24,6 +25,47 @@ make nhl94                                  # needs gcc/g++, make, SDL2 and ../m
 
 Game controllers work too (the first two are players 1 and 2). F5 saves, F9 loads, Backspace
 rewinds, P pauses, F11 is full screen, Esc quits.
+
+## Build
+
+You need this repository and md-runtime side by side (`../md-runtime`), GCC
+(C and C++), `make`, `pkg-config` and SDL2. `make nhl94` builds md-runtime too. The game itself
+must be built with GCC for now: its RAM layout uses a GCC-only attribute until the planned
+WebAssembly work replaces it. Your saves and states go to `out/` in this repository.
+
+**Linux** (built and tested here, Debian 13, GCC 14):
+
+```
+sudo apt install build-essential pkg-config libsdl2-dev          # Debian, Ubuntu
+sudo dnf install gcc gcc-c++ make pkgconf-pkg-config SDL2-devel  # Fedora
+sudo pacman -S --needed base-devel sdl2                          # Arch
+make nhl94
+./build/nhl94 --rom "/path/to/NHL 94.gen"
+```
+
+**macOS** (not tried yet). Apple's `gcc` is really Clang, so install GCC from
+[Homebrew](https://brew.sh) and name it:
+
+```
+brew install gcc sdl2 pkg-config
+make CC=gcc-15 CXX=g++-15 nhl94          # the version brew installed: ls $(brew --prefix)/bin/gcc-*
+./build/nhl94 --rom "/path/to/NHL 94.gen"
+```
+
+**Windows** (cross-built here with MinGW-w64 GCC 14 without a warning, not yet run on Windows),
+with [MSYS2](https://www.msys2.org), in its *UCRT64* shell:
+
+```
+pacman -S --needed git make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-pkgconf mingw-w64-ucrt-x86_64-SDL2
+make CC=gcc CXX=g++ nhl94
+./build/nhl94.exe --rom "C:/path/to/NHL 94.gen"
+```
+
+The C++ runtime is linked in, so outside the MSYS2 shell `build/nhl94.exe` needs only
+`SDL2.dll` beside it (`cp /ucrt64/bin/SDL2.dll build/`).
+
+If a compiler newer than these warns about something, `make WERROR= nhl94` builds anyway; please
+tell us what it said.
 
 ## For agents: where this stands (16 October 2026)
 

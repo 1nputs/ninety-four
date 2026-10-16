@@ -30,14 +30,25 @@ test: build/captest
 # the native game: build/nhl94, on md-runtime (MDRT, its release build with the SDL2 platform)
 MDRT   ?= ../md-runtime
 NATIVE := $(wildcard native/*.c)
-MDRTLIBS := $(MDRT)/build/release/libmdrt_sdl2.a $(MDRT)/build/release/libmdrt.a
-nhl94: build/nhl94
-build/nhl94: $(SRC) $(HDR) $(NATIVE) native/native.h mdrt
-	@mkdir -p build
+MDRTB  ?= build/release
+MDRTLIBS := $(MDRT)/$(MDRTB)/libmdrt_sdl2.a $(MDRT)/$(MDRTB)/libmdrt.a
+ifeq ($(OS),Windows_NT)
+EXE    ?= .exe
+# (Windows: the C++ runtime linked in, so the game needs only SDL2.dll beside it)
+CXXLIB ?= -static-libgcc -Wl,-Bstatic -lstdc++ -Wl,--whole-archive -lwinpthread -Wl,--no-whole-archive -Wl,-Bdynamic
+endif
+# (md-runtime's ymfm core is C++)
+CXXLIB ?= -lstdc++
+nhl94: build/nhl94$(EXE)
+# (Windows: SDL2's -mwindows is left out, so the game keeps its console; out/ is where save RAM
+# and states go)
+SDLLIBS := $(filter-out -mwindows,$(shell pkg-config --libs sdl2))
+build/nhl94$(EXE): $(SRC) $(HDR) $(NATIVE) native/native.h native/routines_gen.h mdrt
+	@mkdir -p build out
 	$(CC) $(CFLAGS) -O2 -Isrc -Inative -I$(MDRT)/include $(shell pkg-config --cflags sdl2) -finstrument-functions \
-	    -finstrument-functions-exclude-file-list=native/ -rdynamic -o $@ $(SRC) $(NATIVE) $(MDRTLIBS) $(shell pkg-config --libs sdl2) -lm -ldl -lstdc++
+	    -finstrument-functions-exclude-file-list=native/ -o $@ $(SRC) $(NATIVE) $(MDRTLIBS) $(SDLLIBS) -lm $(CXXLIB)
 mdrt:
-	$(MAKE) -C $(MDRT) MODE=release sdl
+	$(MAKE) -C $(MDRT) MODE=release B=$(MDRTB) sdl
 
 # the saved states, snapshots and vectors (tools/oracle/vectors.py holds the recipes)
 vectors: build/nhl_oracle.so
@@ -91,7 +102,8 @@ gen:
 	$(PY) tools/gen_tables.py $(ASMSRC)/setup94.asm "defaultsprites/.listsso:listsso" "defaultsprites/.listffo:listffo" "defaultsprites2/.list:dslist" -o src/setup_tables_gen.h
 	$(PY) tools/gen_tables.py $(ASMSRC)/penalty94.asm sctab "StartHL2/.postab:hl_postab" -o src/penalty_tables_gen.h
 	for f in $(STRINGS); do $(PY) tools/gen_strings.py build/asm/src/$${f}94.asm -o src/$${f}_strings_gen.h || exit 1; done
-	@git status --short -- src/ram.h 'src/*_gen.h'
+	$(PY) tools/gen_routines.py $(CC)
+	@git status --short -- src/ram.h 'src/*_gen.h' native/routines_gen.h
 
 clean:
 	rm -rf build/captest build/oracle_shim.o build/nhl94 build/relaytest

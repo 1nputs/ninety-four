@@ -20,7 +20,6 @@
  * interrupts were masked, at the unmask that follows), so the waits after it are checked exactly.
  * A difference while in step stops the run, with work RAM in out/lockstep-native.ram for diffing
  * against the oracle's (lockstep.py --dump). */
-#define _GNU_SOURCE                                       /* dladdr */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -330,9 +329,10 @@ static void advance(const record *r)
 
 /* ---- where the native game is: the routine it is in --------------------------------------------
  * build/nhl94 compiles src/ with -finstrument-functions: each of its functions' entries and exits
- * comes here. The C functions have the 68k routines' names (rom_syms gives their addresses), so
- * the top of this stack is the 68k routine the native game is in (0: a C helper of its own). */
-#include <dlfcn.h>
+ * comes here. The C functions have the 68k routines' names (routines_gen.h pairs each with its
+ * address), so the top of this stack is the 68k routine the native game is in (0: a C helper of
+ * its own). */
+#include "routines_gen.h"
 #define NI __attribute__((no_instrument_function))
 static struct { void *fn; uint32_t routine; } fncache[4096];
 static uint32_t where[512];
@@ -344,10 +344,8 @@ static NI uint32_t routine_of(void *fn)
     while (fncache[h].fn && fncache[h].fn != fn) h = (h + 1) & 4095;
     if (fncache[h].fn) return fncache[h].routine;
     uint32_t r = 0;
-    Dl_info info;
-    if (dladdr(fn, &info) && info.dli_saddr == fn && info.dli_sname)
-        for (size_t i = 0; i < sizeof rom_syms / sizeof *rom_syms; i++)
-            if (!strcmp(rom_syms[i].name, info.dli_sname)) { r = rom_syms[i].addr; break; }
+    for (size_t i = 0; i < sizeof routine_fns / sizeof *routine_fns; i++)
+        if ((void *)routine_fns[i].fn == fn) { r = routine_fns[i].addr; break; }
     fncache[h].fn = fn;
     fncache[h].routine = r;
     return r;
