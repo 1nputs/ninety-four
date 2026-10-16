@@ -55,4 +55,12 @@ throttle; run setup_so     --state "" --script "$(grep -v '^#' tools/oracle/scri
 # the name entry (user records on): a name typed in the letter grid and stored
 NAMES=UserNameEntry,NameEntryScreen,NameLetterGrid,NameEntryHelp,PrintNamePrompt,SyncLetterCursor,FindLetter,PrintNameCursor,PrintCurLetter,LetterGridPos,PrintNameLog,MoveLogArrows,PrintLogArrows,GetNameLength,PrintNameField,NameEntryFramer,GetLogName,StoreUserName,WriteNameRecord,SkipOtherUserName,WriteNameLog,ReadNameLog,NameLogIO
 throttle; run names        --state "" --script "$(grep -v '^#' tools/oracle/scripts/name_entry.txt)" --max 24 --frames 2200 --fn "$NAMES" &
+# the playoff screen: New Playoffs (the first round), and New Playoffs/7 game poked to the semifinals (gamelevel 2:
+# the tree pages, the series scores)
+PO=PlayoffScreen,HandlePlayoffInput,UpdatePlayoffScroll,PlayoffScreen_waitvsync,PrintSeriesScore,DrawTreeArrow,DrawTeamBlocks,VBlank_Playoff,DrawPlayoffSprite,PlayoffScreenExit
+throttle; run playoffs     --state "" --script "$(grep -v '^#' tools/oracle/scripts/playoffs.txt)" --max 16 --frames 1800 --fn "$PO" &
+throttle; run playoffs2    --state "" --script "1200:START,1206:,1320:RIGHT,1326:,1346:RIGHT,1352:,1380:START,1386:,1600:RIGHT,1606:,1700:RIGHT,1760:,1800:LEFT,1806:,1900:LEFT,1950:,2100:START,2106:" --poke "1365:CEEC=2" --max 16 --frames 2150 --fn "$PO" &
+# the scouting report (the matchups paged, fast text)
+SCOUT=ScoutingReport,ScoutCrowdRecord,PageMatchup,PrintMatchupRating,PrintTwoSpaces,DrawMatchupPictures,DrawMatchupPicture,DrawMatchupLogo,DrawMatchupBitmap,GetTeamLogo,PrintMatchupRatings,GetMatchupPlayers,GetMatchupPlayer,RestartAdvantageMarks,PrintAdvantageMarks,GetTeamNickname,GetTeamArena,InitScoutingDisplay,UpdateScoutingDisplay,ScrollDisplayUp,PlayedByHome,PlayedByAway,PlayedByText,PlayedByNone,PlayedByExit,AttribAdjust,DrawPlayerPicture,CalcAttrib,NextHomeHotPlayer,NextAwayHotPlayer,NextHomeColdPlayer,NextAwayColdPlayer
+throttle; run scout        --state "" --script "$(grep -v '^#' tools/oracle/scripts/boot_to_game_full.txt)" --max 24 --frames 2420 --fn "$SCOUT" &
 wait

@@ -643,6 +643,53 @@ static void run_SkipOtherUserName(const Record *r)
 }
 static void run_WriteNameLog(const Record *r) { WriteNameLog(); }
 
+/* ---- the playoff screen (setup94) ---- */
+static void run_PlayoffScreen(const Record *r) { PlayoffScreen(); }
+static void run_HandlePlayoffInput(const Record *r) { HandlePlayoffInput(); }
+static void run_UpdatePlayoffScroll(const Record *r) { UpdatePlayoffScroll(); }
+static void run_PlayoffScreen_waitvsync(const Record *r) { PlayoffScreen_waitvsync(); }
+static void run_PrintSeriesScore(const Record *r) { PrintSeriesScore(ram_ptr(A(R_A2))); }
+static void run_DrawTreeArrow(const Record *r) { DrawTreeArrow(R16(R_D0)); }
+static void run_DrawTeamBlocks(const Record *r) { DrawTeamBlocks(R16(R_D1)); }
+static void run_VBlank_Playoff(const Record *r) { VBlank_Playoff(); }
+static void run_PlayoffScreenExit(const Record *r) { PlayoffScreenExit(); }   /* (pops its caller's return: abnormal, never run) */
+static void run_DrawPlayoffSprite(const Record *r) { DrawPlayoffSprite(); }
+
+/* ---- the scouting report (scout94, the text player of setup94, cards94 / title94 helpers) ---- */
+static void run_ScoutingReport(const Record *r) { ScoutingReport(); }
+static void run_ScoutCrowdRecord(const Record *r) { expect_reg32(r, R_A1, ScoutCrowdRecord(), "a1"); }
+static void run_PageMatchup(const Record *r) { PageMatchup(D16(R_D0)); }
+static void run_PrintMatchupRating(const Record *r) { expect_reg16(r, R_D0, PrintMatchupRating(TEAM(R_A0)), "d0"); }
+static void run_PrintTwoSpaces(const Record *r) { PrintTwoSpaces(); }
+static void run_DrawMatchupPictures(const Record *r) { DrawMatchupPictures(); }
+static void run_DrawMatchupPicture(const Record *r) { DrawMatchupPicture(A(R_A0), R16(R_D4), R16(R_D5)); }
+static void run_DrawMatchupLogo(const Record *r) { DrawMatchupLogo(A(R_A0), R16(R_D3), R16(R_D4), R16(R_D5)); }
+static void run_GetTeamLogo(const Record *r) { uint16_t d3 = R16(R_D3); expect_reg32(r, R_A0, GetTeamLogo(&d3), "a0"); expect_reg16(r, R_D3, d3, "d3"); }
+static void run_PrintMatchupRatings(const Record *r) { PrintMatchupRatings(); }
+static void run_GetMatchupPlayers(const Record *r) { GetMatchupPlayers(); }
+static void run_GetMatchupPlayer(const Record *r) { expect_reg16(r, R_D0, GetMatchupPlayer(TEAM(R_A0)), "d0"); }
+static void run_RestartAdvantageMarks(const Record *r) { RestartAdvantageMarks(); }
+static void run_PrintAdvantageMarks(const Record *r) { PrintAdvantageMarks(); }
+static void run_GetTeamNickname(const Record *r) { expect_reg32(r, R_A1, GetTeamNickname(TEAM(R_A2)), "a1"); }
+static void run_GetTeamArena(const Record *r) { expect_reg32(r, R_A1, GetTeamArena(TEAM(R_A2)), "a1"); }
+static void run_InitScoutingDisplay(const Record *r) { expect_reg16(r, R_A0, (uint16_t)ram_addr(InitScoutingDisplay()), "a0"); }
+static void run_UpdateScoutingDisplay(const Record *r) { UpdateScoutingDisplay(); }
+static void run_ScrollDisplayUp(const Record *r) { ScrollDisplayUp(); }
+static void run_PlayedByHome(const Record *r) { expect_reg32(r, R_A1, PlayedByHome(), "a1"); }
+static void run_PlayedByAway(const Record *r) { expect_reg32(r, R_A1, PlayedByAway(), "a1"); }
+static void run_AttribAdjust(const Record *r) { expect_reg16(r, R_D0, AttribAdjust(R16(R_D0)), "d0"); }
+static void run_DrawPlayerPicture(const Record *r) { expect_reg32(r, R_A0, DrawPlayerPicture(R16(R_D0), R16(R_D1)), "a0"); }
+static void run_DrawMatchupBitmap(const Record *r) { DrawMatchupBitmap(A(R_A0), A(R_A1), A(R_A2), R16(R_D4), R16(R_D5)); }
+static void run_PlayedByText(const Record *r) { expect_reg32(r, R_A1, PlayedByText(R16(R_D0)), "a1"); }
+static void run_PlayedByNone(const Record *r) { expect_reg32(r, R_A1, PlayedByNone(), "a1"); }
+static void run_PlayedByExit(const Record *r) { expect_reg32(r, R_A1, PlayedByExit(A(R_A1)), "a1"); }
+static void run_CalcAttrib(const Record *r)
+{
+    uint16_t div, v = CalcAttrib(R16(R_D0), TEAM(R_A2), A(R_D4), &div);
+    expect_reg16(r, R_D0, v, "d0");
+    expect_reg16(r, R_D1, div, "d1");
+}
+
 const Port ports[] = {
     { SYM_checkwallcoll, "checkwallcoll", run_checkwallcoll },
     { SYM_checkgoal, "checkgoal", run_checkgoal },
@@ -1309,6 +1356,44 @@ const Port ports[] = {
     { SYM_WriteNameRecord, "WriteNameRecord", run_WriteNameRecord },
     { SYM_SkipOtherUserName, "SkipOtherUserName", run_SkipOtherUserName },
     { SYM_WriteNameLog, "WriteNameLog", run_WriteNameLog },
+    { SYM_PlayoffScreen, "PlayoffScreen", run_PlayoffScreen },
+    { SYM_HandlePlayoffInput, "HandlePlayoffInput", run_HandlePlayoffInput },
+    { SYM_UpdatePlayoffScroll, "UpdatePlayoffScroll", run_UpdatePlayoffScroll },
+    { SYM_PlayoffScreen_waitvsync, "PlayoffScreen_waitvsync", run_PlayoffScreen_waitvsync },
+    { SYM_PrintSeriesScore, "PrintSeriesScore", run_PrintSeriesScore },
+    { SYM_DrawTreeArrow, "DrawTreeArrow", run_DrawTreeArrow },
+    { SYM_DrawTeamBlocks, "DrawTeamBlocks", run_DrawTeamBlocks },
+    { SYM_VBlank_Playoff, "VBlank_Playoff", run_VBlank_Playoff },
+    { SYM_DrawPlayoffSprite, "DrawPlayoffSprite", run_DrawPlayoffSprite },
+    { SYM_PlayoffScreenExit, "PlayoffScreenExit", run_PlayoffScreenExit },
+    { SYM_ScoutingReport, "ScoutingReport", run_ScoutingReport },
+    { SYM_ScoutCrowdRecord, "ScoutCrowdRecord", run_ScoutCrowdRecord },
+    { SYM_PageMatchup, "PageMatchup", run_PageMatchup },
+    { SYM_PrintMatchupRating, "PrintMatchupRating", run_PrintMatchupRating },
+    { SYM_PrintTwoSpaces, "PrintTwoSpaces", run_PrintTwoSpaces },
+    { SYM_DrawMatchupPictures, "DrawMatchupPictures", run_DrawMatchupPictures },
+    { SYM_DrawMatchupPicture, "DrawMatchupPicture", run_DrawMatchupPicture },
+    { SYM_DrawMatchupLogo, "DrawMatchupLogo", run_DrawMatchupLogo },
+    { SYM_GetTeamLogo, "GetTeamLogo", run_GetTeamLogo },
+    { SYM_PrintMatchupRatings, "PrintMatchupRatings", run_PrintMatchupRatings },
+    { SYM_GetMatchupPlayers, "GetMatchupPlayers", run_GetMatchupPlayers },
+    { SYM_GetMatchupPlayer, "GetMatchupPlayer", run_GetMatchupPlayer },
+    { SYM_RestartAdvantageMarks, "RestartAdvantageMarks", run_RestartAdvantageMarks },
+    { SYM_PrintAdvantageMarks, "PrintAdvantageMarks", run_PrintAdvantageMarks },
+    { SYM_GetTeamNickname, "GetTeamNickname", run_GetTeamNickname },
+    { SYM_GetTeamArena, "GetTeamArena", run_GetTeamArena },
+    { SYM_InitScoutingDisplay, "InitScoutingDisplay", run_InitScoutingDisplay },
+    { SYM_UpdateScoutingDisplay, "UpdateScoutingDisplay", run_UpdateScoutingDisplay },
+    { SYM_ScrollDisplayUp, "ScrollDisplayUp", run_ScrollDisplayUp },
+    { SYM_PlayedByHome, "PlayedByHome", run_PlayedByHome },
+    { SYM_PlayedByAway, "PlayedByAway", run_PlayedByAway },
+    { SYM_AttribAdjust, "AttribAdjust", run_AttribAdjust },
+    { SYM_DrawPlayerPicture, "DrawPlayerPicture", run_DrawPlayerPicture },
+    { SYM_CalcAttrib, "CalcAttrib", run_CalcAttrib },
+    { SYM_DrawMatchupBitmap, "DrawMatchupBitmap", run_DrawMatchupBitmap },
+    { SYM_PlayedByText, "PlayedByText", run_PlayedByText },
+    { SYM_PlayedByNone, "PlayedByNone", run_PlayedByNone },
+    { SYM_PlayedByExit, "PlayedByExit", run_PlayedByExit },
     { 0, NULL, NULL }
 };
 

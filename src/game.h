@@ -777,10 +777,46 @@ void StoreUserName(void);
 void WriteNameRecord(void);
 int SkipOtherUserName(int16_t dir);                     /* d0 (on the stack) -> Z: stepped */
 void WriteNameLog(void);                                /* cards94 */
+void PlayoffScreen(void);                               /* setup94: the playoff tree */
+int HandlePlayoffInput(void);                           /* -> 1: Start (PlayoffScreenExit) */
+void UpdatePlayoffScroll(void);
+void PlayoffScreenExit(void);
+void PlayoffScreen_waitvsync(void);
+void PrintSeriesScore(const uint8_t *gs);               /* a2 */
+void DrawTreeArrow(uint16_t col);                       /* d0 */
+void DrawTeamBlocks(uint16_t row);                      /* d1 */
+void VBlank_Playoff(void);
+void DrawPlayoffSprite(void);                           /* title94 */
+void ScoutingReport(void);                              /* scout94: the matchups */
+uint32_t ScoutCrowdRecord(void);                        /* -> a1 */
+void PageMatchup(int16_t by);                           /* d0 */
+uint16_t PrintMatchupRating(uint8_t *tm);               /* a0 -> d0 */
+void PrintTwoSpaces(void);
+void DrawMatchupPictures(void);
+void DrawMatchupPicture(uint32_t pic, uint16_t chars, uint16_t palbits);   /* a0, d4, d5 */
+void DrawMatchupLogo(uint32_t logo, uint16_t d3, uint16_t chars, uint16_t palbits);   /* a0, d3, d4, d5 */
+void DrawMatchupBitmap(uint32_t pal, uint32_t map, uint32_t tiles, uint16_t chars, uint16_t palbits);   /* a0, a1, a2, d4, d5 */
+uint32_t GetTeamLogo(uint16_t *d3);                     /* d3 -> a0, d3 */
+void PrintMatchupRatings(void);
+void GetMatchupPlayers(void);
+uint16_t GetMatchupPlayer(const uint8_t *tm);           /* a0 -> d0 */
+void RestartAdvantageMarks(void);
+void PrintAdvantageMarks(void);
+uint32_t GetTeamNickname(const uint8_t *tm);            /* a2 -> a1 */
+uint32_t GetTeamArena(const uint8_t *tm);               /* a2 -> a1 */
+uint8_t *InitScoutingDisplay(void);                     /* setup94: -> a0 */
+void UpdateScoutingDisplay(void);
+void ScrollDisplayUp(void);
+uint32_t PlayedByHome(void);                            /* title94: -> a1 */
+uint32_t PlayedByAway(void);
+uint32_t PlayedByText(uint16_t user);                   /* d0 -> a1 */
+uint32_t PlayedByNone(void);
+uint32_t PlayedByExit(uint32_t a1);
+uint16_t AttribAdjust(uint16_t v);                      /* d0 -> d0 */
+uint32_t DrawPlayerPicture(uint16_t player, uint16_t team);   /* cards94: d0, d1 -> a0 */
+uint16_t CalcAttrib(uint16_t player, uint8_t *tm, uint32_t mask, uint16_t *div);   /* d0, a2, d4 -> d0, d1 */
 /* not ported yet (front end) */
 void GameOver(void);                                    /* setup94: passwords, playoff screens, back to the front end */
-void PlayoffScreen(void);                               /* setup94 */
-void ScoutingReport(void);                              /* scout94 */
 /* jsr (a0) to a 68k routine address kept in RAM (dispatch.c) */
 void call68k(uint32_t addr);
 void call68k_missing(uint32_t addr);

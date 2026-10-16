@@ -13,6 +13,7 @@ static const struct { uint32_t addr; void (*fn)(void); } routines[] = {
     { SYM_VBcount, VBcount },
     { SYM_VBlank_TitleScreen, VBlank_TitleScreen },
     { SYM_VBlank_SetOptions, VBlank_SetOptions },
+    { SYM_VBlank_Playoff, VBlank_Playoff },
     { SYM_ReplayMode, ReplayMode },
     { SYM_PeriodStatsScreen, PeriodStatsScreen },
     { SYM_GameStatisticsScreen, GameStatisticsScreen },

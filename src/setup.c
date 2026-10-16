@@ -7,6 +7,7 @@
 #include "symbols_gen.h"
 #include "anim_gen.h"
 #include "setup_tables_gen.h"
+#include "setup_strings_gen.h"
 
 #define RAM_W(off) ram_ptr(RAM_BASE + (off))
 
@@ -417,4 +418,310 @@ void Opening3(void)
     PlayoffScreen();
     if (!(g.gmode2 & HI(0))) ScoutingReport();
     StartGame();
+}
+
+/* ---- the playoff screen ---------------------------------------------------------------------- */
+
+/* setup94.asm:PlayoffScreen. In the playoffs: the tree (PlayoffTreeSetup by gamelevel: the team
+ * blocks, the arrows, the series scores), the round's title and the playoff sprite, with its own
+ * vblank (VBlank_Playoff); left / right scroll it a page ($70 pixels) at a time, Start leaves. */
+void PlayoffScreen(void)
+{
+    if (g.OptPlayMode == 0) return;
+    g.vbint = SYM_VBlank_Playoff;
+    g.disflags &= (uint16_t)~HI(df32c);
+    g.VSCRLPM = 0;
+    g.VSPRITES = 0xBC00;
+    g.VmMap3 = 0xB000;
+    g.Map3col1 = 6;
+    g.VmMap2 = 0xC000;
+    g.Map2col1 = 7;
+    g.VmMap1 = 0xE000;
+    g.Map1col1 = 7;
+    setVram(0);
+    printz(str_PlayoffScreen_1, sizeof str_PlayoffScreen_1);
+    eraser(0x80, 0x1C, 0x7FF);
+    printz(str_PlayoffScreen_2, sizeof str_PlayoffScreen_2);
+    eraser(0x28, 2, 0x7FF);
+    uint16_t c = AddSmallFont(AddTeamBlock());
+    g.ExtraChars = c;
+    c = DecompressGraphicsPlain(SYM_Arrowsmap + 8, c);
+    printz(str_PlayoffScreen_3, sizeof str_PlayoffScreen_3);
+    uint32_t img = SYM_ScoutMap, map = img + rd32(rom_ptr(img + 4));
+    c = dobitmap(img + rd32(rom_ptr(img)), map, img + 8, 0, 0, rd16(rom_ptr(map)), rd16(rom_ptr(map) + 2), c, 3);
+    const uint8_t *sp = rom_ptr(SYM_PlayoffSprite + rd32(rom_ptr(SYM_PlayoffSprite)));   /* its palette */
+    uint8_t *pal = RAM_W(RAM_OFF_palfadenew + 0x40);
+    for (int i = 0; i < 8; i++, pal += 4, sp += 4) {     /* palette 0 to 3, the sprite's to 0, 1 to 2 */
+        memcpy(pal + 0x20, pal - 0x40, 4);
+        memcpy(pal - 0x40, sp, 4);
+        memcpy(pal, pal - 0x20, 4);
+    }
+    g.energybarchars = c;
+    DecompressGraphicsPlain(SYM_PlayoffSprite + 8, c);
+    g.clampcounter = 0x104;
+    g.playoffspritey = 0xA0;
+    vdp_ctrl16(SYM_VDPR_WINY + 2);
+    const uint8_t *tree = g.potree;
+    const uint8_t *a0 = rom_ptr(SYM_PlayoffTreeSetup + (int16_t)rd16(rom_ptr(SYM_PlayoffTreeSetup + (uint16_t)(g.gamelevel << 1))));
+    for (int16_t n = *a0++; n >= 0; n--) {                /* the team blocks */
+        printz(str_PlayoffScreen_4, sizeof str_PlayoffScreen_4);
+        g.printx = (uint16_t)((g.printx & 0xFF00) | *a0++);
+        g.printy = (uint16_t)((g.printy & 0xFF00) | *a0++);
+        DrawTeamBlocks((uint16_t)(*tree++ << 1));
+    }
+    for (int16_t n = *a0++; n >= 0; n--) {                /* the arrows */
+        printz(str_PlayoffScreen_5, sizeof str_PlayoffScreen_5);
+        g.printx = (uint16_t)((g.printx & 0xFF00) | *a0++);
+        DrawTreeArrow(*a0++);
+    }
+    printz(str_PlayoffScreen_6, sizeof str_PlayoffScreen_6);
+    if (g.bosgames != 7 && !(*a0 & 0x80)) {               /* the series scores */
+        uint8_t *gs = g.gsstruct;
+        for (int16_t n = *a0++; n >= 0; n--, gs += 0x10) {
+            g.printx = (uint16_t)((g.printx & 0xFF00) | *a0++);
+            g.printy = (uint16_t)((g.printy & 0xFF00) | *a0++);
+            PrintSeriesScore(gs);
+        }
+    }
+    printsmallz(str_PlayoffScreen_7, sizeof str_PlayoffScreen_7);
+    uint32_t title = AdvanceStringPtr(SYM_PlayoffScreenText, g.gamelevel);   /* the round, centred */
+    g.printx -= (uint16_t)(rd16(rom_ptr(title)) >> 1);
+    printsmall(title);
+    if (g.gamelevel != 0) printz(str_PlayoffScreen_8, sizeof str_PlayoffScreen_8);
+    g.palcount = 0x18;
+    song(SYM_SngEOG);
+    g.PlayerScrollCtr = 0xFFFF;
+    g.DispAttribCtr = 1;
+    UpdatePlayoffScroll();
+    for (;;) {
+        PlayoffScreen_waitvsync();
+        DrawPlayoffSprite();
+        if (HandlePlayoffInput()) return;                 /* PlayoffScreenExit */
+    }
+}
+
+/* setup94.asm:HandlePlayoffInput. Both pads: Start leaves the playoff screen (-> 1, the 68k's
+ * PlayoffScreenExit), right / left set the scroll step; then UpdatePlayoffScroll. */
+int HandlePlayoffInput(void)
+{
+    uint16_t d0, d1, d2, held, held2;
+    ReadJoy1(&d0, &d1, &d2, &held);
+    ReadJoy2(&d0, &d1, &d2, &held2);
+    held |= held2;
+    if (held & 0x80) { PlayoffScreenExit(); return 1; }
+    if (held & 8) g.PlayerScrollCtr = 0xFFFE;
+    if (held & 4) g.PlayerScrollCtr = 2;
+    UpdatePlayoffScroll();
+    return 0;
+}
+
+/* setup94.asm:UpdatePlayoffScroll. The tree one step (PlayerScrollCtr) within its pages (up to
+ * gamelevel x $70 either way), stopping on a page boundary; the sprite's x while it shows. */
+void UpdatePlayoffScroll(void)
+{
+    int16_t d0 = (int16_t)g.PlayerScrollCtr;
+    if (d0 == 0) return;
+    d0 = (int16_t)(d0 + g.DispAttribCtr);
+    uint16_t lim = g.gamelevel > 3 ? 3 : g.gamelevel;
+    int16_t d1 = (int16_t)(uint16_t)(lim * 0x70);
+    if (d0 > d1 || d0 < -d1) return;
+    g.DispAttribCtr = (uint16_t)d0;
+    g.playoffspritex = 0;
+    int16_t x = (int16_t)(d0 + 0x100);
+    if (x >= 0x40 && x <= 0x200) g.playoffspritex = (uint16_t)x;
+    if ((int16_t)(m68k_divs(d0, 0x70) >> 16) == 0) g.PlayerScrollCtr = 0;
+}
+
+/* setup94.asm:PlayoffScreenExit. Drop HandlePlayoffInput's return: PlayoffScreen returns (the C
+ * caller does). */
+void PlayoffScreenExit(void) {}
+
+/* setup94.asm:PlayoffScreen_waitvsync. When the fade has run out, colour $21 flashes ($EE eor)
+ * and the fade starts again; then wait for the vblank. */
+void PlayoffScreen_waitvsync(void)
+{
+    if ((int16_t)g.palcount < 0) {
+        g.palfadenew[0x21] ^= 0xEE;
+        g.palcount = 0x18;
+    }
+    while (g.vcount == g.oldvcount) hal_wait_vblank();
+    g.oldvcount = g.vcount;
+}
+
+/* setup94.asm:PrintSeriesScore. The best-of-7 wins "t-b" of game struct a2 at printx / printy. */
+void PrintSeriesScore(const uint8_t *gs)
+{
+    uint8_t *m = RAM_W(RAM_OFF_mesarea);
+    wr16(m, 6);
+    m[2] = (uint8_t)(rd16(gs + 4) + '0');
+    m[3] = '-';
+    m[4] = (uint8_t)(rd16(gs + 6) + '0');
+    m[5] = 0;
+    print(RAM_BASE + RAM_OFF_mesarea);
+}
+
+/* setup94.asm:DrawTreeArrow. Column d0 of the arrows map (Arrowsmap, 2 x $17) at printx /
+ * printy. */
+void DrawTreeArrow(uint16_t col)
+{
+    uint32_t img = SYM_Arrowsmap;
+    dobitmap(img + rd32(rom_ptr(img)), img + rd32(rom_ptr(img + 4)), SYM_NoTiles, col, 0, 2, 0x17, g.ExtraChars, 0);
+}
+
+/* setup94.asm:DrawTeamBlocks. Team block d1 (team x 2: its row of Teamblocksmap) at printx /
+ * printy, highlighted (printa $6000) for the user's playoff team. */
+void DrawTeamBlocks(uint16_t row)
+{
+    uint8_t user = (uint8_t)(g.potree[g.potreeteam] << 1);
+    if (user == (uint8_t)row) g.printa = 0x6000;
+    uint32_t map = SYM_Teamblocksmap + rd32(rom_ptr(SYM_Teamblocksmap + 4));
+    dobitmap(0, map, SYM_NoTiles, 0, row, rd16(rom_ptr(map)), 2, 2, 0);
+}
+
+/* setup94.asm:VBlank_Playoff. The playoff screen's vblank: unless dfng, the sprites (and the tree's
+ * scroll, $FEA0 + DispAttribCtr) and the fade; then vcount and the music. */
+void VBlank_Playoff(void)
+{
+    if (!(g.disflags & HI(dfng))) {
+        if (g.Sattsize) {
+            uint16_t n = g.Sattsize;
+            g.Sattsize = 0;
+            DoDMA(RAM_BASE + RAM_OFF_Satt, n, g.VSPRITES);
+            Vmaddr(g.VSCRLPM);
+            vdp_data((uint16_t)(0xFEA0 + g.DispAttribCtr));
+        }
+        cramfade();
+    }
+    g.vcount++;
+    p_music_vblank();
+}
+
+/* ---- the scouting report's text player ------------------------------------------------------- */
+
+/* setup94.asm:InitScoutingDisplay. Start the text player: no line yet, a new paragraph next ->
+ * a0 = the paragraph list (TestList). */
+uint8_t *InitScoutingDisplay(void)
+{
+    g.VertLineScrolling = 0xFFFF;
+    ST_W(g.PlayerScrollCtr);
+    g.SelectedPlayerIdx = 0;
+    g.typedelay = 0;
+    return RAM_W(RAM_OFF_TestList);
+}
+
+/* setup94.asm:UpdateScoutingDisplay. The text player: each time its delay (typedelay; longer
+ * after a comma or a full stop; none with asv set) runs out, the next word of the paragraph
+ * (PlayerScrollCtr: its offset in ScoutTextScript; negative: the next paragraph of TestList) to
+ * the text box, a line at a time (ScrollDisplayUp); the special characters put in the team data:
+ * the city of the team in form ($), the goalies ([ ]), the hot / cold players (< > | \), the
+ * crowd record (@), the users' names (# %), nicknames (= *), arenas (^ ;) and the rosters' ends
+ * (_ + { }). */
+void UpdateScoutingDisplay(void)
+{
+    if ((int16_t)g.typedelay > 0x1000) return;
+    if ((int16_t)g.asv >= 0 && (int16_t)--g.typedelay >= 0) return;
+    const uint32_t a1 = SYM_ScoutTextScript;
+    int16_t d0 = (int16_t)g.PlayerScrollCtr;
+    if (d0 < 0) {                                         /* the next paragraph */
+        g.DispAttribCtr = 0;
+        uint16_t i = g.SelectedPlayerIdx;
+        g.SelectedPlayerIdx += 2;
+        d0 = (int16_t)rd16(RAM_W(RAM_OFF_TestList) + (int16_t)i);
+        if (d0 < 0) {                                     /* the list's end */
+            g.typedelay = 0x7FFF;
+            g.screentimer = 0x1E0;
+            return;
+        }
+        ScrollDisplayUp();
+        const uint8_t *p = rom_ptr(a1);
+        for (uint16_t n = (uint16_t)d0; n-- != 0;) while (*p++ != 0xD) {}
+        d0 = (int16_t)(uint16_t)(p - rom_ptr(a1));
+    }
+    const uint8_t *a2 = rom_ptr(a1) + d0;
+    g.typedelay = 0xA;
+    d0 = (int16_t)g.DispAttribCtr;
+    uint32_t str;                                         /* a String the special character puts in */
+    uint8_t *tm;
+    uint16_t d1;
+    switch (*a2) {
+    case '_': case '{': str = rd32(ram_ptr(RAM_BASE + RAM_OFF_HomeTeamRosterPtr)); goto string4;
+    case '+': case '}': str = rd32(ram_ptr(RAM_BASE + RAM_OFF_AwayTeamRosterPtr)); goto string4;
+    case '$': str = rd32((g.awayhotter ? g.AwShots : g.tmstruct) + 0x1E); goto string4;
+    case '[': tm = g.tmstruct; d1 = rd16(tm + 0x26); goto roster;
+    case ']': tm = g.AwShots; d1 = rd16(tm + 0x26); goto roster;
+    case '<': d1 = NextHomeHotPlayer(&tm); goto roster;
+    case '>': d1 = NextAwayHotPlayer(&tm); goto roster;
+    case '|': d1 = NextHomeColdPlayer(&tm); goto roster;
+    case '\\': d1 = NextAwayColdPlayer(&tm); goto roster;
+    case '@': str = ScoutCrowdRecord(); goto append;
+    case '#': str = PlayedByHome(); goto append;
+    case '%': str = PlayedByAway(); goto append;
+    case '=': str = GetTeamNickname(g.tmstruct); goto append;
+    case '*': str = GetTeamNickname(g.AwShots); goto append;
+    case '^': str = GetTeamArena(g.tmstruct); goto append;
+    case ';': str = GetTeamArena(g.AwShots); goto append;
+    default: break;
+    }
+    {                                                     /* a word, and the spaces after it */
+        ST_W(g.PlayerScrollCtr);
+        uint8_t *a0 = RAM_W(RAM_OFF_TextBuffer);
+        d1 = 0;
+        while (*a2 != 0xD) {
+            d0++;
+            int more;
+            do {
+                *a0++ = *a2;
+                d1++;
+                if (*a2 == ',' || *a2 == '.') g.typedelay += 0x28;
+                more = *a2++ == ' ' && *a2 == ' ';
+            } while (more);
+            if (a2[-1] == ' ') {
+                d0--;
+                g.PlayerScrollCtr = (uint16_t)(a2 - rom_ptr(a1));
+                break;
+            }
+        }
+        g.mesarea = (uint16_t)(d1 + 2);
+        if (d1 & 1) { *a0 = 0; g.mesarea++; }
+        str = RAM_BASE + RAM_OFF_mesarea;
+        goto put;
+    }
+string4:                                                  /* the String at word 4 of a team data block */
+    str += (uint32_t)(int16_t)rd16(rom_ptr(str + 4));
+    goto append;
+roster:                                                   /* player d1's name in team a1's roster */
+    str = rd32(tm + 0x1E);
+    str += (uint32_t)(int16_t)rd16(rom_ptr(str));
+    for (; d1-- != 0;) str += (uint32_t)(int16_t)rd16(rom_ptr(str)) + 8;
+append:
+    g.PlayerScrollCtr++;
+    {
+        const uint8_t *s = mem_ptr(str);
+        d0 = (int16_t)(d0 + rd16(s) - 1);
+        d1 = (uint16_t)(rd16(s) - 2);
+        if (s[1 + (int16_t)d1] == 0) d1--;                /* (not its pad byte) */
+    }
+put:
+    if (d0 > 0x1D) ScrollDisplayUp();                     /* not on this line: the next */
+    printz(str_UpdateScoutingDisplay_1, sizeof str_UpdateScoutingDisplay_1);
+    g.printx += g.DispAttribCtr;
+    g.printy += g.VertLineScrolling;
+    print(str);
+    g.DispAttribCtr += d1;
+}
+
+/* setup94.asm:ScrollDisplayUp. The next line of the text box; past its seventh, the box's 8 rows
+ * one row up (VRAM to VRAM DMA). */
+void ScrollDisplayUp(void)
+{
+    g.DispAttribCtr = 0;
+    g.VertLineScrolling++;
+    if ((int16_t)g.VertLineScrolling < 7) return;
+    g.VertLineScrolling--;
+    uint16_t d1 = (uint16_t)(g.VmMap1 + 0x212);
+    for (int i = 0; i < 8; i++) {
+        uint16_t d2 = (uint16_t)(d1 + 0x80);
+        DoDMA_nd2(0x3A, d1, d2);
+        d1 = d2;
+    }
 }

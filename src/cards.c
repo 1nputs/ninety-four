@@ -477,3 +477,81 @@ void TrimSpaces(uint32_t str)
     }
     wr16(s, (uint16_t)((rd16(s) + 1) & 0xFE));
 }
+
+/* ---- the matchups' pictures and ratings (scouting report) ------------------------------------ */
+
+/* cards94.asm:DrawPlayerPicture. -> a0 = the picture of player d0 of team d1: his from the team's
+ * FeaturedPictures list, else a stock one (NoPicGoalie1 / 2, NoPicSkater1 / 2 by the bit 0 of his
+ * fifth attribute byte; the first as many players as the team's .sodds word has nibbles are its
+ * goalies). */
+uint32_t DrawPlayerPicture(uint16_t player, uint16_t team)
+{
+    uint32_t list = rd32(rom_ptr(SYM_FeaturedPictures + (uint32_t)(int16_t)(uint16_t)(team << 2)));
+    for (; rd32(rom_ptr(list)) != 0; list += 6)
+        if (rd16(rom_ptr(list + 4)) == player) return rd32(rom_ptr(list));
+    uint32_t data = rd32(rom_ptr(SYM_TeamList + (uint32_t)(int16_t)(uint16_t)(team << 2)));
+    uint32_t a6 = data + (uint32_t)(int16_t)rd16(rom_ptr(data));
+    for (uint16_t n = player; n-- != 0;) a6 += (uint32_t)(int16_t)rd16(rom_ptr(a6)) + 8;
+    a6 += (uint32_t)(int16_t)rd16(rom_ptr(a6));           /* past his name: his attributes */
+    uint16_t odds = rd16(rom_ptr(data + (int16_t)rd16(rom_ptr(data + 0xA)))), goalies = 0;
+    do { goalies++; odds = (uint16_t)(odds << 4); } while (odds != 0);
+    int pic1 = rom_ptr(a6)[4] & 1;
+    if ((int16_t)player < (int16_t)goalies) return pic1 ? SYM_NoPicGoalie1 : SYM_NoPicGoalie2;
+    return pic1 ? SYM_NoPicSkater2 : SYM_NoPicSkater1;
+}
+
+/* cards94.asm:CalcAttrib. The rating of player d0 of team a2 for the attributes set in the high
+ * word of d4 (bit 15 down to 0, a nibble each, from the end of his 8 attribute bytes back): each
+ * nibble times its weight / 2 (OvrPlayerWgtList / OvrGoalWgtList for the overall masks, else
+ * AttribWgtList; the Wgt and Fight nibbles as they are). The overall ratings add the average of
+ * his hot / cold bytes ($1A2 of the team struct: OvrDivisor / OvrDividend); the others scale each
+ * nibble by 18 and add its hot / cold byte (a negative low byte cleared) -> d0 = the sum, d1 =
+ * 100 a nibble counted (100 for the overall ones); d0 at or past d1 becomes d1 - 1. */
+uint16_t CalcAttrib(uint16_t player, uint8_t *tm, uint32_t mask, uint16_t *div)
+{
+    g.OvrDivisor = 0;
+    g.OvrDividend = 0;
+    uint32_t weights = SYM_AttribWgtList;
+    if (mask == rd32(rom_ptr(SYM_PAttribOverallMask))) weights = SYM_OvrPlayerWgtList;
+    if (mask == rd32(rom_ptr(SYM_GAttribOverallMask))) weights = SYM_OvrGoalWgtList;
+    uint32_t a0 = rd32(tm + 0x1E);
+    const uint8_t *hotcold = tm + 0x1A2 + (uint16_t)(player << 4) + 0x10;   /* the end of his hot / cold bytes */
+    a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0));
+    for (uint16_t n = player;; n--) {                     /* past his name and attributes */
+        a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0)) + 8;
+        if (n == 0) break;
+    }
+    const uint8_t *attrs = rom_ptr(a0);
+    uint16_t d0 = 0, d1 = 0, bits = (uint16_t)(mask >> 16);
+    for (int16_t d2 = 0xF; d2 >= 0; d2--) {
+        if (!(bits & (1u << d2))) continue;
+        uint16_t d3 = attrs[-(d2 >> 1) - 1];
+        if (d2 & 1) d3 >>= 4;
+        d3 &= 0xF;
+        if (d2 != 0xD && d2 != 6) {
+            int16_t w = (int8_t)rom_ptr(weights)[d2];
+            if (w != 2) d3 = (uint16_t)((int16_t)(uint16_t)(d3 * (uint16_t)w) >> 1);   /* (the 68k adds it w - 1 more times, mod 2^16) */
+            if (weights != SYM_AttribWgtList) {
+                g.OvrDivisor += (uint16_t)(int8_t)hotcold[-d2 - 1];
+                g.OvrDividend++;
+            } else {
+                d3 = (uint16_t)(d3 * 18);
+                uint8_t lo = (uint8_t)(d3 + hotcold[-d2 - 1]);
+                if (lo & 0x80) lo = 0;
+                d3 = (uint16_t)((d3 & 0xFF00) | lo);
+            }
+        }
+        d0 = (uint16_t)(d0 + d3);
+        d1 = (uint16_t)(d1 + 100);
+    }
+    if (weights != SYM_AttribWgtList) {
+        d1 = 100;
+        d0 = (uint16_t)(d0 + (uint16_t)m68k_divs((int32_t)(int16_t)g.OvrDivisor, (int16_t)g.OvrDividend));
+    }
+    if ((int16_t)d0 >= (int16_t)d1) {
+        d1 = d0;
+        d0--;
+    }
+    *div = d1;
+    return d0;
+}

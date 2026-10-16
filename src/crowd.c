@@ -80,13 +80,16 @@ void checkcornercoll(int16_t x, int16_t y, struct SortObj *o)
     o->pflags3 &= (uint8_t)~(1 << pf3wall);
     int16_t d4 = (int16_t)(0x88 - (int16_t)g.wcradiusx);
     int16_t d5 = (int16_t)(0x12A - (int16_t)g.wcradiusy);
-    int16_t cx = (int16_t)(-d4 + 0x40), cy = (int16_t)(-d5 + 0x40);   /* the corner circle centers */
-    int incorner;
-    if (y > cy) {
+    int16_t cx = (int16_t)(-d4 + 0x40), cy = (int16_t)(-d5 + 0x40);   /* the corner circle centers (one end, left) */
+    int incorner = 0, check = 1;
+    if (y > cy) {                                         /* the other end's circles, unless between the ends */
         cy = (int16_t)-cy;
-        incorner = y >= cy && (x < cx || x > (int16_t)-cx);
-    } else
-        incorner = x < cx || x > (int16_t)-cx;
+        check = y >= cy;
+    }
+    if (check) {
+        if (x < cx) incorner = 1;
+        else if (x > (int16_t)-cx) { cx = (int16_t)-cx; incorner = 1; }   /* the right-hand circle */
+    }
     if (incorner) {
         int16_t dx = (int16_t)(x - cx), dy = (int16_t)(y - cy);
         int16_t c = dy, s = (int16_t)-dx;
@@ -154,28 +157,28 @@ uint16_t NextHomeHotPlayer(uint8_t **team)
 {
     *team = team_struct(0);
     uint16_t d1 = listed(RAM_OFF_homehotplayer, g.homehotidx);
-    if ((int16_t)g.homehotidx >= 0) g.homehotidx++;
+    if ((int16_t)g.homehotidx < 0) g.homehotidx++;       /* (only below 0: it stays at the first) */
     return d1;
 }
 uint16_t NextAwayHotPlayer(uint8_t **team)
 {
     *team = team_struct(1);
     uint16_t d1 = listed(RAM_OFF_awayhotplayer, g.awayhotidx);
-    if ((int16_t)g.awayhotidx >= 0) g.awayhotidx++;
+    if ((int16_t)g.awayhotidx < 0) g.awayhotidx++;
     return d1;
 }
 uint16_t NextHomeColdPlayer(uint8_t **team)
 {
     *team = team_struct(0);
     uint16_t d1 = listed(RAM_OFF_homecoldplayer, g.homecoldidx);
-    if ((int16_t)g.homecoldidx >= 0) g.homecoldidx++;
+    if ((int16_t)g.homecoldidx < 0) g.homecoldidx++;
     return d1;
 }
 uint16_t NextAwayColdPlayer(uint8_t **team)
 {
     *team = team_struct(1);
     uint16_t d1 = listed(RAM_OFF_awaycoldplayer, g.awaycoldidx);
-    if ((int16_t)g.awaycoldidx >= 0) g.awaycoldidx++;
+    if ((int16_t)g.awaycoldidx < 0) g.awaycoldidx++;
     return d1;
 }
 

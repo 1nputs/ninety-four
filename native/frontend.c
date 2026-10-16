@@ -11,5 +11,3 @@ static void no_front_end(const char *what)
 }
 
 __attribute__((weak)) void GameOver(void) { no_front_end("GameOver"); }
-__attribute__((weak)) void PlayoffScreen(void) { no_front_end("PlayoffScreen"); }
-__attribute__((weak)) void ScoutingReport(void) { no_front_end("ScoutingReport"); }

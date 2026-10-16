@@ -1,0 +1,2 @@
+# power on: Start at the title, New Playoffs on the setup screen, Start, the playoff screen (scroll keys do nothing in the first round), Start (lockstep.py, capture.py)
+1200:START,1206:,1320:RIGHT,1326:,1360:START,1366:,1600:RIGHT,1606:,1660:LEFT,1666:,1760:START,1766:

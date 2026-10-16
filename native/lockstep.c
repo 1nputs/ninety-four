@@ -10,12 +10,12 @@
  * Gameloop: its stack says), the player takes the state (work RAM, the VDP, and `elapsed`, the d7
  * the game loop keeps) and restarts the native game there (restart_at, as the 68k's own restarts
  * do), wherever the native game was: then it checks again. Other resync points in the game are
- * passed over. Outside the game (the vbint handler is not the game's VBlank: the front end, whose
- * screens load for frames with the vblank on) the player compares the native state with the
+ * passed over. Outside the game's logic (DoGameFrame not on the native function stack: the front
+ * end, whose screens load for frames with the vblank on, and the intermission) the player compares the native state with the
  * oracle's there, but for what the oracle's vblank code changed in the lag frames (the
  * recording's lag mask, version 4), then takes the oracle's state in place and goes on.
  * Better, from version 5 the recording counts the game's port accesses (the C port makes the same
- * accesses in the same order): outside the game the player runs each of the oracle's lag
+ * accesses in the same order): outside the game's logic the player runs each of the oracle's lag
  * interrupts in the native game's work right after the same access (or, when it came while the
  * interrupts were masked, at the unmask that follows), so the waits after it are checked exactly.
  * A difference while in step stops the run, with work RAM in out/lockstep-native.ram for diffing
@@ -215,8 +215,7 @@ static void take_state(const record *r, int game_loop)
 static void differs(const char *what, long frame, const record *r)
 {
     printf("lockstep: %s differs at the game's vblank wait %ld (the oracle's frame %u, the 68k at %06x); "
-           "%zu HV reads of %u; %ld waits checked, %ld lag frames before\n",
-           what, frame, r->frame, r->at, hv_used, r->nhv, checked, lagged);
+           "%ld waits checked, %ld lag frames before\n", what, frame, r->frame, r->at, checked, lagged);
     FILE *f = fopen("out/lockstep-native.ram", "wb");
     if (f) { fwrite(ram_ptr(RAM_BASE), 1, 0x10000, f); fclose(f); }
     if ((f = fopen("out/lockstep-native.ram.vdp", "wb"))) {   /* as lockstep.py --dump writes the oracle's */
@@ -314,9 +313,17 @@ static NI void place_next(const char *how)
     if (getenv("LOCKSTEP_DEBUG")) printf("  lag frame %u (68k at %06x, %u accesses) placed %s\n", l->frame, l->at, l->writes, how);
     native_vblank_now();
 }
+/* the native game is in a frame's game logic (DoGameFrame on its function stack): the oracle's lag
+ * frames there fall in long stretches without port accesses, where a routine runs many times a
+ * frame, so they are not placed: the player takes the oracle's state at the game loop instead */
+static NI int in_game_logic(void)
+{
+    for (int i = 0; i < depth && i < 512; i++) if (where[i] == SYM_DoGameFrame) return 1;
+    return 0;
+}
 static NI int due(uint32_t n, int unmask)
 {
-    if (!recs || lag_next + 1 >= span_hi || g.vbint == SYM_VBlank) return 0;
+    if (!recs || lag_next + 1 >= span_hi || in_game_logic()) return 0;
     const record *l = &recs[lag_next];
     return !!(l->flags & 4) == unmask && l->writes <= n;
 }
@@ -375,7 +382,7 @@ void lockstep_check(long frame)
             restarted = 1;
             restart_at(native_resume_game_loop);
         }
-        if (r->mask && g.vbint != SYM_VBlank) {           /* outside the game: check, then take it here */
+        if (r->mask && !in_game_logic()) {                /* outside the game: check, then take it here */
             const char *bad = masked_diff(r);
             if (bad) differs(bad, frame, r);
             advance(r);
@@ -390,7 +397,10 @@ void lockstep_check(long frame)
         return;
     }
     uint64_t rh = fnv64(0xCBF29CE484222325ull, ram_ptr(RAM_BASE), 0xDF00), vh = vdp_hash();
-    const char *bad = rh != r->ram ? "work RAM" : vh != r->vdp ? "VDP state" : hv_over || hv_used != r->nhv ? "HV reads" : NULL;
+    size_t want = 0, used = hv_used;                      /* the HV reads of the whole span (its lag frames' too) */
+    for (size_t i = span_lo; i < span_hi; i++) want += recs[i].nhv;
+    for (size_t i = span_lo; i < hv_rec && i < span_hi; i++) used += recs[i].nhv;
+    const char *bad = rh != r->ram ? "work RAM" : vh != r->vdp ? "VDP state" : hv_over || used != want ? "HV reads" : NULL;
     if (bad) differs(bad, frame, r);
     checked++;
     advance(r);

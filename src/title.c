@@ -593,3 +593,50 @@ void UnpackPicture(uint32_t pic)
         out += 4;
     } while (rows-- != 0);
 }
+
+/* title94.asm:DrawPlayoffSprite. The PlayoffSprite sprite at playoffspritex / playoffspritey in
+ * Satt (an empty entry when it is off screen), the list ended there (Sattsize). */
+void DrawPlayoffSprite(void)
+{
+    struct Vid v = { NULL, RAM_W(RAM_OFF_Satt), 1 };
+    SetSframe(SYM_PlayoffSprite, (int16_t)g.playoffspritex, (int16_t)g.playoffspritey, 1, (uint16_t)(g.energybarchars | 0x8000), &v);
+    if (v.sat == RAM_W(RAM_OFF_Satt)) { memset(v.sat, 0, 8); v.sat += 8; }
+    v.sat[-5] = 0;                                        /* the last sprite's link */
+    g.Sattsize = (uint16_t)((uint16_t)(v.sat - RAM_W(RAM_OFF_Satt)) >> 1);
+}
+
+/* title94.asm:PlayedByHome. The text player's '#' -> a1 = "(played by NAME)" for homeuser
+ * (PlayedByText), or an empty String. */
+uint32_t PlayedByHome(void) { return PlayedByText(g.homeuser); }
+
+/* title94.asm:PlayedByAway. The same for awayuser ('%'). */
+uint32_t PlayedByAway(void) { return PlayedByText(g.awayuser); }
+
+/* title94.asm:PlayedByText. User d0's name (GetLogName from the name log, as a String at
+ * nameentrybuf) in "(played by NAME)" at TempBuffer -> a1; user 0: PlayedByNone. */
+uint32_t PlayedByText(uint16_t user)
+{
+    if (user == 0) return PlayedByNone();
+    g.namelogsel = user;
+    GetLogName(RAM_BASE + RAM_OFF_nameentrybuf + 2);
+    g.nameentrybuf[2 + (int16_t)g.namelength] = 0;
+    g.namelength = (uint16_t)(((g.namelength + 1) & 0xFFFE) + 2);
+    wr16(g.nameentrybuf, g.namelength);
+    CopyString(SYM_PlayedByTxt, RAM_BASE + RAM_OFF_TempBuffer);
+    appstring(RAM_BASE + RAM_OFF_nameentrybuf, RAM_BASE + RAM_OFF_TempBuffer);
+    appendz(str_PlayedByText_1, sizeof str_PlayedByText_1, RAM_BASE + RAM_OFF_TempBuffer);
+    return PlayedByExit(RAM_BASE + RAM_OFF_TempBuffer);
+}
+
+/* title94.asm:PlayedByNone. No user: the empty String. */
+uint32_t PlayedByNone(void) { return PlayedByExit(SYM_PlayedByEmptyTxt); }
+
+/* title94.asm:PlayedByExit. The common exit -> a1. */
+uint32_t PlayedByExit(uint32_t a1) { return a1; }
+
+/* title94.asm:AttribAdjust. An attribute under $32 becomes d0 / 2 + $19. */
+uint16_t AttribAdjust(uint16_t v)
+{
+    if ((int16_t)v >= 0x32) return v;
+    return (uint16_t)(((int16_t)v >> 1) + 0x19);
+}
