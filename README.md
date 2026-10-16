@@ -7,7 +7,7 @@ community's byte-matching assembly rebuild. See `docs/PLAN.md` for the approach 
 Status: the whole game is ported to `src/`, from power on (the EA screen, the title, the setup
 screen, the name entry, the playoffs, the scouting report) through the game, its menus and
 screens, the intermissions and highlights to the game over, with the Z80's sound relay in C. It
-passes 10065 recorded function-level tests and frame-by-frame lockstep runs against the oracle
+passes 10197 recorded function-level tests and frame-by-frame lockstep runs against the oracle
 emulator (work RAM and VDP at every vblank wait) with 0 mismatches. It runs natively on
 md-runtime (`../md-runtime`) with sound.
 
@@ -23,28 +23,23 @@ power on; `--snap FILE` starts from an oracle snapshot instead. See `docs/HANDOF
 
 ## Setup
 
-```
-./tools/fetch_refs.sh          # clones the asm rebuild and disassembly, builds the oracle emulator
-cp /path/to/your/nhl94.gen .   # retail ROM, SHA-1 7b1489ab501258133bf03e5f0892b77d04312580
-```
-
-## Oracle
+The ROM is your own copy; nothing derived from it is committed.
 
 ```
-python3 tools/oracle/run.py "NHL 94 (UE) [!].gen" --frames 600 --shots out/shots
+./tools/fetch_refs.sh                  # the asm rebuild, the disassembly, the oracle emulator, vasm
+cp /path/to/your/rom "NHL 94 (UE) [!].gen"   # retail ROM, SHA-1 7b1489ab501258133bf03e5f0892b77d04312580
+tools/asm/build_vasm.sh                # the byte-exact rebuild: build/asm/symbols.json (every label)
 ```
 
-## Assemble the upstream source on Linux (byte-exact)
+## Verify
 
 ```
-tools/asm/build_vasm.sh        # build/asm/nhl94.bin == the ROM; build/asm/symbols.json = every label
+make oracle                            # build/nhl_oracle.so: the emulator with the capture hook
+make vectors                           # saved states, snapshots, lockstep and hardware vectors (out/)
+tools/hybrid/capture_all.sh            # the 29 capture sessions (out/captures/*.cap)
+make test                              # the function-level tests: every capture against the C port
+make lockstep                          # the native game against the oracle at every vblank
+make runtime-check                     # md-runtime's tests on this game's vectors
 ```
 
-## Function-level tests
-
-```
-make oracle                    # build/nhl_oracle.so: the emulator with the capture hook
-tools/hybrid/capture_all.sh    # records the sixteen standard sessions into out/captures/*.cap
-python3 tools/hybrid/capture.py "NHL 94 (UE) [!].gen" --fn checkcoll,checkcx --out out/captures/x.cap --frames 600
-make test                      # replays every capture in out/captures against the C port
-```
+`docs/HANDOFF.md` section 2 has the details; `tools/oracle/vectors.py` holds every recipe.
