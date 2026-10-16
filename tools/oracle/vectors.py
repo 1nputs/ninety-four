@@ -10,7 +10,7 @@ record makes whatever is missing (everything with --force), states and snapshots
 vectors that start from them. check runs `build/nhl94 --lockstep` on every lockstep vector and
 fails when one differs or stops early. NAME picks entries (a state, snapshot or vector name).
 --root (default out) holds states/ and vectors/, so a whole set can be made again elsewhere and
-checked there. md-runtime reads the same vectors (`make runtime-check`); `make relaytest` reads
+checked there. pulseman reads the same vectors (`make runtime-check`); `make relaytest` reads
 the sound traces.
 """
 import argparse, os, re, subprocess, sys, time
@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 ROM = os.environ.get('NHL94_ROM', 'NHL 94 (UE) [!].gen')
-MDRT = os.environ.get('MDRT', os.path.join(REPO, '..', 'md-runtime'))
+MDRT = os.environ.get('MDRT', os.path.join(REPO, 'ext', 'pulseman'))
 BOOT = 'boot_to_game.txt'          # Start at frames 900, 1500, 2100, 2700, 3300: into a faceoff
 RANDOM = 'random_seed94.txt'       # the random input of the one-player sessions
 
@@ -60,7 +60,7 @@ VECTORS = [
     ('pause_menus3', 'lockstep', dict(frames=10600, state='demo_faceoff', snap='demo_faceoff', script='pause_menus3.txt')),
     ('replay_menu', 'lockstep', dict(frames=4700, state='faceoff', snap='faceoff', script='replay_menu.txt')),
     ('demo1p', 'lockstep', dict(frames=18000, skip=23, state='demo1p_faceoff', snap='demo1p_faceoff', script=RANDOM)),   # skip: to the snapshot's frame
-    # VDP traces for md-runtime's vdp_trace (port accesses, DMA sources, the state and picture a frame)
+    # VDP traces for pulseman's vdp_trace (port accesses, DMA sources, the state and picture a frame)
     ('boot', 'vdptrace', dict(frames=90, skip=30, script=BOOT)),
     ('title', 'vdptrace', dict(frames=90, skip=800, script=BOOT)),
     ('setup', 'vdptrace', dict(frames=90, skip=1480, script=BOOT)),
@@ -69,12 +69,12 @@ VECTORS = [
     ('faceoff', 'vdptrace', dict(frames=120, state='faceoff')),
     ('play', 'vdptrace', dict(frames=120, skip=1200, state='demo_faceoff')),
     ('pause', 'vdptrace', dict(frames=150, skip=300, state='faceoff', script='320:START,330:,400:DOWN,405:,420:DOWN,425:')),
-    ('vdptest', 'vdptrace', dict(frames=290, skip=30, rom=os.path.join(MDRT, 'build', 'vdptest.bin'),   # md-runtime's test ROM
-                                      hint=' (in md-runtime: tests/rom/build.sh)')),
-    # pad reads for md-runtime's pad_trace
+    ('vdptest', 'vdptrace', dict(frames=290, skip=30, rom=os.path.join(MDRT, 'build', 'vdptest.bin'),   # pulseman's test ROM
+                                      hint=' (in pulseman: tests/rom/build.sh)')),
+    # pad reads for pulseman's pad_trace
     ('play', 'padtrace', dict(frames=900, state='faceoff', script=RANDOM,
                               script2='100:A,110:,200:B+UP,230:,300:C+LEFT,320:START,330:,400:RIGHT+DOWN,420:')),
-    # sound: every chip write with its master clock (md-runtime's chip tests; the Z80 relay test)
+    # sound: every chip write with its master clock (pulseman's chip tests; the Z80 relay test)
     ('boot', 'sndtrace', dict(frames=3000, script=BOOT)),
     ('game', 'sndtrace', dict(frames=6000, script=BOOT)),
     ('game_psg', 'sndtrace', dict(frames=6000, script=BOOT, extra=['--fm-preamp', '0'])),

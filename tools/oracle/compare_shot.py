@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare a picture of the native game (a PPM from `nhl94 [--snap S] --headless --frames N --shot F.ppm`)
 with the oracle's after the same number of frames from the same state: both reduced to the VDP's
-3 bits a colour channel (the oracle's frame buffer is RGB565, the native PPM uses md-runtime's
+3 bits a colour channel (the oracle's frame buffer is RGB565, the native PPM uses pulseman's
 levels), so the comparison is of VDP colours.
 
 usage: compare_shot.py ROM [--state STATE] --frames N SHOT.ppm [--around K]   (also N-K .. N+K;

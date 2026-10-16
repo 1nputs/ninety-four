@@ -1,4 +1,4 @@
-/* The native game: NHL '94 on md-runtime (../md-runtime), with the Z80's sound relay (src/z80.c)
+/* The native game: NHL '94 on pulseman (ext/pulseman), with the Z80's sound relay (src/z80.c)
  * feeding its FM chip. */
 #pragma once
 #include <stdint.h>
@@ -24,7 +24,7 @@ void native_hal_start(mdrt *m, uint64_t start);
 /* the game loop from setvideo's wait at a frame's end (main.c) */
 void native_resume_game_loop(void);
 
-/* states (state.c): md-runtime's console and the game's parts (work RAM, the Z80 relay, the C
+/* states (state.c): pulseman's console and the game's parts (work RAM, the Z80 relay, the C
  * port's registers kept across routines, the HAL's clock), taken at the game loop's wait */
 void native_states_init(mdrt *m, const char *path, int rewind);   /* path: the F5 / F9 file */
 int native_load_state_file(const char *path);       /* 0: loaded (then run68k(native_resume_game_loop)) */

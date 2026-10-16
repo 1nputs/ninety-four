@@ -461,8 +461,8 @@ void oracle_vdp_get(uint8_t *out_vram, uint8_t *out_cram, uint8_t *out_vsram, ui
   memcpy(out_zram, zram, 0x2000);
 }
 
-/* ---- VDP test vectors for md-runtime (.vdptrace) ------------------------------------------
- * (The three md-runtime formats are specified in ../md-runtime/docs/VECTORS.md; a change here
+/* ---- VDP test vectors for pulseman (.vdptrace) ------------------------------------------
+ * (The three pulseman formats are specified in ext/pulseman/docs/VECTORS.md; a change here
  * changes that file and its readers in the same commit.)
  * Every VDP port access of the 68k in order with its time, the 68k bytes each DMA from the 68k bus
  * will read, and at the start of each vblank (v_counter reaching the active height) a FRAME
@@ -597,7 +597,7 @@ void oracle_vdptrace_close(void) {
   vt = NULL;
 }
 
-/* ---- pad port test vectors for md-runtime (.padtrace) --------------------------------------
+/* ---- pad port test vectors for pulseman (.padtrace) --------------------------------------
  * "MDPT", version u32 = 1, the 16 I/O registers at the start (io_reg: version, data 1-3, control
  * 1-3, serial ...); then records: tag u8
  *   1 FRAME  buttons u16 port 1, buttons u16 port 2 (bits: 0 up, 1 down, 2 left, 3 right, 4 B,
@@ -628,7 +628,7 @@ void oracle_padtrace_frame(uint32_t b1, uint32_t b2) {
 }
 void oracle_padtrace_close(void) { if (pt) { pt_u8(4); fclose(pt); pt = NULL; } }
 
-/* ---- sound test vectors for md-runtime and the Z80 relay (.sndtrace) -----------------------
+/* ---- sound test vectors for pulseman and the Z80 relay (.sndtrace) -----------------------
  * "MDST", version u32 = 3, the oracle's audio rate u32 (Hz), its FM and PSG preamps u16 each (in
  * percent: GPGX's defaults are 100 and 150; 0 leaves that chip out of the audio), flags u32 (bit 0:
  * recorded from power on, so every write the chips had is in the trace; otherwise they start in a

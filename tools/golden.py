@@ -2,7 +2,7 @@
 """Golden runs: the native game headless from power on (or a snapshot) with scripted input, a line
 of hashes a frame (nhl94 --golden: work RAM, the VDP state and Z80 RAM at the game's wait, the
 picture, the frame's sound). `record` keeps a build's runs in out/golden; `check` runs the build
-again and compares, frame by frame, so a change to md-runtime or the native client can be shown
+again and compares, frame by frame, so a change to pulseman or the native client can be shown
 to change nothing it was not meant to. The runs use a fixed HV counter stand-in (main.c), so
 changes to the runtime's HV model do not show; everything else must match bit for bit.
 

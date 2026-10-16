@@ -1,4 +1,4 @@
-/* hal.h on md-runtime: the VDP, pads and save RAM are the runtime's; the Z80 is src/z80.c, the
+/* hal.h on pulseman: the VDP, pads and save RAM are the runtime's; the Z80 is src/z80.c, the
  * sound relay ported to C, whose YM2612 writes go to the runtime's FM chip at their time.
  *
  * Time: the runtime makes each frame's sound at the handshake, every write at its master clock in

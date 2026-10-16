@@ -1,4 +1,4 @@
-/* NHL '94 on Linux: the C game on md-runtime (../md-runtime) in an SDL2 window, with sound. It
+/* NHL '94 on Linux: the C game on pulseman (ext/pulseman) in an SDL2 window, with sound. It
  * starts from power on (Start: the EA screen, the title, the setup screen ...); --snap FILE starts
  * from a snapshot of the oracle instead (tools/oracle/snapshot.py: RAM, VDP, Z80 RAM, the sound
  * chips' registers, the Z80's place, taken at a game-loop wait such as a faceoff's) and enters the
@@ -12,14 +12,14 @@
  *
  * --headless runs without a window or pacing (as fast as it goes): with --frames it stops, --shot
  * writes the last picture, --wav the sound, --input plays pad 1 from a script (tools/oracle/scripts)
- * and --golden writes a line of hashes a frame (make golden). Keys: md-runtime's
+ * and --golden writes a line of hashes a frame (make golden). Keys: pulseman's
  * (include/mdrt/platform_sdl2.h): pad 1 arrows, Z / X / C = A / B / C, Enter = Start; pad 2 I J K L,
  * Q / W / E, Tab; two game controllers; Esc quits, P pauses, F11 full screen; F5 saves a state
  * (into --state FILE, out/nhl94.state), F9 loads it, Backspace held steps back (state.c).
  * --load-state FILE starts from a native state; --save-state FRAME:FILE (headless) saves one at
- * the first game loop wait from that frame on. --record DIR has md-runtime write the run's
+ * the first game loop wait from that frame on. --record DIR has pulseman write the run's
  * .vdptrace, .padtrace and .sndtrace into DIR (make runtime-selfcheck replays them). --fm-core and
- * --fm-model choose md-runtime's FM core (Nuked-OPN2 by default) and the chip (the YM2612 of the
+ * --fm-model choose pulseman's FM core (Nuked-OPN2 by default) and the chip (the YM2612 of the
  * first consoles by default, or the later YM3438). --watch prints work RAM words (hex addresses,
  * e.g. FFC472) at frame 1 and whenever they change. */
 #include <setjmp.h>
@@ -41,7 +41,7 @@ static uint32_t watch[16];              /* --watch: work RAM words printed when 
 static uint16_t watched[16];
 static int nwatch;
 static int fm_model;
-static FILE *traces[3];                 /* --record: md-runtime's .vdptrace, .padtrace, .sndtrace of the run */
+static FILE *traces[3];                 /* --record: pulseman's .vdptrace, .padtrace, .sndtrace of the run */
 static long save_state_frame = -1;
 static int states, rewind_states;       /* states on (the window, or --save-state / --load-state); rewind (the window) */
 static long stop_after = -1, shots_every = 600;
@@ -218,7 +218,7 @@ void native_game(mdrt *m, void *user)
 /* golden runs (--golden FILE): a line a frame with hashes of work RAM, the VDP state and Z80 RAM
  * at the game's wait, the picture and the frame's sound, so two builds can be compared bit for
  * bit (make golden, make golden-check). The HV counter comes from a stand-in fixed here (the
- * beam md-runtime reported until 2026-10-16), so changes to the runtime's HV model do not show. */
+ * beam pulseman reported until 2026-10-16), so changes to the runtime's HV model do not show. */
 static FILE *golden;
 static uint64_t golden_ram, golden_vdp, golden_z80, golden_pic;
 static uint32_t golden_beam;
@@ -462,7 +462,7 @@ int main(int argc, char **argv)
     c.platform = (mdrt_platform){ .present = golden ? golden_present : NULL, .audio = wav_audio };
     if (script_requests) c.platform.requests = script_request;
     mdrt *m = mdrt_new(&c);
-    if (!m) { fprintf(stderr, "no FM core %s in this build of md-runtime\n", fm_core ? fm_core : "(default)"); return 1; }
+    if (!m) { fprintf(stderr, "no FM core %s in this build of pulseman\n", fm_core ? fm_core : "(default)"); return 1; }
     if (lockstep_path && !lockstep_load(lockstep_path, m)) return 1;
     if (golden) mdrt_set_hv_source(m, golden_hv, m);
     if (input_path) mdrt_set_pad_source(m, script_source, m);

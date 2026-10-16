@@ -66,7 +66,7 @@ static int run(const char *path)
         }
         switch (t) {
         case 1: want[nwant++] = (struct w){ time, d[o], d[o + 1] }; o += 2; break;
-        case 2: o += 1; break;                            /* PSG: md-runtime's */
+        case 2: o += 1; break;                            /* PSG: pulseman's */
         case 3: z80_ram[u16(d + o) & 0x1FFF] = d[o + 2]; o += 3; break;
         case 4: z80_relay_busreq(u16(d + o)); o += 2; break;
         case 5: z80_relay_reset(u16(d + o)); o += 2; break;

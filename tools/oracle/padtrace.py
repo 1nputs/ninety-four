@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record a pad port test vector (.padtrace) for md-runtime: the 68k's accesses to the I/O ports
+"""Record a pad port test vector (.padtrace) for pulseman: the 68k's accesses to the I/O ports
 ($A10000-$A1001F) and, every frame, the buttons held on pads 1 and 2.
 
 usage: padtrace.py ROM --out FILE.padtrace [--state STATE] [--frames N] [--script S] [--script2 S]

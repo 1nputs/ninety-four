@@ -15,6 +15,7 @@ Bring your own cartridge dump and you're on the ice in a minute (what to install
 under [Build](#build)):
 
 ```
+git clone --recursive https://github.com/1nputs/ninety-four.git && cd ninety-four
 make nhl94
 ./build/nhl94 --rom "/path/to/NHL 94.gen"   # the 1 MB retail ROM (US/Europe)
 ```
@@ -30,10 +31,12 @@ rewinds, P pauses, F11 is full screen, Esc quits.
 
 ## Build
 
-You need this repository and md-runtime side by side (`../md-runtime`), GCC
-(C and C++), `make`, `pkg-config` and SDL2. `make nhl94` builds md-runtime too. The game itself
-must be built with GCC for now: its RAM layout uses a GCC-only attribute until the planned
-WebAssembly work replaces it. Your saves and states go to `out/` in this repository.
+The hardware side is [pulseman](https://github.com/1nputs/pulseman), our Mega Drive runtime,
+included as a git submodule in `ext/pulseman`: clone with `--recursive`, or after a plain clone
+run `git submodule update --init`. `make nhl94` builds it too. Besides that you need GCC (C and
+C++), `make`, `pkg-config` and SDL2. The game itself must be built with GCC for now: its RAM
+layout uses a GCC-only attribute until the planned WebAssembly work replaces it. Your saves and
+states go to `out/` in this repository.
 
 **Linux** (built and tested here, Debian 13, GCC 14):
 
@@ -74,24 +77,26 @@ tell us what it said.
 - **What it is.** A hand-written C reimplementation of NHL '94 (Genesis, US/Europe retail, SHA-1
   `7b1489ab501258133bf03e5f0892b77d04312580`). `src/` has one C file per asm module of the
   community's byte-exact rebuild (34 modules, about 1,500 routines, the same names). The Z80's
-  661-byte sound relay is ported too (`src/z80.c`). It runs on **md-runtime** (`../md-runtime`,
-  MIT): the VDP, PSG, YM2612, pads and save RAM as C modules, with an SDL2 platform. There is no
-  68k or Z80 emulation.
+  661-byte sound relay is ported too (`src/z80.c`). It runs on **pulseman**
+  ([1nputs/pulseman](https://github.com/1nputs/pulseman), MIT, the git submodule `ext/pulseman`;
+  its C API keeps the `mdrt_` prefix): the VDP, PSG, YM2612, pads and save RAM as C modules,
+  with an SDL2 platform. There is no 68k or Z80 emulation. A change to pulseman is committed and
+  pushed there, then the submodule's new commit is committed here.
 - **How it is verified.** Genesis Plus GX with a hook (the oracle, a development tool only)
   records real play. `make test` replays 10,197 recorded routine calls. `make lockstep` runs 17
   whole sessions against the oracle, checking work RAM and VDP at every vblank. `make
   golden-check` compares the native build's own output with a recorded build, bit for bit
-  (88,000 frames), plus save-state round trips. md-runtime is checked on the oracle's vectors
+  (88,000 frames), plus save-state round trips. pulseman is checked on the oracle's vectors
   (`make runtime-check`) and on this game's own recordings (`make runtime-selfcheck`).
 - **Done.** The harness, the game-play core, video and sound, the frame drivers, native running,
   lockstep, the whole front end (it boots from power on), a cleanup, golden runs, native save
-  states and rewind. In md-runtime: the console's state as a value, a client-owned clock with
+  states and rewind. In pulseman: the console's state as a value, a client-owned clock with
   line-by-line drawing and an H-interrupt hook, a bus map, FM cores and models chosen at run
   time, and a trace recorder.
 - **Deferred by the owner.** WebAssembly (it first needs `src/ram.h`'s GCC-only big-endian
   struct replaced: the choice is part of that job) and the cartridge's slowdown (it needs a 68k
   cost model).
-- **Read first.** `../md-runtime/README.md` and `docs/API.md` there; the comments at the top
+- **Read first.** `ext/pulseman/README.md` and `docs/API.md` there; the comments at the top
   of `tools/oracle/vectors.py`, `tools/golden.py` and `tools/hybrid/oracle_shim.c`. The working
   notes (the handoff guide, the plan, the playbook for another game) are kept outside the
   repository.
@@ -177,5 +182,5 @@ Big, big greets to everyone whose work this stands on:
   [Plutiedev](https://plutiedev.com), [Sega Retro](https://segaretro.org),
   [SMS Power](https://www.smspower.org) (the SN76489) and the
   [SpritesMind](https://gendev.spritesmind.net) forum (Nemesis's YM2612 and VDP research).
-- **[Zig](https://ziglang.org)**, whose bundled Clang checks md-runtime against a second
+- **[Zig](https://ziglang.org)**, whose bundled Clang checks pulseman against a second
   compiler.

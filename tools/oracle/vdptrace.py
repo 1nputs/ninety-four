@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record a VDP test vector (.vdptrace) for md-runtime: the 68k's VDP port accesses, DMA source
+"""Record a VDP test vector (.vdptrace) for pulseman: the 68k's VDP port accesses, DMA source
 bytes, and per frame the VDP state and the picture (format: tools/hybrid/oracle_shim.c).
 
 usage: vdptrace.py ROM --out FILE.vdptrace [--state STATE] [--frames N] [--script S] [--skip N]

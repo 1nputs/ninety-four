@@ -1,4 +1,4 @@
-/* States of the native game: md-runtime's whole console (mdrt_get_state) with the game's own
+/* States of the native game: pulseman's whole console (mdrt_get_state) with the game's own
  * parts, work RAM ("RAM "), the Z80 relay ("Z80 ": its RAM and its place in its program) and
  * "NHL " (the C port's registers kept across routines: elapsed, the assignment dispatch's d2, the
  * line editor's d6 / d7; and the HAL's clock). A state is taken at the game loop's wait (setvideo's,

@@ -1,0 +1,3 @@
+[submodule "ext/pulseman"]
+	path = ext/pulseman
+	url = https://github.com/1nputs/pulseman.git

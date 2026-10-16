@@ -1,11 +1,11 @@
 # ninety-four: NHL '94 rebuilt in C.
-#   make nhl94          the native game (build/nhl94, on md-runtime at MDRT)
+#   make nhl94          the native game (build/nhl94, on pulseman at MDRT)
 #   make test           the function-level capture tests (out/captures/*.cap)
 #   make lockstep       the native game against the oracle at every vblank (out/vectors/*.lockstep)
 #   make vectors        record the saved states, snapshots and test vectors that are missing
-#   make runtime-check  md-runtime's tests on this game's vectors
+#   make runtime-check  pulseman's tests on this game's vectors
 #   make golden         record the native game's golden runs (out/golden; make golden-check compares)
-#   make runtime-selfcheck  md-runtime's tests on the native game's own traces (nhl94 --record)
+#   make runtime-selfcheck  pulseman's tests on the native game's own traces (nhl94 --record)
 #   make relaytest      the Z80 relay port against the sound traces
 #   make oracle         the hooked oracle core (build/nhl_oracle.so)
 #   make gen            regenerate the committed headers from ref/ and the asm rebuild
@@ -27,8 +27,9 @@ test: build/captest
 	@test -n "$(CAPS)" || { echo "no captures in out/captures: tools/hybrid/capture_all.sh records them"; exit 1; }
 	./build/captest $(CAPS)
 
-# the native game: build/nhl94, on md-runtime (MDRT, its release build with the SDL2 platform)
-MDRT   ?= ../md-runtime
+# the native game: build/nhl94, on pulseman (MDRT: the git submodule ext/pulseman, or another
+# checkout; its release build with the SDL2 platform)
+MDRT   ?= ext/pulseman
 NATIVE := $(wildcard native/*.c)
 MDRTB  ?= build/release
 MDRTLIBS := $(MDRT)/$(MDRTB)/libmdrt_sdl2.a $(MDRT)/$(MDRTB)/libmdrt.a
@@ -37,7 +38,7 @@ EXE    ?= .exe
 # (Windows: the C++ runtime linked in, so the game needs only SDL2.dll beside it)
 CXXLIB ?= -static-libgcc -Wl,-Bstatic -lstdc++ -Wl,--whole-archive -lwinpthread -Wl,--no-whole-archive -Wl,-Bdynamic
 endif
-# (md-runtime's ymfm core is C++)
+# (pulseman's ymfm core is C++)
 CXXLIB ?= -lstdc++
 nhl94: build/nhl94$(EXE)
 # (Windows: SDL2's -mwindows is left out, so the game keeps its console; out/ is where save RAM
@@ -48,6 +49,7 @@ build/nhl94$(EXE): $(SRC) $(HDR) $(NATIVE) native/native.h native/routines_gen.h
 	$(CC) $(CFLAGS) -O2 -Isrc -Inative -I$(MDRT)/include $(shell pkg-config --cflags sdl2) -finstrument-functions \
 	    -finstrument-functions-exclude-file-list=native/ -o $@ $(SRC) $(NATIVE) $(MDRTLIBS) $(SDLLIBS) -lm $(CXXLIB)
 mdrt:
+	@test -f $(MDRT)/Makefile || { echo "no pulseman at $(MDRT): git submodule update --init (or make MDRT=path/to/pulseman)"; exit 1; }
 	$(MAKE) -C $(MDRT) MODE=release B=$(MDRTB) sdl
 
 # the saved states, snapshots and vectors (tools/oracle/vectors.py holds the recipes)
@@ -57,7 +59,7 @@ lockstep: build/nhl94
 	$(PY) tools/oracle/vectors.py check
 runtime-check:
 	$(MAKE) -C $(MDRT) check MDRT_VECTORS=$(abspath out/vectors) MDRT_REQUIRE_VECTORS=1
-# md-runtime's tests on the native game's own traces (nhl94 --record): 600 frames of play
+# pulseman's tests on the native game's own traces (nhl94 --record): 600 frames of play
 runtime-selfcheck: build/nhl94
 	@test -f out/states/faceoff.snap || { echo "runtime-selfcheck needs out/states/faceoff.snap: make vectors"; exit 1; }
 	@mkdir -p out/selfvectors

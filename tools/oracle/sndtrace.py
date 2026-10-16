@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record a sound test vector (.sndtrace) for md-runtime and the Z80 relay port: every YM2612
+"""Record a sound test vector (.sndtrace) for pulseman and the Z80 relay port: every YM2612
 and PSG write with its time, the 68k's writes to Z80 RAM and the Z80 bus, and the oracle's audio
 output (format: tools/hybrid/oracle_shim.c).
 
@@ -7,7 +7,7 @@ usage: sndtrace.py ROM --out FILE.sndtrace [--state STATE] [--frames N] [--skip 
                    [--fm-preamp P] [--psg-preamp P]   (percent, GPGX's defaults 100 / 150; 0 mutes
                                                        that chip in the recorded audio)
                    [--ym2612 mame|nuked]              (the oracle's FM core: MAME's, the default, or
-                                                       Nuked-OPN2, md-runtime's)
+                                                       Nuked-OPN2, pulseman's)
 """
 import argparse, ctypes as C, os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'hybrid'))
