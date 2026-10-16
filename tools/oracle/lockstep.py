@@ -2,13 +2,13 @@
 """Record a lockstep vector (.lockstep) for the native game: at each vblank interrupt, where the
 68k was, the pads, the HV counter reads since the last one, and hashes of work RAM and the VDP
 (format: tools/hybrid/oracle_shim.c). The native game replays the pads and HV reads and checks
-the hashes at each of its vblank waits (nhl94 --lockstep FILE).
+the hashes at each of its vblank waits (nhl94 [--snap SNAPSHOT] --lockstep FILE).
 
 usage: lockstep.py ROM [--state STATE] --out FILE.lockstep [--frames N] [--script S] [--skip N]
        (the script's frames count from the state; faceoff.snap is faceoff.state; --skip runs N
-       frames first, as snapshot.py --game-loop reported, so the recording starts at its snapshot.
-       Without --state the recording starts at power on, with save RAM blank ($FF), for
-       `nhl94 --boot --lockstep FILE`)
+       frames first, as snapshot.py --game-loop reported, so the recording starts at its snapshot:
+       `nhl94 --snap SNAPSHOT --lockstep FILE`. Without --state the recording starts at power on,
+       with save RAM blank ($FF), for `nhl94 --lockstep FILE`)
 """
 import argparse, os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'hybrid'))

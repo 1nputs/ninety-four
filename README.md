@@ -4,20 +4,22 @@ A behaviour-verified C reimplementation of EA's NHL '94 for the Sega Genesis, bu
 community's byte-matching assembly rebuild. See `docs/PLAN.md` for the approach and
 `docs/HANDOFF.md` for the working guide (setup, porting recipe, status, quirks, next steps).
 
-Status: the game-play core and its game loop, video94, sound94 (68k half) and the game-play helpers
-of the front-end modules are ported to `src/` and pass 8616 recorded function-level
-tests with 0 mismatches. The game does not run natively yet (see the plan's phases 3-4).
+Status: the whole game is ported to `src/`, from power on (the EA screen, the title, the setup
+screen, the name entry, the playoffs, the scouting report) through the game, its menus and
+screens, the intermissions and highlights to the game over, with the Z80's sound relay in C. It
+passes 10065 recorded function-level tests and frame-by-frame lockstep runs against the oracle
+emulator (work RAM and VDP at every vblank wait) with 0 mismatches. It runs natively on
+md-runtime (`../md-runtime`) with sound.
 
-## Play (no sound or menus yet)
+## Play
 
 ```
 make nhl94
-python3 tools/oracle/snapshot.py "NHL 94 (UE) [!].gen" --state out/states/faceoff.state --out out/states/faceoff.snap
 ./build/nhl94
 ```
 
-Arrows, Z / X / C, Enter (or a game controller). It starts at a faceoff of a game in progress;
-the menus and title screen are not ported yet. See `docs/HANDOFF.md` section 9.
+Arrows, Z / X / C, Enter (or a game controller); pad 2 is I J K L, Q / W / E, Tab. It starts at
+power on; `--snap FILE` starts from an oracle snapshot instead. See `docs/HANDOFF.md` section 9.
 
 ## Setup
 

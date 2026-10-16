@@ -1,8 +1,8 @@
-/* NHL '94 on Linux: the C game on md-runtime (../md-runtime) in an SDL2 window, with sound. Until
- * the front end is ported it starts from a snapshot of the oracle taken at a faceoff
- * (tools/oracle/snapshot.py: RAM, VDP, Z80 RAM, the sound chips' registers, the Z80's place) and
- * enters the game loop; --boot starts from power on instead (Start: the EA screen, the title,
- * then as far as the front end is ported).
+/* NHL '94 on Linux: the C game on md-runtime (../md-runtime) in an SDL2 window, with sound. It
+ * starts from power on (Start: the EA screen, the title, the setup screen ...); --snap FILE starts
+ * from a snapshot of the oracle instead (tools/oracle/snapshot.py: RAM, VDP, Z80 RAM, the sound
+ * chips' registers, the Z80's place, taken at a game-loop wait such as a faceoff's) and enters the
+ * game loop. --boot (power on) is the default and still accepted.
  *
  * usage: nhl94 [--rom FILE] [--snap FILE | --boot] [--scale N] [--aspect] [--sram FILE]
  *              [--headless] [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE]
@@ -24,9 +24,9 @@
 #include "native.h"
 #include "mdrt/platform_sdl2.h"
 
-static const char *snap = "out/states/faceoff.snap", *shot_path, *shots_dir, *wav_path, *lockstep_path;
+static const char *snap, *shot_path, *shots_dir, *wav_path, *lockstep_path;
 static long stop_after = -1, shots_every = 600;
-static int boot;
+static int boot = 1;                    /* power on, unless --snap */
 static jmp_buf out;
 
 /* ---- the snapshot --------------------------------------------------------------------------- */
@@ -213,7 +213,7 @@ int main(int argc, char **argv)
     int scale = 3, aspect = 0, headless = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--rom") && i + 1 < argc) rom = argv[++i];
-        else if (!strcmp(argv[i], "--snap") && i + 1 < argc) snap = argv[++i];
+        else if (!strcmp(argv[i], "--snap") && i + 1 < argc) { snap = argv[++i]; boot = 0; }
         else if (!strcmp(argv[i], "--boot")) boot = 1;
         else if (!strcmp(argv[i], "--scale") && i + 1 < argc) scale = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--aspect")) aspect = 1;
