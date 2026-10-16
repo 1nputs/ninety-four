@@ -13,9 +13,12 @@
  * --headless runs without a window or pacing (as fast as it goes): with --frames it stops, --shot
  * writes the last picture, --wav the sound, --input plays pad 1 from a script (tools/oracle/scripts)
  * and --golden writes a line of hashes a frame (make golden). Keys: pulseman's
- * (include/mdrt/platform_sdl2.h): pad 1 arrows, Z / X / C = A / B / C, Enter = Start; pad 2 I J K L,
- * Q / W / E, Tab; two game controllers; Esc quits, P pauses, F11 full screen; F5 saves a state
- * (into --state FILE, out/nhl94.state), F9 loads it, Backspace held steps back (state.c).
+ * (include/mdrt/platform_sdl2.h, all of them changeable in its settings file): pad 1 arrows,
+ * Z / X / C = A / B / C, Enter = Start; pad 2 I J K L, Q / W / E, Tab; two game controllers; Esc
+ * quits, P pauses, F11 full screen, Space held fast-forward, "," slow motion, "." a frame while
+ * paused, F12 a screenshot, "-" / "=" volume, M mute, F6 / F7 scaling and aspect; F5 saves a state
+ * (into --state FILE, out/nhl94.state), F9 loads it, Backspace held steps back (state.c). --scale
+ * and --aspect set the window for this run (otherwise the settings' size and aspect).
  * --load-state FILE starts from a native state; --save-state FRAME:FILE (headless) saves one at
  * the first game loop wait from that frame on. --record DIR has pulseman write the run's
  * .vdptrace, .padtrace and .sndtrace into DIR (make runtime-selfcheck replays them). --fm-core and
@@ -420,7 +423,7 @@ static void make_parent(const char *path)
 int main(int argc, char **argv)
 {
     const char *rom = "NHL 94 (UE) [!].gen", *sram = "out/nhl94.srm";
-    int scale = 3, aspect = 0, headless = 0;
+    int scale = 0, aspect = 0, headless = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--rom") && i + 1 < argc) rom = argv[++i];
         else if (!strcmp(argv[i], "--snap") && i + 1 < argc) { snap = argv[++i]; boot = 0; }
@@ -473,7 +476,7 @@ int main(int argc, char **argv)
     c.sram_size = 0x2000;
     c.read68k = read68k;
     if (!headless) {
-        mdrt_sdl_options o = { "NHL '94", scale, aspect, sram };
+        mdrt_sdl_options o = { .title = "NHL '94", .scale = scale, .aspect = aspect, .sram_path = sram, .app = "ninety-four" };
         return mdrt_sdl_run(&c, &o, native_game, NULL);
     }
     if (wav_path && !(wav = fopen(wav_path, "wb"))) { fprintf(stderr, "cannot write %s\n", wav_path); return 1; }

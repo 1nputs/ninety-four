@@ -9,6 +9,7 @@
 # build products and run output
 /build/
 /out/
+/screenshots/
 __pycache__/
 *.o
 *.so

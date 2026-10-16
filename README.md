@@ -9,7 +9,8 @@ apart. The same one-timers, the same diving saves, the same organ, the same Gret
 frames a second, without the cartridge's slowdown.
 
 And things the cartridge never had: **save in the middle of a game (F5), load it back (F9), and
-hold Backspace to rewind** the goal you just gave up.
+hold Backspace to rewind** the goal you just gave up. Hold Space to fast-forward, slow the replay
+of that one-timer down, step through it a frame at a time, and press F12 to keep it.
 
 Bring your own cartridge dump and you're on the ice in a minute (what to install first is
 under [Build](#build)):
@@ -26,8 +27,26 @@ make nhl94
 | A / B / C | Z / X / C | Q / W / E |
 | Start | Enter | Tab |
 
-Game controllers work too (the first two are players 1 and 2). F5 saves, F9 loads, Backspace
-rewinds, P pauses, F11 is full screen, Esc quits.
+Game controllers work too (the first two are players 1 and 2).
+
+| Key | |
+|---|---|
+| F5 / F9 | save / load a state |
+| Backspace (held) | rewind |
+| Space (held) | fast-forward |
+| , | slow motion on / off |
+| P, then . | pause, then a frame at a time |
+| F12 | screenshot (a PNG in `screenshots/`) |
+| - / = and M | volume down / up, mute |
+| F6 / F7 | scaling (sharp, integer, fit) / aspect (square pixels, 4:3) |
+| F11 or Alt+Enter | full screen |
+| Esc | quit |
+
+Every key (both pads' too), the window, the scaling, the sound and more are kept in a settings
+file you can edit while the game is closed: `~/.local/share/pulseman/ninety-four/settings.ini`
+on Linux, `%APPDATA%\pulseman\ninety-four\settings.ini` on Windows,
+`~/Library/Application Support/pulseman/ninety-four/settings.ini` on macOS. The game pauses when
+its window loses focus (`general.pause_on_focus_loss = 0` turns that off).
 
 ## Build
 
@@ -126,12 +145,14 @@ From the least ambitious to the most.
 - [x] Save states (F5 / F9) and rewind (Backspace)
 - [x] FM core and chip model choice (`--fm-core nuked|ymfm`, `--fm-model ym2612|ym3438`)
 - [x] Headless runs: screenshots, WAV, scripted input, RAM watch (`--watch`), trace recording (`--record`)
-- [ ] Mute, volume, audio device and latency options
-- [ ] A settings file (window, scaling, volume, keys)
-- [ ] Integer and sharp-bilinear scaling, hi-DPI
+- [x] Mute, volume, audio device and latency options
+- [x] A settings file (window, scaling, volume, keys), every key rebindable
+- [x] Integer and sharp-bilinear scaling, hi-DPI
+- [x] Screenshot key (PNG)
+- [x] Fast-forward, slow motion, frame step
+- [x] Pause when the window loses focus
 - [ ] Controller remapping: profiles (B/C swap, pads labelled A B C), player slots, turbo, dead zones
-- [ ] Screenshot key; video and audio capture
-- [ ] Fast-forward, slow motion, frame step
+- [ ] Video and audio capture
 - [ ] Save slots with thumbnails; quick resume on quit and start
 - [ ] Skip the EA screen, boot straight into a game
 - [ ] Colour options; scanlines, CRT mask, composite dither blending

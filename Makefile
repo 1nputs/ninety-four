@@ -59,11 +59,11 @@ lockstep: build/nhl94
 	$(PY) tools/oracle/vectors.py check
 runtime-check:
 	$(MAKE) -C $(MDRT) check MDRT_VECTORS=$(abspath out/vectors) MDRT_REQUIRE_VECTORS=1
-# pulseman's tests on the native game's own traces (nhl94 --record): 600 frames of play
+# pulseman's tests on the native game's own traces (nhl94 --record): 600 frames of play, headless
 runtime-selfcheck: build/nhl94
 	@test -f out/states/faceoff.snap || { echo "runtime-selfcheck needs out/states/faceoff.snap: make vectors"; exit 1; }
 	@mkdir -p out/selfvectors
-	./build/nhl94 --snap out/states/faceoff.snap --input tools/oracle/scripts/random_seed94.txt --frames 600 --record out/selfvectors
+	./build/nhl94 --headless --snap out/states/faceoff.snap --input tools/oracle/scripts/random_seed94.txt --frames 600 --record out/selfvectors
 	$(MAKE) -C $(MDRT) check MDRT_VECTORS=$(abspath out/selfvectors)
 # golden runs: the native game's own output, frame by frame, against a build's recorded runs
 golden: build/nhl94
