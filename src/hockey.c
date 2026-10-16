@@ -156,7 +156,7 @@ void clockcont(void)
     if (g.gmode & (1 << gmclock)) return;
     if (g.gameclock != 0) return;
     g.disflags |= HI(dfclock);
-    stop_current_song(0);                                /* periodicevents' d0 is not followed (HANDOFF: register leaks) */
+    stop_current_song(0);                                /* periodicevents' d0 is not followed (a register leak) */
     sfx(SYM_SFXhorn);
     freezewindow();
     clockcont_0();
@@ -288,7 +288,7 @@ void DoGameFrame(void)
     periodicevents();
     updateplayers();
     if ((int16_t)g.songdelay > 0 && --g.songdelay == 0) {
-        stop_current_song(0);                             /* updateplayers' d0 is not followed (HANDOFF: register leaks) */
+        stop_current_song(0);                             /* updateplayers' d0 is not followed (a register leak) */
         song((int16_t)g.delayedsong);
     }
     setSlotBit();

@@ -89,9 +89,10 @@ tell us what it said.
 - **Deferred by the owner.** WebAssembly (it first needs `src/ram.h`'s GCC-only big-endian
   struct replaced: the choice is part of that job) and the cartridge's slowdown (it needs a 68k
   cost model).
-- **Read first.** `docs/HANDOFF.md` (the living guide: setup, recipe, status, quirks, next
-  steps), `docs/PLAN.md`, `../md-runtime/README.md`, and `../md-recomp-playbook/` (the method
-  for another game; the runtime's directions; netplay, mods and scripting; quality of life).
+- **Read first.** `../md-runtime/README.md` and `docs/API.md` there; the comments at the top
+  of `tools/oracle/vectors.py`, `tools/golden.py` and `tools/hybrid/oracle_shim.c`. The working
+  notes (the handoff guide, the plan, the playbook for another game) are kept outside the
+  repository.
 - **Rules.** The ROM and everything made from it (states, traces, captures, screenshots, GIFs
   such as `tools/goal_gif.py` makes) stay out of git. Commit after each finished job.
   Before and after a change: `make test`, `make lockstep`, `make golden-check`; for a runtime

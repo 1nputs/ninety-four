@@ -691,7 +691,7 @@ goal:
     g.sflags4 |= HI(0);
     g.sflags8 &= (uint8_t)~(1 << 3);
     ChkShotStat();
-    stop_current_song(0);                                /* checkgoal's d0 is not followed (HANDOFF: register leaks) */
+    stop_current_song(0);                                /* checkgoal's d0 is not followed (a register leak) */
     hal_wait_vblank();
     sfx(0);                                              /* SFXsiren */
     freezewindow();

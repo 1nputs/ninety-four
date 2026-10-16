@@ -12,3 +12,6 @@
 __pycache__/
 *.o
 *.so
+# working notes, kept outside the repository
+/docs/HANDOFF.md
+/docs/PLAN.md
