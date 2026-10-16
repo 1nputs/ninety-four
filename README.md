@@ -43,6 +43,7 @@ make test                              # the function-level tests: every capture
 make lockstep                          # the native game against the oracle at every vblank
 make runtime-check                     # md-runtime's tests on this game's vectors
 make golden && make golden-check       # this build's own output, frame by frame, before and after a change
+make runtime-selfcheck                 # md-runtime's tests on this game's own recorded traces
 ```
 
 `docs/HANDOFF.md` section 2 has the details; `tools/oracle/vectors.py` holds every recipe.

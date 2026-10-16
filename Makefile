@@ -5,6 +5,7 @@
 #   make vectors        record the saved states, snapshots and test vectors that are missing
 #   make runtime-check  md-runtime's tests on this game's vectors
 #   make golden         record the native game's golden runs (out/golden; make golden-check compares)
+#   make runtime-selfcheck  md-runtime's tests on the native game's own traces (nhl94 --record)
 #   make relaytest      the Z80 relay port against the sound traces
 #   make oracle         the hooked oracle core (build/nhl_oracle.so)
 #   make gen            regenerate the committed headers from ref/ and the asm rebuild
@@ -34,7 +35,7 @@ nhl94: build/nhl94
 build/nhl94: $(SRC) $(HDR) $(NATIVE) native/native.h mdrt
 	@mkdir -p build
 	$(CC) $(CFLAGS) -O2 -Isrc -Inative -I$(MDRT)/include $(shell pkg-config --cflags sdl2) -finstrument-functions \
-	    -finstrument-functions-exclude-file-list=native/ -rdynamic -o $@ $(SRC) $(NATIVE) $(MDRTLIBS) $(shell pkg-config --libs sdl2) -lm -ldl
+	    -finstrument-functions-exclude-file-list=native/ -rdynamic -o $@ $(SRC) $(NATIVE) $(MDRTLIBS) $(shell pkg-config --libs sdl2) -lm -ldl -lstdc++
 mdrt:
 	$(MAKE) -C $(MDRT) MODE=release sdl
 
@@ -45,6 +46,12 @@ lockstep: build/nhl94
 	$(PY) tools/oracle/vectors.py check
 runtime-check:
 	$(MAKE) -C $(MDRT) check MDRT_VECTORS=$(abspath out/vectors) MDRT_REQUIRE_VECTORS=1
+# md-runtime's tests on the native game's own traces (nhl94 --record): 600 frames of play
+runtime-selfcheck: build/nhl94
+	@test -f out/states/faceoff.snap || { echo "runtime-selfcheck needs out/states/faceoff.snap: make vectors"; exit 1; }
+	@mkdir -p out/selfvectors
+	./build/nhl94 --snap out/states/faceoff.snap --input tools/oracle/scripts/random_seed94.txt --frames 600 --record out/selfvectors
+	$(MAKE) -C $(MDRT) check MDRT_VECTORS=$(abspath out/selfvectors)
 # golden runs: the native game's own output, frame by frame, against a build's recorded runs
 golden: build/nhl94
 	$(PY) tools/golden.py record
@@ -88,4 +95,4 @@ gen:
 
 clean:
 	rm -rf build/captest build/oracle_shim.o build/nhl94 build/relaytest
-.PHONY: test oracle clean nhl94 relaytest mdrt vectors lockstep runtime-check golden golden-check gen
+.PHONY: test oracle clean nhl94 relaytest mdrt vectors lockstep runtime-check runtime-selfcheck golden golden-check gen
