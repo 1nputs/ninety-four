@@ -356,6 +356,8 @@ static uint8_t tick_byte(uint8_t v)
  * updateanim, the no-puck timers, time on ice, deceleration and movement (with the bounce sound
  * when the puck lands), the puck carrier's pad, the human controllers' input (doinput), the
  * assignment from asstab, collisions and the impact decay. d7 = elapsed frames. */
+uint32_t assign_d2 = 6;
+
 void updateplayers(void)
 {
     if (!(g.sflags & HI(sfhor))) {
@@ -405,6 +407,7 @@ void updateplayers(void)
                 uint16_t d4 = (uint16_t)((g.PalMode ? 0x16 : 0x11) * (uint16_t)elapsed);
                 if (o->Zpos == 0) {                               /* deceleration on the ice */
                     int d2 = (o->pflags & (1 << pfdoff)) ? 9 : 6;
+                    assign_d2 = (uint32_t)d2;
                     int16_t d0 = o->Xvel;
                     if (d0 != 0) {
                         d0 = (int16_t)(d0 >> d2);
@@ -454,21 +457,25 @@ void updateplayers(void)
             uint16_t d0, d1, d2, d3;
             if (d6 == (int16_t)g.c1playernum) {
                 ReadJoy1(&d0, &d1, &d2, &d3);
+                assign_d2 = d2;                                   /* (doinput's own d2 not followed) */
                 g.joypuckcarrier = 0xFFFF;
                 doinput(d0, d1, d2, d3, 0, o);
             } else if (d6 == (int16_t)g.c2playernum) {
                 ReadJoy2(&d0, &d1, &d2, &d3);
+                assign_d2 = d2;
                 g.joypuckcarrier = 0xFFFF;
                 doinput(d0, d1, d2, d3, 2, o);
             }
             if (d6 <= 0xB) {                                      /* pads 3 and 4 of the four way play */
                 if (g.cont3team != 0 && d6 == (int16_t)g.c3playernum) {
                     ReadJoy3(&d0, &d1, &d2, &d3);
+                    assign_d2 = d2;
                     g.joypuckcarrier = 0;
                     FOURWAY_INPUT(cont1team, cont3team, c1playernum, c3playernum, bholdtimer, padword1, padword3, aholdtimer, PadControlBits, d0, d1, d2, d3, 0, o);
                 }
                 if (g.cont4team != 0 && d6 == (int16_t)g.c4playernum) {
                     ReadJoy4(&d0, &d1, &d2, &d3);
+                    assign_d2 = d2;
                     g.joypuckcarrier = 1;
                     FOURWAY_INPUT(cont2team, cont4team, c2playernum, c4playernum, bholdtimer, padword2, padword4, aholdtimer, PadControlBits, d0, d1, d2, d3, 2, o);
                 }

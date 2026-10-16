@@ -704,7 +704,7 @@ void oracle_sndtrace_close(void) {
 }
 
 /* ---- lockstep vectors for the native game (.lockstep) ---------------------------------------
- * "MDLS", version u32 = 5, the vblank handler's address u32; then a record at each vblank
+ * "MDLS", version u32 = 6, the vblank handler's address u32; then a record at each vblank
  * interrupt (before the handler's first instruction): tag u8 = 1, flags u8 (bit 0: the 68k was
  * in a vblank wait loop, as the native game would be; bit 1: the whole state follows the record,
  * at the first such interrupt after one that was not; bit 2: taken just after the interrupts
@@ -712,6 +712,7 @@ void oracle_sndtrace_close(void) {
  * u32, the address the 68k was interrupted at u32, the pad buttons u16 (as
  * oracle_lockstep_buttons last set them: MDRT_PAD_* bits), the game's port accesses so far u32
  * (not the vblank code's; ls_counted: the native game places a lag frame after the same one),
+ * the long above the exception frame u32 (the return address when the 68k was at an rts),
  * the HV counter reads since the last record (n u16, then address u8 (0 $C00008 V,
  * 1 $C00009 H, 2 a word) and value u16 each), the hashes (FNV-1a 64) of work RAM (68k order)
  * below the stack ($0000-$DEFF) and of the VDP's 24 registers, VRAM, CRAM and VSRAM (as
@@ -769,7 +770,7 @@ int oracle_lockstep_open(const char *path, uint32_t vcount, uint32_t palcount, u
   ls = fopen(path, "wb");
   if (!ls) return 0;
   ls_vblank = (uint32_t)(READ_BYTE(cart.rom, 0x78) << 24 | READ_BYTE(cart.rom, 0x79) << 16 | READ_BYTE(cart.rom, 0x7A) << 8 | READ_BYTE(cart.rom, 0x7B));
-  fwrite("MDLS", 1, 4, ls); ls_u32(5); ls_u32(ls_vblank);
+  fwrite("MDLS", 1, 4, ls); ls_u32(6); ls_u32(ls_vblank);
   ls_writes = 0;
   ls_in_irq = 0;
   ls_nhv = 0;
@@ -812,6 +813,7 @@ static void lockstep_vblank(void) {
                (READ_BYTE(cart.rom, pc - 2) == 0x46 && READ_BYTE(cart.rom, pc - 1) == 0xDF);
   ls_last_wait = wait;
   ls_u8(1); ls_u8((uint8_t)(wait | full << 1 | unmask << 2)); ls_u32(frame_no); ls_u32(pc); ls_u16(ls_buttons); ls_u32(ls_writes);
+  ls_u32((uint32_t)(bus_byte(sp + 6) << 24 | bus_byte(sp + 7) << 16 | bus_byte(sp + 8) << 8 | bus_byte(sp + 9)));
   ls_u16(ls_nhv);
   for (int i = 0; i < ls_nhv; i++) { ls_u8(ls_hv_addr[i]); ls_u16(ls_hv[i]); }
   ls_nhv = 0;

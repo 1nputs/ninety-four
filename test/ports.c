@@ -690,6 +690,30 @@ static void run_CalcAttrib(const Record *r)
     expect_reg16(r, R_D1, div, "d1");
 }
 
+/* ---- the game over: the playoff password, the player stats lists ---- */
+static void run_GameOver(const Record *r) { GameOver(); }
+static void run_ClrPassBits(const Record *r) { ClrPassBits(ram_ptr(A(R_A3))); }
+static void run_SuperAdd(const Record *r) { SuperAdd(ram_ptr(A(R_A3)), A(R_D0)); }
+static void run_SuperMult(const Record *r) { SuperMult(ram_ptr(A(R_A3)), R16(R_D0)); }
+static void run_PushBits(const Record *r) { PushBits(ram_ptr(A(R_A3)), R16(R_D0), R16(R_D1)); }
+static void run_WritePassBits(const Record *r) { WritePassBits(ram_ptr(A(R_A3))); }
+static void run_ResolveGames(const Record *r) { ResolveGames(); }
+static void run_EncodePW(const Record *r) { EncodePW(); }
+static void run_WriteLineData(const Record *r) { WriteLineData(); }
+static void run_PlayoffStatsScreen(const Record *r) { PlayoffStatsScreen(); }
+static void run_PlayerStatsScreen(const Record *r) { PlayerStatsScreen(TEAM(R_A2)); }
+static void run_PlayerStatsList(const Record *r) { PlayerStatsList(TEAM(R_A2), R16(R_D7) != 0); }
+static void run_UpdateStatsListScroll(const Record *r) { UpdateStatsListScroll(TEAM(R_A2), R16(R_D7) != 0); }
+static void run_SetStatsListScrollReg(const Record *r) { SetStatsListScrollReg(); }
+static void run_DrawStatsRowUp(const Record *r) { DrawStatsRowUp(TEAM(R_A2), R16(R_D7) != 0); }
+static void run_DrawStatsRowDown(const Record *r) { DrawStatsRowDown(TEAM(R_A2), R16(R_D7) != 0); }
+static void run_DrawStatsList(const Record *r) { DrawStatsList(TEAM(R_A2), R16(R_D7) != 0); }
+static void run_DrawStatsRow(const Record *r) { DrawStatsRow(R16(R_D3), TEAM(R_A2), R16(R_D7) != 0); }
+static void run_GetStatColumn(const Record *r) { expect_reg16(r, R_D2, GetStatColumn(R16(R_D0), R16(R_D1), TEAM(R_A2), R16(R_D7) != 0), "d2"); }
+static void run_ReadStatColumn(const Record *r) { expect_reg16(r, R_D2, ReadStatColumn(R16(R_D0), R16(R_D1), TEAM(R_A2), R16(R_D7) != 0), "d2"); }
+static void run_GetStatsValue(const Record *r) { expect_reg16(r, R_D2, GetStatsValue(R16(R_D1), R16(R_D0), R16(R_D2)), "d2"); }
+static void run_DrawStatsListArrows(const Record *r) { DrawStatsListArrows(); }
+
 const Port ports[] = {
     { SYM_checkwallcoll, "checkwallcoll", run_checkwallcoll },
     { SYM_checkgoal, "checkgoal", run_checkgoal },
@@ -1394,6 +1418,28 @@ const Port ports[] = {
     { SYM_PlayedByText, "PlayedByText", run_PlayedByText },
     { SYM_PlayedByNone, "PlayedByNone", run_PlayedByNone },
     { SYM_PlayedByExit, "PlayedByExit", run_PlayedByExit },
+    { SYM_GameOver, "GameOver", run_GameOver },
+    { SYM_ClrPassBits, "ClrPassBits", run_ClrPassBits },
+    { SYM_SuperAdd, "SuperAdd", run_SuperAdd },
+    { SYM_SuperMult, "SuperMult", run_SuperMult },
+    { SYM_PushBits, "PushBits", run_PushBits },
+    { SYM_WritePassBits, "WritePassBits", run_WritePassBits },
+    { SYM_ResolveGames, "ResolveGames", run_ResolveGames },
+    { SYM_EncodePW, "EncodePW", run_EncodePW },
+    { SYM_WriteLineData, "WriteLineData", run_WriteLineData },
+    { SYM_PlayoffStatsScreen, "PlayoffStatsScreen", run_PlayoffStatsScreen },
+    { SYM_PlayerStatsScreen, "PlayerStatsScreen", run_PlayerStatsScreen },
+    { SYM_PlayerStatsList, "PlayerStatsList", run_PlayerStatsList },
+    { SYM_UpdateStatsListScroll, "UpdateStatsListScroll", run_UpdateStatsListScroll },
+    { SYM_SetStatsListScrollReg, "SetStatsListScrollReg", run_SetStatsListScrollReg },
+    { SYM_DrawStatsRowUp, "DrawStatsRowUp", run_DrawStatsRowUp },
+    { SYM_DrawStatsRowDown, "DrawStatsRowDown", run_DrawStatsRowDown },
+    { SYM_DrawStatsList, "DrawStatsList", run_DrawStatsList },
+    { SYM_DrawStatsRow, "DrawStatsRow", run_DrawStatsRow },
+    { SYM_GetStatColumn, "GetStatColumn", run_GetStatColumn },
+    { SYM_ReadStatColumn, "ReadStatColumn", run_ReadStatColumn },
+    { SYM_GetStatsValue, "GetStatsValue", run_GetStatsValue },
+    { SYM_DrawStatsListArrows, "DrawStatsListArrows", run_DrawStatsListArrows },
     { 0, NULL, NULL }
 };
 

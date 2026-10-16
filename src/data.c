@@ -575,3 +575,154 @@ void ContinuePlayoffs(void)
     }
     g.OptNOP = (uint16_t)(d0 - g.pojoy);
 }
+
+/* ---- the playoff password (after a playoff game) --------------------------------------------- */
+
+/* the long at p (two words of a 5-word number) plus v, the carry run up through at most n words
+ * above it (dbcc: n counts down to -1) */
+static void add_long_carry(uint8_t *p, uint32_t v, int16_t n)
+{
+    uint32_t old = rd32(p), sum = old + v;
+    wr32(p, sum);
+    int carry = sum < old;
+    while (carry && --n != -1) {
+        p -= 2;
+        uint16_t w = (uint16_t)(rd16(p) + 1);
+        wr16(p, w);
+        carry = w == 0;
+    }
+}
+
+/* data94.asm:ClrPassBits. Clear the 5 words at a3. */
+void ClrPassBits(uint8_t *bits)
+{
+    for (int i = 0; i < 10; i++) bits[i] = 0;
+}
+
+/* data94.asm:SuperAdd. The 5-word number at a3 plus d0 (a long). */
+void SuperAdd(uint8_t *bits, uint32_t v)
+{
+    add_long_carry(bits + 6, v, 3);
+}
+
+/* data94.asm:SuperMult. The 5-word number at a3 times d0 (a word): each word's product added in
+ * from the lowest (the highest's spills into the word below a3, which the game's numbers never
+ * reach). */
+void SuperMult(uint8_t *bits, uint16_t m)
+{
+    uint16_t w[5];
+    for (int i = 0; i < 5; i++) { w[i] = rd16(bits + 2 * i); wr16(bits + 2 * i, 0); }
+    for (int16_t i = 4; i >= 0; i--) add_long_carry(bits + 2 * i - 2, (uint32_t)m * w[i], i);
+}
+
+/* data94.asm:PushBits. bits = bits x d1 + d0 (d1 the value's range, 2-$4000). */
+void PushBits(uint8_t *bits, uint16_t v, uint16_t range)
+{
+    SuperMult(bits, range);
+    SuperAdd(bits, v);
+}
+
+/* data94.asm:WritePassBits. The playoff state into the 5 words at a3 (as ReadPassBits reads it):
+ * postarts, bosgames, gamelevel, potreeteam, pojoy, WinBits, then each game's series wins. */
+void WritePassBits(uint8_t *bits)
+{
+    ClrPassBits(bits);
+    PushBits(bits, g.postarts, 0x20);
+    PushBits(bits, g.bosgames, 8);
+    PushBits(bits, g.gamelevel, 4);
+    PushBits(bits, g.potreeteam, 0x10);
+    PushBits(bits, g.pojoy, 8);
+    PushBits(bits, g.WinBits, 0x4000);
+    for (int n = 0; n < 8; n++) {
+        PushBits(bits, rd16(GS(n) + gspotwins), 5);
+        PushBits(bits, rd16(GS(n) + gspobwins), 5);
+    }
+}
+
+/* data94.asm:ResolveGames. After a playoff game: its score into its game struct, then this
+ * round's results. Best of seven: a win to each unfinished series' winner; past game seven, or
+ * when the user's series is over (the rest of the round decided at random, the bits before kept
+ * at tpassbits, sf3alttree), the next round: WinBits from the series won, gamelevel + 1. Best of
+ * one: WinBits from the scores (by the games' flipped flags). */
+void ResolveGames(void)
+{
+    uint8_t *gs = g.gsstruct + (int16_t)(uint16_t)(g.gamenum * 0x10);
+    wr16(gs + gss1, g.HmGoals[0]);
+    wr16(gs + gss2, g.AwGoals[0]);
+    uint16_t first;
+    int16_t n = (int16_t)GetShifter(&first);
+    uint8_t *a0 = g.gsstruct + (int16_t)(uint16_t)(0x10 * (uint16_t)n);
+    uint16_t won = 0;
+    if (g.bosgames == 7) {                                /* best of one */
+        for (; n >= 0; n--, a0 -= 0x10) {
+            if (!(rd16(a0 + gss1) > rd16(a0 + gss2))) won |= (uint16_t)(1u << n);
+            if (a0[gsflags] & 1) won ^= (uint16_t)(1u << n);
+        }
+        goto winbits;
+    }
+    for (; n >= 0; n--, a0 -= 0x10) {                     /* the series' wins */
+        if (rd16(a0 + gspotwins) == 4 || rd16(a0 + gspobwins) == 4) continue;
+        uint16_t side = (a0[gsflags] & 1) ? 2 : 0;
+        if ((int16_t)(rd16(a0 + gss1) - rd16(a0 + gss2)) < 0) side ^= 2;
+        wr16(a0 + gspotwins + side, (uint16_t)(rd16(a0 + gspotwins + side) + 1));
+    }
+    if (++g.bosgames != 7) {
+        gs = g.gsstruct + (int16_t)(uint16_t)(g.gamenum * 0x10);
+        if (rd16(gs + gspotwins) != 4 && rd16(gs + gspobwins) != 4) return;
+        if ((int16_t)g.gamelevel < 3) {                   /* the user's series is over: the round's others */
+            n = (int16_t)GetShifter(&first);
+            a0 = g.gsstruct + (int16_t)(uint16_t)(0x10 * (uint16_t)n);
+            for (; n >= 0; n--, a0 -= 0x10) {
+                if ((uint16_t)n == g.gamenum) continue;
+                while (rd16(a0 + gspotwins) != 4 && rd16(a0 + gspobwins) != 4) {
+                    wr16(a0 + gspotwins, (uint16_t)(rd16(a0 + gspotwins) + 1));
+                    if (randomd0(0xC8) & 1) {
+                        wr16(a0 + gspotwins, (uint16_t)(rd16(a0 + gspotwins) - 1));
+                        wr16(a0 + gspobwins, (uint16_t)(rd16(a0 + gspobwins) + 1));
+                    }
+                }
+            }
+            WritePassBits(ram_ptr(RAM_BASE + RAM_OFF_tpassbits));
+            g.sflags3 |= 1 << sf3alttree;
+        }
+    }
+    g.bosgames = 0;                                       /* the next round */
+    n = (int16_t)GetShifter(&first);
+    a0 = g.gsstruct + (int16_t)(uint16_t)(0x10 * (uint16_t)n);
+    for (; n >= 0; n--, a0 -= 0x10) {
+        if (rd16(a0 + gspotwins) != 4) won |= (uint16_t)(1u << n);
+        wr16(a0 + gspotwins, 0);
+        wr16(a0 + gspobwins, 0);
+    }
+winbits:
+    g.WinBits &= (uint16_t)((uint16_t)(1u << first) - 1);
+    g.WinBits |= (uint16_t)(won << first);
+    g.gamelevel++;
+}
+
+/* data94.asm:EncodePW. After a playoff game (not Demo, Regular Season or a shootout): the results
+ * (ResolveGames), the tree, and the state saved (WritePassBits to pwddatabuffer, WriteLineData);
+ * the playoffs over (or the user's team out): cleared, and the mode back to new playoffs. */
+void EncodePW(void)
+{
+    if (g.OptNOP == 0 || g.OptPlayMode == 0 || g.OptPlayMode == 4) return;
+    g.OptPlayMode = 1;                                    /* continue playoffs */
+    g.TempOptPlayMode = 1;
+    ResolveGames();
+    maketree();
+    if (g.gamelevel != 4 && (int16_t)g.gamenum >= 0) {
+        WritePassBits(g.pwddatabuffer);
+        WriteLineData();
+        if (!(g.sflags3 & (1 << sf3alttree))) return;
+        ReadPassBits(ram_ptr(RAM_BASE + RAM_OFF_tpassbits));   /* the bits before the round was settled */
+        maketree();
+        return;
+    }
+    ClrPassBits(g.pwddatabuffer);
+    WriteLineData();
+    g.OptPlayMode = 2;                                    /* new playoffs */
+    g.TempOptPlayMode = 2;
+    if (g.bosgames == 7) return;
+    g.OptPlayMode = 3;                                    /* new playoffs, best of 7 */
+    g.TempOptPlayMode = 3;
+}

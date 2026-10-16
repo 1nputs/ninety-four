@@ -5,7 +5,15 @@
 #include "game.h"
 #include "symbols_gen.h"
 
+/* the menu handlers that take the pause pad's team (a2, which HandleMenuInput set with seta2) */
+static void player_stats(void) { PlayerStatsScreen(seta2()); }
+static void rts(void) {}
+
 static const struct { uint32_t addr; void (*fn)(void); } routines[] = {
+    { SYM_rtss2, rts },                                   /* Resume Game */
+    { SYM_PlayerStatsScreen, player_stats },
+    { SYM_PlayoffStatsScreen, PlayoffStatsScreen },
+    { SYM_ManualGoalieMenu, ManualGoalieMenu },
     { SYM_ReloadRinkGraphics, ReloadRinkGraphics },
     { SYM_SetupPauseScreen, SetupPauseScreen },
     { SYM_VBlank, VBlank },

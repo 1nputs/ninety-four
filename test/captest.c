@@ -41,6 +41,7 @@ static int run_record(Record *r, const Port *p)
     replay_begin(r);
     replay_failures = 0; reg_fail = 0;
     elapsed = (int16_t)r->regs_in[R_D7];
+    assign_d2 = r->regs_in[R_D2];                         /* (assnearest's register leak) */
     p->run(r);
     int bad = 0;
     const uint8_t *got = (const uint8_t *)&g;

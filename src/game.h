@@ -183,6 +183,9 @@ uint16_t EvadePC(uint16_t dir, struct SortObj *o);
 void checkob(struct SortObj *o);
 void assbreakaway(uint8_t *tm, struct SortObj *o);
 void assnearest(uint8_t *tm, struct SortObj *o);
+/* the 68k's d2 at the assignment dispatch (updateplayers: 6 or 9 for a player on the ice, else a
+ * pad's changed buttons): assnearest reads it when its team has the puck (a register leak) */
+extern uint32_t assign_d2;
 void check4check(struct SortObj *o);
 void asspassrec(uint8_t *tm, struct SortObj *o);
 void SkateToTempTarget(struct SortObj *o);
@@ -815,8 +818,28 @@ uint32_t PlayedByExit(uint32_t a1);
 uint16_t AttribAdjust(uint16_t v);                      /* d0 -> d0 */
 uint32_t DrawPlayerPicture(uint16_t player, uint16_t team);   /* cards94: d0, d1 -> a0 */
 uint16_t CalcAttrib(uint16_t player, uint8_t *tm, uint32_t mask, uint16_t *div);   /* d0, a2, d4 -> d0, d1 */
-/* not ported yet (front end) */
-void GameOver(void);                                    /* setup94: passwords, playoff screens, back to the front end */
+void GameOver(void);                                    /* setup94: the password, the playoff screens, back to the title */
+void ClrPassBits(uint8_t *bits);                        /* data94: a3 */
+void SuperAdd(uint8_t *bits, uint32_t v);               /* a3, d0 */
+void SuperMult(uint8_t *bits, uint16_t m);              /* a3, d0 */
+void PushBits(uint8_t *bits, uint16_t v, uint16_t range);   /* a3, d0, d1 */
+void WritePassBits(uint8_t *bits);                      /* a3 */
+void ResolveGames(void);
+void EncodePW(void);
+void WriteLineData(void);                               /* title94 */
+void PlayoffStatsScreen(void);                          /* stats94: the player stats lists */
+void PlayerStatsScreen(uint8_t *tm);                    /* a2 */
+void PlayerStatsList(uint8_t *tm, int playoff);         /* a2, d7 */
+void UpdateStatsListScroll(uint8_t *tm, int playoff);
+void SetStatsListScrollReg(void);
+void DrawStatsRowUp(uint8_t *tm, int playoff);
+void DrawStatsRowDown(uint8_t *tm, int playoff);
+void DrawStatsList(uint8_t *tm, int playoff);           /* a2, d7 */
+void DrawStatsRow(uint16_t row, uint8_t *tm, int playoff);   /* d3, a2, d7 */
+uint16_t GetStatColumn(uint16_t player, uint16_t col, uint8_t *tm, int playoff);    /* d0, d1, a2, d7 -> d2 */
+uint16_t ReadStatColumn(uint16_t player, uint16_t col, uint8_t *tm, int playoff);   /* d0, d1, a2, d7 -> d2 */
+uint16_t GetStatsValue(uint16_t at, uint16_t off, uint16_t v);   /* d1, d0, d2 -> d2 */
+void DrawStatsListArrows(void);
 /* jsr (a0) to a 68k routine address kept in RAM (dispatch.c) */
 void call68k(uint32_t addr);
 void call68k_missing(uint32_t addr);

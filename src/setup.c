@@ -383,6 +383,19 @@ void setupice_highlight(void)
     cpu_set_sr(0x2300);
 }
 
+/* setup94.asm:GameOver. After the game: the playoff password (EncodePW), in the playoffs their
+ * stats and the playoff screen; then back to the title (ExitToOpening). */
+void GameOver(void)
+{
+    EncodePW();
+    if (g.OptPlayMode != 0) {
+        g.sflags &= (uint16_t)~HI(sfpj);
+        PlayoffStatsScreen();
+    }
+    PlayoffScreen();
+    ExitToOpening();
+}
+
 /* setup94.asm:ExitToOpening. The title song, then the options again (Opening2, with a new
  * stack). From the game over, the end of a demo and the end of a shootout. */
 void ExitToOpening(void)

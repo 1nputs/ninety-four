@@ -35,6 +35,9 @@ typedef struct record {
     uint8_t flags;              /* 1: in a wait loop, 2: the whole state follows, 4: at an unmask */
     uint32_t frame, at, writes;
     uint32_t routine;           /* the 68k routine (the last global label) at */
+    uint8_t past_dfng;          /* the routine sets dfng (bset #2,(disflags).w) between its entry and at */
+    uint8_t at_rts;             /* at an rts (version 6): the return into ret_routine */
+    uint32_t ret_routine;       /* the routine of the long above the exception frame */
     uint16_t buttons, nhv;
     const uint8_t *hv, *state, *mask;
     uint64_t ram, vdp;
@@ -102,8 +105,8 @@ int lockstep_load(const char *path, mdrt *m)
     long len = ftell(f);
     fseek(f, 0, SEEK_SET);
     uint8_t *d = malloc((size_t)len);
-    if (!d || fread(d, 1, (size_t)len, f) != (size_t)len || len < 12 || memcmp(d, "MDLS", 4) || le32(d + 4) < 3 || le32(d + 4) > 5) {
-        fclose(f); fprintf(stderr, "%s: not a version 3 to 5 lockstep file\n", path); return 0;
+    if (!d || fread(d, 1, (size_t)len, f) != (size_t)len || len < 12 || memcmp(d, "MDLS", 4) || le32(d + 4) < 3 || le32(d + 4) > 6) {
+        fclose(f); fprintf(stderr, "%s: not a version 3 to 6 lockstep file\n", path); return 0;
     }
     fclose(f);
     version = (int)le32(d + 4);
@@ -115,13 +118,19 @@ int lockstep_load(const char *path, mdrt *m)
         r->flags = d[o + 1]; r->frame = le32(d + o + 2); r->at = le32(d + o + 6);
         r->buttons = le16(d + o + 10);
         r->writes = 0xFFFFFFFFu;
+        r->ret_routine = 0;
         if (version >= 5) { r->writes = le32(d + o + 12); o += 4; }
+        if (version >= 6) { r->ret_routine = routine_at(le32(d + o + 12) & 0xFFFFFF); o += 4; }
         r->nhv = le16(d + o + 12);
         r->hv = d + o + 14;
         o += 14 + 3 * (size_t)r->nhv;
         r->ram = le64(d + o); r->vdp = le64(d + o + 8);
         o += 16;
         r->routine = routine_at(r->at);
+        r->at_rts = version >= 6 && rd16(rom_ptr(r->at)) == 0x4E75;
+        r->past_dfng = 0;
+        for (uint32_t a = r->routine; a + 6 <= r->at && a < r->routine + 0x40; a += 2)
+            if (rd16(rom_ptr(a)) == 0x08F8 && rd16(rom_ptr(a + 2)) == 2 && rd16(rom_ptr(a + 4)) == (uint16_t)RAM_OFF_disflags) { r->past_dfng = 1; break; }
         r->state = r->mask = NULL;
         if (r->flags & 2) { r->state = d + o; o += STATE_SIZE; }
         if ((r->flags & 2) && version >= 4) { r->mask = d + o; o += MASK_SIZE; }
@@ -242,9 +251,18 @@ void lockstep_report(void)
            span_lo, nrecs, checked, lagged, resynced, skipped, masked, placed);
 }
 
-/* the span done: on to the next */
+static uint32_t accesses_now;            /* the game's port accesses so far */
+
+/* the span done: on to the next; the game's port access count is the oracle's from here (it
+ * drifts in the game's logic, where lag frames are not placed, and over resyncs) */
 static void advance(const record *r)
 {
+    if (version >= 5) {
+        if (getenv("LOCKSTEP_DEBUG") && accesses_now != r->writes)
+            printf("  the game's port accesses %u, the oracle's %u at its frame %u\n", accesses_now, r->writes, r->frame);
+        native_set_accesses(r->writes);
+        accesses_now = r->writes;
+    }
     lagged += (long)(span_hi - span_lo - 1);
     buttons = r->buttons;
     next = span_hi;
@@ -277,6 +295,8 @@ static NI uint32_t routine_of(void *fn)
 }
 
 static void try_place(void);
+static void place_next(const char *how);
+static int due(uint32_t n, int unmask);
 static int armed;                       /* the next lag frame's access count has come: waiting for its routine */
 
 void NI __cyg_profile_func_enter(void *fn, void *site)
@@ -297,6 +317,10 @@ void NI __cyg_profile_func_exit(void *fn, void *site)
     (void)fn; (void)site;
     if (!recs || native_in_vblank()) return;
     if (depth > 0) depth--;
+    while (armed && recs[lag_next].at_rts && depth > 0 && depth <= 512 && where[depth - 1] == recs[lag_next].ret_routine) {
+        place_next("at the return");                      /* the oracle was at an rts: the return into its caller */
+        armed = due(accesses_now, 0);
+    }
     if (armed) try_place();
 }
 
@@ -313,12 +337,16 @@ static NI void place_next(const char *how)
     if (getenv("LOCKSTEP_DEBUG")) printf("  lag frame %u (68k at %06x, %u accesses) placed %s\n", l->frame, l->at, l->writes, how);
     native_vblank_now();
 }
-/* the native game is in a frame's game logic (DoGameFrame on its function stack): the oracle's lag
- * frames there fall in long stretches without port accesses, where a routine runs many times a
- * frame, so they are not placed: the player takes the oracle's state at the game loop instead */
+/* the native game is in a frame's game logic (DoGameFrame on its function stack, and not the
+ * intermission or the game over a period's end runs from inside it): the oracle's lag frames there
+ * fall in long stretches without port accesses, where a routine runs many times a frame, so they
+ * are not placed: the player takes the oracle's state at the game loop instead */
 static NI int in_game_logic(void)
 {
-    for (int i = 0; i < depth && i < 512; i++) if (where[i] == SYM_DoGameFrame) return 1;
+    for (int i = (depth < 512 ? depth : 512) - 1; i >= 0; i--) {
+        if (where[i] == SYM_IntermissionStart) return 0;
+        if (where[i] == SYM_DoGameFrame) return 1;
+    }
     return 0;
 }
 static NI int due(uint32_t n, int unmask)
@@ -327,10 +355,12 @@ static NI int due(uint32_t n, int unmask)
     const record *l = &recs[lag_next];
     return !!(l->flags & 4) == unmask && l->writes <= n;
 }
-static uint32_t accesses_now;
 static NI void try_place(void)
 {
-    while (armed && depth > 0 && depth <= 512 && where[depth - 1] == recs[lag_next].routine) {
+    /* in its routine: at once (at the routine's entry, or after an access in it), unless the
+     * routine had already set dfng there (then before its next access, past the bset) */
+    while (armed && depth > 0 && depth <= 512 && where[depth - 1] == recs[lag_next].routine && !recs[lag_next].past_dfng
+           && !recs[lag_next].at_rts) {
         place_next("in its routine");
         armed = due(accesses_now, 0);
     }
@@ -383,6 +413,10 @@ void lockstep_check(long frame)
             restart_at(native_resume_game_loop);
         }
         if (r->mask && !in_game_logic()) {                /* outside the game: check, then take it here */
+            if (getenv("LOCKSTEP_DEBUG"))
+                for (size_t i = lag_next; i + 1 < span_hi; i++)
+                    printf("  lag frame %u (68k at %06x, %u accesses) not placed (the game at %u accesses, routine %06x)\n",
+                           recs[i].frame, recs[i].at, recs[i].writes, accesses_now, depth > 0 && depth <= 512 ? where[depth - 1] : 0);
             const char *bad = masked_diff(r);
             if (bad) differs(bad, frame, r);
             advance(r);

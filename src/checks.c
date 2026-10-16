@@ -940,11 +940,12 @@ void assnearest(uint8_t *tm, struct SortObj *o)
         }
     wr32(tm + tmneardist, 0);
     struct SortObj *a1 = NULL;
-    d2 = -1;
+    d2 = (int32_t)assign_d2;                              /* (the caller's d2, as the 68k leaves it below) */
     d1 = puckc();
     if (d1 >= 0 && !((sortobj(d1)->pflags ^ o->pflags) & (1 << pfteam)))
         a1 = sortobj(d1);                                 /* our carrier is the nearest */
     else {
+        d2 = -1;
         struct SortObj *a0 = sortobj_at(rd16(tm + tmsort));
         for (int i = 0; i < 6; i++, a0++) {
             if (a0->position <= 0) continue;

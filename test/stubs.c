@@ -57,4 +57,3 @@ void call68k_missing(uint32_t addr)
     replay_apply(c);
 }
 /* the intermission and the game over: frame drivers / front end, not ported yet */
-STUB(GameOver) void GameOver(void) { TAKE(GameOver); replay_apply(c); }

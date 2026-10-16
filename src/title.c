@@ -640,3 +640,14 @@ uint16_t AttribAdjust(uint16_t v)
     if ((int16_t)v >= 0x32) return v;
     return (uint16_t)(((int16_t)v >> 1) + 0x19);
 }
+
+/* title94.asm:WriteLineData. databuffer back to save RAM at LineDataBase, the checksum; then as
+ * ReadLineData after. */
+void WriteLineData(void)
+{
+    WriteSRAM(SYM_LineDataBase, 0x100, RAM_BASE + RAM_OFF_databuffer);
+    MakeSRAMChecksum();
+    g.sflags &= (uint16_t)~HI(4);
+    g.lastsfx = 0xFFFF;
+    g.recbpr = RAM_BASE;
+}

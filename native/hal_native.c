@@ -74,6 +74,7 @@ uint16_t vdp_read(void) { return mdrt_vdp_read16(vdp()); }
 static void before(void) { if (!in_vblank) lockstep_before_access(); }
 static void counted(void) { if (!in_vblank) lockstep_access(++accesses); }
 int native_in_vblank(void) { return in_vblank; }
+void native_set_accesses(uint32_t n) { accesses = n; }
 void vdp_ctrl(uint32_t v) { before(); mdrt_vdp_ctrl32(vdp(), v); counted(); }
 void vdp_ctrl16(uint16_t v) { before(); mdrt_vdp_ctrl16(vdp(), v); counted(); }
 void vdp_data(uint16_t v) { before(); mdrt_vdp_data16(vdp(), v); counted(); }

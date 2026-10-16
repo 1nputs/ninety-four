@@ -16,6 +16,7 @@ void native_frame_done(long frame, int wait);
 /* a vblank now, in the middle of the game's work (hal_native.c) */
 void native_vblank_now(void);
 int native_in_vblank(void);              /* running the vblank's code */
+void native_set_accesses(uint32_t n);    /* lockstep: the count of the game's port accesses (the oracle's) */
 /* the HAL from master clock `start` of the relay's time (hal_native.c) */
 void native_hal_start(mdrt *m, uint64_t start);
 
