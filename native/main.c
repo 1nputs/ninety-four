@@ -6,12 +6,13 @@
  *
  * usage: nhl94 [--rom FILE] [--snap FILE | --boot] [--scale N] [--aspect] [--sram FILE]
  *              [--headless] [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE]
- *              [--lockstep FILE]
+ *              [--input FILE] [--lockstep FILE | --golden FILE]
  *
  * --headless runs without a window or pacing (as fast as it goes): with --frames it stops, --shot
- * writes the last picture, --wav the sound. Keys: md-runtime's (include/mdrt/platform_sdl2.h):
- * pad 1 arrows, Z / X / C = A / B / C, Enter = Start; pad 2 I J K L, Q / W / E, Tab; two game
- * controllers; Esc quits, P pauses, F11 full screen. */
+ * writes the last picture, --wav the sound, --input plays pad 1 from a script (tools/oracle/scripts)
+ * and --golden writes a line of hashes a frame (make golden). Keys: md-runtime's
+ * (include/mdrt/platform_sdl2.h): pad 1 arrows, Z / X / C = A / B / C, Enter = Start; pad 2 I J K L,
+ * Q / W / E, Tab; two game controllers; Esc quits, P pauses, F11 full screen. */
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +25,7 @@
 #include "native.h"
 #include "mdrt/platform_sdl2.h"
 
-static const char *snap, *shot_path, *shots_dir, *wav_path, *lockstep_path;
+static const char *snap, *shot_path, *shots_dir, *wav_path, *lockstep_path, *golden_path, *input_path;
 static long stop_after = -1, shots_every = 600;
 static int boot = 1;                    /* power on, unless --snap */
 static jmp_buf out;
@@ -162,6 +163,101 @@ void native_game(mdrt *m, void *user)
     run68k(Gameloop);
 }
 
+/* ---- golden runs and scripted input ---------------------------------------------------------- */
+
+/* golden runs (--golden FILE): a line a frame with hashes of work RAM, the VDP state and Z80 RAM
+ * at the game's wait, the picture and the frame's sound, so two builds can be compared bit for
+ * bit (make golden, make golden-check). The HV counter comes from a stand-in fixed here (the
+ * beam md-runtime reported until 2026-10-16), so changes to the runtime's HV model do not show. */
+static FILE *golden;
+static uint64_t golden_ram, golden_vdp, golden_z80, golden_pic;
+static uint32_t golden_beam;
+
+static uint64_t fnv(uint64_t h, const void *p, size_t n)
+{
+    const uint8_t *b = p;
+    for (size_t i = 0; i < n; i++) h = (h ^ b[i]) * 0x100000001B3ull;
+    return h;
+}
+#define FNV0 0xCBF29CE484222325ull
+
+static uint16_t golden_hv(void *user)
+{
+    mdrt *m = user;
+    uint32_t width = mdrt_vdp_width(mdrt_get_vdp(m)) == 320 ? 420 : 342, lines = mdrt_frame_mclks(m) / 3420;
+    golden_beam += 97;
+    uint32_t line = (224 + golden_beam / width) % lines, h = golden_beam % width;
+    return (uint16_t)((line & 0xFF) << 8 | (h >> 1));
+}
+
+static void golden_wait(void)
+{
+    mdrt_vdp_state s;
+    mdrt_vdp_get_state(mdrt_get_vdp(native_m), &s);
+    golden_ram = fnv(FNV0, ram_ptr(RAM_BASE), 0x10000);
+    golden_vdp = fnv(fnv(fnv(fnv(FNV0, s.reg, 24), s.vram, 0x10000), s.cram, sizeof s.cram), s.vsram, sizeof s.vsram);
+    golden_z80 = fnv(FNV0, z80_ram, 0x2000);
+    golden_beam = 0;                                      /* (the beam starts again at the handshake) */
+}
+
+static void golden_present(void *user, const uint16_t *px, int w, int h, int pitch)
+{
+    (void)user;
+    golden_pic = FNV0;
+    for (int y = 0; y < h; y++) golden_pic = fnv(golden_pic, px + y * pitch, (size_t)w * 2);
+}
+
+/* --input FILE: pad 1's buttons from a script ("FRAME:BUTTON+BUTTON,..." as tools/oracle/run.py
+ * takes, # lines are comments), held from that frame (the handshakes so far) on */
+static struct { long frame; uint16_t buttons; } *script;
+static size_t script_len;
+static long input_frame;
+
+static int read_script(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    if (!f) { fprintf(stderr, "cannot open %s\n", path); return 0; }
+    static const struct { const char *name; uint16_t bit; } names[] = {
+        { "UP", MDRT_PAD_UP }, { "DOWN", MDRT_PAD_DOWN }, { "LEFT", MDRT_PAD_LEFT }, { "RIGHT", MDRT_PAD_RIGHT },
+        { "A", MDRT_PAD_A }, { "B", MDRT_PAD_B }, { "C", MDRT_PAD_C }, { "START", MDRT_PAD_START },
+        { "X", MDRT_PAD_X }, { "Y", MDRT_PAD_Y }, { "Z", MDRT_PAD_Z }, { "MODE", MDRT_PAD_MODE },
+    };
+    char line[65536];
+    size_t cap = 0;
+    while (fgets(line, sizeof line, f)) {
+        if (line[0] == '#') continue;
+        for (char *item = strtok(line, ",\r\n"); item; item = strtok(NULL, ",\r\n")) {
+            char *colon = strchr(item, ':');
+            if (!colon) continue;
+            if (script_len == cap) script = realloc(script, (cap = cap ? 2 * cap : 256) * sizeof *script);
+            script[script_len].frame = atol(item);
+            uint16_t b = 0;
+            for (char *name = colon + 1; *name; ) {
+                size_t n = strcspn(name, "+");
+                size_t i = 0;
+                while (i < sizeof names / sizeof *names && (strlen(names[i].name) != n || strncmp(names[i].name, name, n))) i++;
+                if (i == sizeof names / sizeof *names) { fprintf(stderr, "%s: no button %.*s\n", path, (int)n, name); fclose(f); return 0; }
+                b |= names[i].bit;
+                name += n + (name[n] == '+');
+            }
+            script[script_len++].buttons = b;
+        }
+    }
+    fclose(f);
+    return 1;
+}
+
+static void script_source(void *user, uint16_t b[2])
+{
+    (void)user;
+    uint16_t now = 0;
+    for (size_t i = 0; i < script_len; i++)
+        if (script[i].frame <= input_frame) now = script[i].buttons;
+    b[0] = now;
+    b[1] = 0;
+    input_frame++;
+}
+
 /* pictures to files */
 static void write_ppm(const char *path)
 {
@@ -184,6 +280,7 @@ static void write_ppm(const char *path)
 void native_frame_done(long frame, int wait)
 {
     if (wait) lockstep_check(frame);
+    if (golden) golden_wait();
     if (shots_dir && frame % shots_every == 0) {
         char path[512];
         snprintf(path, sizeof path, "%s/f%06ld.ppm", shots_dir, frame);
@@ -202,6 +299,9 @@ static uint32_t wav_frames;
 static void wav_audio(void *user, const int16_t *s, int n)
 {
     (void)user;
+    if (golden) fprintf(golden, "%016llx %016llx %016llx %016llx %016llx %d\n", (unsigned long long)golden_ram,
+                        (unsigned long long)golden_vdp, (unsigned long long)golden_z80, (unsigned long long)golden_pic,
+                        (unsigned long long)fnv(FNV0, s, (size_t)n * 4), n);
     if (!wav) return;
     fwrite(s, 4, (size_t)n, wav);                         /* (a little-endian host) */
     wav_frames += (uint32_t)n;
@@ -235,14 +335,18 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--wav") && i + 1 < argc) wav_path = argv[++i];
         else if (!strcmp(argv[i], "--headless")) headless = 1;
         else if (!strcmp(argv[i], "--lockstep") && i + 1 < argc) { lockstep_path = argv[++i]; headless = 1; }
+        else if (!strcmp(argv[i], "--golden") && i + 1 < argc) { golden_path = argv[++i]; headless = 1; }
+        else if (!strcmp(argv[i], "--input") && i + 1 < argc) input_path = argv[++i];
         else {
             fprintf(stderr, "usage: %s [--rom FILE] [--snap FILE | --boot] [--scale N] [--aspect] [--sram FILE] [--headless]\n"
-                            "       [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE] [--lockstep FILE]\n", argv[0]);
+                            "       [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE] [--input FILE]\n"
+                            "       [--lockstep FILE | --golden FILE]\n", argv[0]);
             return 2;
         }
     }
     if (!rom_load(rom)) { fprintf(stderr, "cannot load the ROM %s\n", rom); return 1; }
     if (!boot) read_snapshot();
+    if (input_path && (lockstep_path || !read_script(input_path))) { if (lockstep_path) fprintf(stderr, "--input: not with --lockstep\n"); return 1; }
     mdrt_config c = { 0 };
     c.audio_rate = 48000;
     c.sram_size = 0x2000;
@@ -253,15 +357,19 @@ int main(int argc, char **argv)
     }
     if (wav_path && !(wav = fopen(wav_path, "wb"))) { fprintf(stderr, "cannot write %s\n", wav_path); return 1; }
     if (wav) wav_header(c.audio_rate);
-    c.platform = (mdrt_platform){ NULL, NULL, wav_audio, NULL, NULL };
+    if (golden_path && !(golden = fopen(golden_path, "w"))) { fprintf(stderr, "cannot write %s\n", golden_path); return 1; }
+    c.platform = (mdrt_platform){ NULL, golden ? golden_present : NULL, wav_audio, NULL, NULL };
     mdrt *m = mdrt_new(&c);
     if (lockstep_path && !lockstep_load(lockstep_path, m)) return 1;
-    if (lockstep_path) sram = NULL;                       /* lockstep: save RAM blank, as the oracle's at power on */
+    if (golden) mdrt_set_hv_source(m, golden_hv, m);
+    if (input_path) mdrt_set_pad_source(m, script_source, NULL);
+    if (lockstep_path || golden) sram = NULL;             /* lockstep, golden: save RAM blank, as the oracle's at power on */
     FILE *f = sram ? fopen(sram, "rb") : NULL;            /* save RAM: as the window's platform keeps it */
     if (f) { if (fread(mdrt_get_sram(m)->bytes, 1, 0x2000, f) != 0x2000) fprintf(stderr, "%s: short\n", sram); fclose(f); }
     native_game(m, NULL);
     if (sram && mdrt_get_sram(m)->dirty && (f = fopen(sram, "wb"))) { fwrite(mdrt_get_sram(m)->bytes, 1, 0x2000, f); fclose(f); }
     if (wav) { wav_header(c.audio_rate); fclose(wav); }
+    if (golden) fclose(golden);
     mdrt_free(m);
     int ls = lockstep_result();                           /* (a run cut short by --frames is not a failure) */
     return ls == 1 || (ls == 2 && stop_after < 0) ? 1 : 0;

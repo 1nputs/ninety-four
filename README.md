@@ -40,6 +40,7 @@ tools/hybrid/capture_all.sh            # the 29 capture sessions (out/captures/*
 make test                              # the function-level tests: every capture against the C port
 make lockstep                          # the native game against the oracle at every vblank
 make runtime-check                     # md-runtime's tests on this game's vectors
+make golden && make golden-check       # this build's own output, frame by frame, before and after a change
 ```
 
 `docs/HANDOFF.md` section 2 has the details; `tools/oracle/vectors.py` holds every recipe.

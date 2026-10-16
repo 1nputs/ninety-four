@@ -4,6 +4,7 @@
 #   make lockstep       the native game against the oracle at every vblank (out/vectors/*.lockstep)
 #   make vectors        record the saved states, snapshots and test vectors that are missing
 #   make runtime-check  md-runtime's tests on this game's vectors
+#   make golden         record the native game's golden runs (out/golden; make golden-check compares)
 #   make relaytest      the Z80 relay port against the sound traces
 #   make oracle         the hooked oracle core (build/nhl_oracle.so)
 #   make gen            regenerate the committed headers from ref/ and the asm rebuild
@@ -44,6 +45,11 @@ lockstep: build/nhl94
 	$(PY) tools/oracle/vectors.py check
 runtime-check:
 	$(MAKE) -C $(MDRT) check MDRT_VECTORS=$(abspath out/vectors)
+# golden runs: the native game's own output, frame by frame, against a build's recorded runs
+golden: build/nhl94
+	$(PY) tools/golden.py record
+golden-check: build/nhl94
+	$(PY) tools/golden.py check
 
 # the Z80 relay port against sound traces
 relaytest: build/relaytest
@@ -82,4 +88,4 @@ gen:
 
 clean:
 	rm -rf build/captest build/oracle_shim.o build/nhl94 build/relaytest
-.PHONY: test oracle clean nhl94 relaytest mdrt vectors lockstep runtime-check gen
+.PHONY: test oracle clean nhl94 relaytest mdrt vectors lockstep runtime-check golden golden-check gen
