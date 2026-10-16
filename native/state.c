@@ -6,8 +6,11 @@
  * redo, which is how lockstep goes on after it takes the oracle's state. Loading one restarts the
  * game there (restart_at), from wherever it was.
  *
- * In the window: F9 saves a state to a file, F10 loads it, F4 held steps back (a state every
- * third frame of play, ten seconds of them). Headless: --save-state FRAME:FILE, --load-state FILE
+ * In the window: F9 saves a state into pulseman's slot, F10 loads one (the file the request names:
+ * mdrt_request_path; states/slotN.state, or quick resume's), F4 held steps back (a state every
+ * third frame of play, ten seconds of them). Without a named file, --state FILE. A save asked for
+ * outside play is not taken (the platform keeps the slot as it was). Headless: --save-state
+ * FRAME:FILE, --load-state FILE
  * (tools/golden.py checks that a loaded state goes on bit for bit as the run it was taken from). */
 #include <stddef.h>
 #include <stdio.h>
@@ -18,7 +21,7 @@
 #include "z80.h"
 
 static mdrt *m;
-static const char *file;                /* F9 / F10 */
+static const char *file;                /* --state: F9 / F10's when the platform names none */
 static long save_frame = -1;            /* --save-state */
 static const char *save_path;
 static long seen;                       /* the handshake whose requests were taken */
@@ -149,13 +152,14 @@ void native_states_wait(void)
         if (save(save_path)) printf("nhl94: state saved at frame %ld (golden line %ld) into %s\n", native_frames(), native_golden_lines(), save_path);
         else fprintf(stderr, "nhl94: cannot write %s\n", save_path);
     }
-    if ((req & MDRT_REQUEST_SAVE) && file) {
+    const char *path = mdrt_request_path(m) ? mdrt_request_path(m) : file;   /* (the platform's slot, or --state) */
+    if ((req & MDRT_REQUEST_SAVE) && path) {
         if (!at) printf("nhl94: a state is saved in play (not in the menus or a pause)\n");
-        else if (save(file)) printf("nhl94: state saved into %s\n", file);
-        else fprintf(stderr, "nhl94: cannot write %s\n", file);
+        else if (save(path)) printf("nhl94: state saved into %s\n", path);
+        else fprintf(stderr, "nhl94: cannot write %s\n", path);
     }
-    if ((req & MDRT_REQUEST_LOAD) && file && native_load_state_file(file) == 0) {
-        printf("nhl94: state loaded from %s\n", file);
+    if ((req & MDRT_REQUEST_LOAD) && path && native_load_state_file(path) == 0) {
+        printf("nhl94: state loaded from %s\n", path);
         ring_n = 0;
         restart_at(native_resume_game_loop);
     }

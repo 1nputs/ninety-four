@@ -41,7 +41,7 @@ Game controllers work too (the first two are players 1 and 2).
 | F6 (held) | fast-forward |
 | F7 | slow motion on / off |
 | F8 | a frame at a time, while paused |
-| F9 / F10 | save / load a state |
+| F9 / F10 | save / load a state (the slot chosen last) |
 | F11 or Alt+Enter | full screen |
 | F12 | screenshot (a PNG in `screenshots/`) |
 | Esc | the menu |
@@ -52,6 +52,11 @@ staircases without blurring or adding colours; sharp, integer or fit scaling; sq
 4:3; full screen), the sound (volume, and the FM sound core and chip: hear the difference as you play),
 players (see below), options, and every key of the pads and the controls: pick one and press the
 new key.
+
+**Save slots and quick resume:** the menu's Save and Load pages have eight slots, each with a
+picture of the moment, in `states/` beside the game. States are taken during play (not in the menus
+or a pause). Quit in the middle of a game and the next start puts you back where you were (an
+option in the menu).
 
 **Four players** (EA's 4 Way Play, as on the cartridge): in the menu, Players, set Controllers to
 EA 4 Way Play and Reset; then choose Players: Three or Four in the game's setup screen. The
@@ -169,7 +174,7 @@ From the least ambitious to the most.
 - [x] Pause when the window loses focus
 - [x] Controller remapping, player slots, turbo, dead zones
 - [ ] Video and audio capture
-- [ ] Save slots with thumbnails; quick resume on quit and start
+- [x] Save slots with thumbnails; quick resume on quit and start (states during play)
 - [ ] Skip the EA screen, boot straight into a game
 - [ ] Colour options; scanlines, CRT mask, composite dither blending
 - [ ] IPS and BPS patches, soft-patching, the ROM check as a toggle for data hacks

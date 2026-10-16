@@ -10,6 +10,7 @@
 /build/
 /out/
 /screenshots/
+/states/
 /settings.ini
 __pycache__/
 *.o
