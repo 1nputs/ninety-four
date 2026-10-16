@@ -462,6 +462,8 @@ void oracle_vdp_get(uint8_t *out_vram, uint8_t *out_cram, uint8_t *out_vsram, ui
 }
 
 /* ---- VDP test vectors for md-runtime (.vdptrace) ------------------------------------------
+ * (The three md-runtime formats are specified in ../md-runtime/docs/VECTORS.md; a change here
+ * changes that file and its readers in the same commit.)
  * Every VDP port access of the 68k in order, the 68k bytes each DMA from the 68k bus will read,
  * and at the start of each vblank (v_counter reaching the active height) a FRAME marker with the
  * VDP state and the frame just drawn in 9-bit colours. Format (integers little-endian unless

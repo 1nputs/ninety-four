@@ -44,7 +44,7 @@ vectors: build/nhl_oracle.so
 lockstep: build/nhl94
 	$(PY) tools/oracle/vectors.py check
 runtime-check:
-	$(MAKE) -C $(MDRT) check MDRT_VECTORS=$(abspath out/vectors)
+	$(MAKE) -C $(MDRT) check MDRT_VECTORS=$(abspath out/vectors) MDRT_REQUIRE_VECTORS=1
 # golden runs: the native game's own output, frame by frame, against a build's recorded runs
 golden: build/nhl94
 	$(PY) tools/golden.py record
