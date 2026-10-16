@@ -1273,13 +1273,13 @@ void puckpenshot(uint8_t *tm, struct SortObj *o)
         g.CwdExciteLvl += 0x14;
     }
     DecompressGraphicsPlain(SYM_RefsMap + 8, g.ExtraChars);
-    g.disflags |= HI(3);
-    g.sflags &= (uint16_t)~HI(0);
+    g.disflags |= HI(dfclock);
+    g.sflags &= (uint16_t)~HI(sfpz);
     g.sflags3 &= (uint8_t)~1;
     g.glovecords = 0;
     g.iflags = 0;
     ST_W(g.RefCnt);
-    g.sflags2 &= (uint16_t)~HI(1);
+    g.sflags2 &= (uint16_t)~HI(sf2refref);
     ST_W(g.passplayer);
     ClrHor();
     g.Vpos = 0;
@@ -1346,7 +1346,7 @@ void puckpenshot(uint8_t *tm, struct SortObj *o)
     else if (d1 == g.cont2team) setc2player(g.BA_Goalie_SCnum);
     assreplace(0xE, gk);
     g.BA_PS_flags |= HI(7);
-    g.sflags2 |= HI(2);
+    g.sflags2 |= HI(sf2drec);
     g.msgtimer = 0x190;
     if (g.cont1team == 0 && g.cont2team == 0) g.msgtimer = 0x64;
     g.palcount = 0x18;
@@ -1385,7 +1385,7 @@ void EndPenaltyShotPlay(void)
     freezewindow();
     if (!(g.gmode2 & HI(0))) {
         g.replaydelay = 0xA;
-        g.sflags2 |= HI(2);
+        g.sflags2 |= HI(sf2drec);
     }
     g.gmode |= 1 << gmclock;
     g.gmode2 &= (uint16_t)~HI(2);
@@ -1662,7 +1662,7 @@ void puckfaceoff2(uint8_t *tm, struct SortObj *o)
     if (g.fox == 0 && g.foy == 0) g.faceoffanim[0] = 0xFFFF;   /* center ice: no arena animation */
     else cpu_set_sr(0x2700);                              /* (masked until the end of the setup) */
     if (g.crowdlevel > 0x258) g.crowdlevel = 0x258;
-    g.disflags |= HI(3);                                  /* dfclock */
+    g.disflags |= HI(dfclock);                                  /* dfclock */
     g.sflags &= (uint16_t)~HI(sfpz);
     g.sflags3 &= (uint8_t)~(1 << sf3llcs);                /* no line changes */
     g.glovecords = 0;

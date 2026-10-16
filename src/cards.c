@@ -103,8 +103,8 @@ void UpdatePlayerRecords(uint32_t team, uint32_t buf, const uint8_t *tm, uint16_
     uint8_t *rec = mem_ptr(buf);
     for (uint16_t slot = 0; slot < 0x1A; slot++) {
         ReadPlayerRecord(slot, (uint16_t)team, buf);
-        uint8_t best = (int16_t)slot >= (int16_t)goalies ? tm[0xB4 + slot]
-                                                         : (uint8_t)(tm[0xE8 + slot] - tm[0xB4 + slot]);   /* goalie: saves */
+        uint8_t best = (int16_t)slot >= (int16_t)goalies ? tm[tmpgoals + slot]
+                                                         : (uint8_t)(tm[tmpshots + slot] - tm[tmpgoals + slot]);   /* goalie: saves */
         if ((int8_t)best <= (int8_t)rec[0]) continue;
         rec[0] = best;
         int home = tm == team_struct(0);
@@ -157,7 +157,7 @@ void UpdateCrowdRecord(uint32_t buf, uint32_t team, uint16_t opp, uint16_t user,
     uint8_t saves = 0;
     uint16_t n = (uint16_t)(goalies - 1);
     do {
-        uint8_t s = (uint8_t)(tm[0xE8 + n] - tm[0xB4 + n]);
+        uint8_t s = (uint8_t)(tm[tmpshots + n] - tm[tmpgoals + n]);
         g.TempWord1 = (uint16_t)((s << 8) | (g.TempWord1 & 0xFF));
         if ((int8_t)saves < (int8_t)s) saves = s;
     } while (n-- != 0);
@@ -515,8 +515,8 @@ uint16_t CalcAttrib(uint16_t player, uint8_t *tm, uint32_t mask, uint16_t *div)
     uint32_t weights = SYM_AttribWgtList;
     if (mask == rd32(rom_ptr(SYM_PAttribOverallMask))) weights = SYM_OvrPlayerWgtList;
     if (mask == rd32(rom_ptr(SYM_GAttribOverallMask))) weights = SYM_OvrGoalWgtList;
-    uint32_t a0 = rd32(tm + 0x1E);
-    const uint8_t *hotcold = tm + 0x1A2 + (uint16_t)(player << 4) + 0x10;   /* the end of his hot / cold bytes */
+    uint32_t a0 = rd32(tm + tmdata);
+    const uint8_t *hotcold = tm + tmhotcold + (uint16_t)(player << 4) + 0x10;   /* the end of his hot / cold bytes */
     a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0));
     for (uint16_t n = player;; n--) {                     /* past his name and attributes */
         a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0)) + 8;
@@ -608,7 +608,7 @@ void PlayerCards(void)
     g.palcount = 0x18;
     g.homecardidx = 0;
     g.awaycardidx = 0;
-    int second = g.FourWayPlay ? g.pausepad != 3 : (g.sflags & HI(1)) != 0;
+    int second = g.FourWayPlay ? g.pausepad != 3 : (g.sflags & HI(sfpj)) != 0;
     int16_t side = (int16_t)((second ? g.cont2team : g.cont1team) - 1);
     if (side < 0) side = 0;
     g.cardvis = (uint16_t)(side & 1);
@@ -934,8 +934,8 @@ void GetJerseyString(uint16_t player, uint32_t buf)
 void PrintGoalsAssists(uint16_t player, uint16_t x, uint16_t y)
 {
     const uint8_t *tm = GetCardTeam();
-    uint16_t goals = (uint16_t)(int16_t)(int8_t)tm[0xB4 + (int16_t)player];
-    uint16_t assists = (uint16_t)(int16_t)(int8_t)tm[0xCE + (int16_t)player];
+    uint16_t goals = (uint16_t)(int16_t)(int8_t)tm[tmpgoals + (int16_t)player];
+    uint16_t assists = (uint16_t)(int16_t)(int8_t)tm[tmpassists + (int16_t)player];
     g.printx = x;
     g.printy = y;
     printsmallz(str_PrintGoalsAssists_1, sizeof str_PrintGoalsAssists_1);
@@ -953,8 +953,8 @@ void PrintGoalsAssists(uint16_t player, uint16_t x, uint16_t y)
 void PrintSaves(uint16_t player, uint16_t x, uint16_t y)
 {
     const uint8_t *tm = GetCardTeam();
-    int16_t against = (int8_t)tm[0xB4 + (int16_t)player];
-    int16_t shots = (int8_t)tm[0xE8 + (int16_t)player];
+    int16_t against = (int8_t)tm[tmpgoals + (int16_t)player];
+    int16_t shots = (int8_t)tm[tmpshots + (int16_t)player];
     uint16_t saves = (uint16_t)(shots - against);
     g.printx = x;
     g.printy = y;

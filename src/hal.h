@@ -11,6 +11,10 @@
 #define SRAM_BASE     0x200000u
 #define Z80_RESET     0xA11200u
 #define Z80_RAM_BASE  0xA00000u
+/* VDP commands (equals.inc): a write to VSRAM or CRAM at address 0; + (address << 16) for another
+ * address, as the asm adds (n<<16) */
+#define VSRAM_W       0x40000010u
+#define CRAM_W        0xC0000000u
 uint8_t vdp_hv8(void);       /* move.b (VDP_CNTR).l: V counter */
 uint16_t vdp_hv16(void);     /* move.w (VDP_CNTR).l: HV counter word */
 uint16_t vdp_status(void);   /* move.w (VDP_CTRL).l: status word (bit 1 = DMA busy) */

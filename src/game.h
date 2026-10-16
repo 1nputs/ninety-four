@@ -42,7 +42,22 @@ enum { pf3oside, pf3break, pf3gctrl, pf3onetimer, pf3wall, pf3fall };           
 #define tmassist1 0x1A     /* the two before him */
 #define tmassist2 0x1C
 #define tmneardist 0x2A    /* long: distance squared from the puck to the team's nearest skater */
+#define tmchecks 0x10       /* body checks (team stat) */
+#define tmpasses 0x12       /* pass attempts (team stat) */
+#define tmteam 0x28         /* the team (TeamList index; the asm reads it as Xvel(a2)) */
+#define tmlchoice 0x2E      /* the line the pad chose (setpads / lcfound) */
+/* per roster slot, a byte each (26-byte tables): */
+#define tmpgoals 0xB4       /* goals (a goalie's: goals against) */
+#define tmpassists 0xCE     /* assists */
+#define tmpshots 0xE8       /* shots (a goalie's: shots faced) */
+#define tmppim 0x102        /* penalty minutes */
+#define tmpchecks 0x11C     /* body checks */
+#define tmptoi 0x136        /* time on ice: a word per slot */
+#define tmlines 0x16A       /* the line sets: 7 lines of 8 slot bytes (roster number + 1) */
+#define tmhotcold 0x1A2     /* 94: the hot / cold table, 16 bytes per slot */
+#define tmpptime 0x352      /* power play time */
 #define tmbreakaways 0x358
+#define tmonetimers 0x35C   /* one-timer attempts */
 #define tmsoattempts 0x360
 static inline uint8_t *team_struct(int away) { return ram_ptr(RAM_BASE + RAM_OFF_tmstruct) + (away ? tmsize : 0); }
 

@@ -63,7 +63,6 @@ static inline void sat_entry(struct Vid *v, uint16_t y, uint8_t size, uint16_t t
     v->sat += 8;
     v->link++;
 }
-#define VSRAM_WRITE 0x40000010u
 
 /* display94.asm:VBlank. The main vblank code for game play: DumpSprites when the frame is
  * ready (dfok), the palette fade, then the game clock (a second every $AAA jiffies, the
@@ -145,7 +144,7 @@ void SetScroll2(void)
 {
     Vmaddr((uint16_t)(g.VSCRLPM + 2));
     vdp_data(g.Hscroll);
-    vdp_ctrl(VSRAM_WRITE + (2u << 16));
+    vdp_ctrl(VSRAM_W + (2u << 16));
     vdp_data(g.Vscroll);
 }
 
@@ -392,7 +391,7 @@ void showclock(struct Vid *v)
     }
     if (!(g.disflags & HI(dfclock))) return;
     g.disflags &= (uint16_t)~HI(dfclock);
-    if (g.sflags2 & HI(3)) return;
+    if (g.sflags2 & HI(sf2replay)) return;
     if (g.gsp == 4) return;
     uint8_t *a0 = ram_ptr(RAM_BASE + RAM_OFF_clockram + 6);   /* 5 words, written backward */
     const uint8_t *font = rom_ptr(SYM_SmallFontMap + rd32(rom_ptr(SYM_SmallFontMap) + 4));
@@ -428,7 +427,7 @@ static void sso_arrow(const uint8_t *a0, struct SortObj *a3, uint16_t d3, struct
     if ((int16_t)rd16(a0 + 0x18) < 0) return;             /* not on the ice */
     ST_W(a3->frame);                                      /* a3 is an sso entry: x 0, y 2, attribute 4, frame 6, oldframe 8, VRoffs $A, VRchar $12 */
     int16_t d0 = (int16_t)rd16(a0);
-    if ((g.gmode2 & HI(0)) || (g.sflags2 & HI(3)) || (g.BA_PS_flags & HI(2))) {
+    if ((g.gmode2 & HI(0)) || (g.sflags2 & HI(sf2replay)) || (g.BA_PS_flags & HI(2))) {
         int16_t ax = d0 < 0 ? (int16_t)-d0 : d0;
         if (!(ax < 0xA6)) return;
     }

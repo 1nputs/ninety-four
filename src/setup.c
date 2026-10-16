@@ -298,7 +298,7 @@ void setupice(void)
  * (tmdata, from TeamList) and its line sets at $16A (the layout by OptLine). */
 void InitTeamStructure(uint16_t team, uint8_t *tm)
 {
-    wr16(tm + 0x28, team);
+    wr16(tm + tmteam, team);
     wr32(tm + tmdata, rd32(rom_ptr(SYM_TeamList + (uint16_t)(team << 2))));
     InitTeamLines(tm);
 }
@@ -309,7 +309,7 @@ void InitTeamLines(uint8_t *tm)
 {
     uint32_t data = rd32(tm + tmdata);
     const uint8_t *src = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 6)));
-    uint8_t *dst = tm + 0x16A;
+    uint8_t *dst = tm + tmlines;
     if (g.OptLine != 0) {
         memcpy(dst, src, 8);
         memcpy(dst + 8, src + 16, 12 * 4);
@@ -667,8 +667,8 @@ void UpdateScoutingDisplay(void)
     case '_': case '{': str = rd32(ram_ptr(RAM_BASE + RAM_OFF_HomeTeamRosterPtr)); goto string4;
     case '+': case '}': str = rd32(ram_ptr(RAM_BASE + RAM_OFF_AwayTeamRosterPtr)); goto string4;
     case '$': str = rd32((g.awayhotter ? g.AwShots : g.tmstruct) + 0x1E); goto string4;
-    case '[': tm = g.tmstruct; d1 = rd16(tm + 0x26); goto roster;
-    case ']': tm = g.AwShots; d1 = rd16(tm + 0x26); goto roster;
+    case '[': tm = g.tmstruct; d1 = rd16(tm + tmgoalie); goto roster;
+    case ']': tm = g.AwShots; d1 = rd16(tm + tmgoalie); goto roster;
     case '<': d1 = NextHomeHotPlayer(&tm); goto roster;
     case '>': d1 = NextAwayHotPlayer(&tm); goto roster;
     case '|': d1 = NextHomeColdPlayer(&tm); goto roster;
@@ -710,7 +710,7 @@ string4:                                                  /* the String at word 
     str += (uint32_t)(int16_t)rd16(rom_ptr(str + 4));
     goto append;
 roster:                                                   /* player d1's name in team a1's roster */
-    str = rd32(tm + 0x1E);
+    str = rd32(tm + tmdata);
     str += (uint32_t)(int16_t)rd16(rom_ptr(str));
     for (; d1-- != 0;) str += (uint32_t)(int16_t)rd16(rom_ptr(str)) + 8;
 append:

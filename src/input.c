@@ -313,7 +313,7 @@ void SetLCmode2(uint8_t *tm)
         int16_t line = getlchoice(d4, tm);
         if (line < 0) continue;
         if (!(tm[tmflags] & 2)) {
-            if ((uint16_t)d4 != rd16(tm + 0x2E)) { g.printy -= 1; continue; }
+            if ((uint16_t)d4 != rd16(tm + tmlchoice)) { g.printy -= 1; continue; }
             line = (int16_t)rd16(tm + tmline);
         }
         uint8_t *mes = ram_ptr(RAM_BASE + RAM_OFF_mesarea);   /* "A " .. "C " */
@@ -393,7 +393,7 @@ void lineinput(uint16_t d0, uint16_t d1, uint16_t d2, struct SortObj *o)
 /* input94.asm:lcfound. d2 = choice made 0-2: set the team's line and close the box. */
 void lcfound(uint16_t choice, uint8_t *tm, struct SortObj *o)
 {
-    wr16(tm + 0x2E, choice);
+    wr16(tm + tmlchoice, choice);
     int16_t line = getlchoice((int16_t)choice, tm);
     if (line < 0) return;
     o->pflags2 &= (uint8_t)~8;
@@ -579,7 +579,7 @@ void passto(struct SortObj *rcv, struct SortObj *o)
 void passtoa0(struct SortObj *rcv, struct SortObj *o)
 {
     uint8_t *tm = loadTeamStruct(o, NULL);
-    wr16(tm + 0x12, (uint16_t)(rd16(tm + 0x12) + 1));    /* pass attempts */
+    wr16(tm + tmpasses, (uint16_t)(rd16(tm + tmpasses) + 1));    /* pass attempts */
     g.passplayer = (uint16_t)rcv->SCnum;
     int16_t d5 = (int16_t)((int16_t)g.passspeed >> 2);
     assinsert(0x13, rcv);                                 /* apassrec */

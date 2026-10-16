@@ -351,7 +351,7 @@ void assscore(uint8_t *tm, struct SortObj *o)
     if (g.gmode2 & HI(0)) {                               /* shootout */
         if (g.shootoutdelay != 0) {
             g.shootoutdelay--;
-            if (g.shootoutdelay == 0) g.sflags2 |= HI(2);
+            if (g.shootoutdelay == 0) g.sflags2 |= HI(sf2drec);
         }
         if (o->Xpos > 0x88 || o->Xpos <= -0x88) d1 = 0;
     }

@@ -228,7 +228,7 @@ void InProgress(void)
         a4[3] = pl->pnum;
         g.TempPlOffset = d0;
         int16_t p = (int8_t)pl->pnum;
-        a2[0x102 + p] = (uint8_t)(a2[0x102 + p] + d2);    /* his penalty minutes */
+        a2[tmppim + p] = (uint8_t)(a2[tmppim + p] + d2);    /* his penalty minutes */
         p = (int16_t)(p * 2);
         d2 = (uint16_t)((uint16_t)(int8_t)d2 * 0x3C);
         d2 |= 0x2000;
@@ -762,7 +762,7 @@ void printscores1(void)
     if (was) g.crowdnoisedelay = 0x78;
     printz(str_printscores1_1, sizeof str_printscores1_1);
     Framer(9, 5);
-    g.disflags |= HI(3);                                  /* dfclock */
+    g.disflags |= HI(dfclock);                                  /* dfclock */
     printz(str_printscores1_2, sizeof str_printscores1_2);
     uint16_t d0 = g.gsp;
     uint32_t list = SYM_PerLabels;
@@ -839,7 +839,7 @@ static void dispen(uint8_t *tm)
  * their time remaining. */
 void USBoard(void)
 {
-    g.disflags |= HI(3);
+    g.disflags |= HI(dfclock);
     printscores1();
     printz(str_USBoard_1, sizeof str_USBoard_1);
     dispen(team_struct(0));
@@ -888,7 +888,7 @@ void linebar(uint16_t line, uint8_t *tm)
  * that line's skaters. */
 uint16_t getlinee(uint16_t line, const uint8_t *tm)
 {
-    const uint8_t *a1 = tm + 0x16A + line * 8;            /* the line set */
+    const uint8_t *a1 = tm + tmlines + line * 8;            /* the line set */
     const uint8_t *prio = rom_ptr(SYM_priolist);
     uint32_t d0 = 0;
     uint16_t d1 = 0;
@@ -956,10 +956,10 @@ void ChkShotStat(void)
             wr16(a2 + 0x354, (uint16_t)(rd16(a2 + 0x354) + 1));   /* power play shots */
     }
     wr16(a2 + 0x34A + g.gsp * 2, (uint16_t)(rd16(a2 + 0x34A + g.gsp * 2) + 1));   /* shots by period */
-    a2[0xE8 + a3->pnum]++;
+    a2[tmpshots + a3->pnum]++;
     int16_t gk = (int16_t)rd16(a1 + tmgoalie);
     if (gk < 0) return;                                   /* empty net */
-    a1[0xE8 + gk]++;
+    a1[tmpshots + gk]++;
 }
 
 /* refill one team (a2) and pick the other's (a3) starting line from the players on the ice */
@@ -1204,10 +1204,10 @@ static void hl_set_team(uint8_t *tm)
     reenergizeteam(tm);
     setpersonel(tm);
     forcepldata(tm);
-    tm[0x18] = 0xFF;
+    tm[tmlasttouch] = 0xFF;
     g.sflags8 &= (uint8_t)~0x80;
-    tm[0x1A] = 0xFF;
-    tm[0x1C] = 0xFF;
+    tm[tmassist1] = 0xFF;
+    tm[tmassist2] = 0xFF;
 }
 
 /* penalty94.asm:StartHL2. Play the highlight of game a0 (d1 = its number): its ticker score,

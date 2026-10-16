@@ -146,7 +146,7 @@ void PlayoffStatsScreen(void)
     ReadTeamStats();
     uint16_t team = (uint16_t)((g.potreeteam & 0xFF00) | g.potree[g.potreeteam]);
     uint8_t *tm = team_struct(0);
-    if (team != rd16(tm + 0x28)) tm = team_struct(1);
+    if (team != rd16(tm + tmteam)) tm = team_struct(1);
     PlayerStatsList(tm, 1);
 }
 
@@ -236,7 +236,7 @@ void SetStatsListScrollReg(void)
 {
     uint16_t saved = g.disflags;
     g.disflags |= HI(dfng);
-    vdp_ctrl(0x40000010 + (2u << 16));
+    vdp_ctrl(VSRAM_W + (2u << 16));
     vdp_data((uint16_t)(0xFF98 + g.VertLineScrolling));
     g.disflags = saved;
 }
@@ -277,7 +277,7 @@ void DrawStatsList(uint8_t *tm, int playoff)
     do {
         int32_t top = -1;
         best = 0xFF;
-        uint32_t data = rd32(tm + 0x1E);
+        uint32_t data = rd32(tm + tmdata);
         for (int16_t p = (int16_t)GetPlayerCount(tm) - 1; p >= 0; p--) {
             if (done & (1u << (p & 31))) continue;
             uint16_t v = 0;
@@ -444,7 +444,7 @@ void UpdateVertScrollReg(void)
 {
     uint16_t saved = g.disflags;
     g.disflags |= HI(dfng);
-    vdp_ctrl(0x40000010 + (2u << 16));
+    vdp_ctrl(VSRAM_W + (2u << 16));
     vdp_data((uint16_t)(0xFFD0 + g.VertLineScrolling));
     g.disflags = saved;
 }
@@ -682,7 +682,7 @@ void DrawLineIcon(uint16_t line, uint8_t *tm)
     g.printx = rd16(pos);
     uint16_t slot = (uint16_t)((line << 3) + 1);
     g.printy = rd16(pos + 2);
-    const uint8_t *slots = tm + 0x16A;
+    const uint8_t *slots = tm + tmlines;
     for (int16_t n = (int16_t)rd16(pos + 4); n >= 0; n--, slot++) {
         g.printx = rd16(pos);
         printsmallz(str_DrawLineIcon_2, sizeof str_DrawLineIcon_2);
@@ -746,7 +746,7 @@ int LineEditorExit(uint8_t *tm)
     g.palcount = 0x18;
     uint32_t item = g.menuitem, list = g.menulist, draw = g.menudraw;
     uint32_t items = SYM_LineEditorMenuText;
-    if ((uint8_t)(rd16(tm + 0x28) + 1) != g.databuffer[0]) items = SYM_LineEditorMenuNoLoad;
+    if ((uint8_t)(rd16(tm + tmteam) + 1) != g.databuffer[0]) items = SYM_LineEditorMenuNoLoad;
     printsmallz(str_LineEditorExit_1, sizeof str_LineEditorExit_1);
     InitMenuState(items, SYM_rtss2);
     for (;;) {
@@ -770,7 +770,7 @@ int LineEditorExit(uint8_t *tm)
  * another slot of that line, the slot's old player goes there (a swap). */
 void SetLineSlot(uint8_t player, uint16_t slot, uint8_t *tm)
 {
-    uint8_t *lines = tm + 0x16A, *line = lines + (int16_t)(slot & 0xFFF8);
+    uint8_t *lines = tm + tmlines, *line = lines + (int16_t)(slot & 0xFFF8);
     for (int16_t i = 5; i >= 0; i--)
         if (line[1 + i] == player) { line[1 + i] = lines[(int16_t)slot]; break; }
     lines[(int16_t)slot] = player;
@@ -800,8 +800,8 @@ void DecodeTeamLines(uint8_t *tm)
 void EncodeTeamLines(uint8_t *tm)
 {
     uint8_t *a0 = g.databuffer;
-    *a0++ = (uint8_t)(rd16(tm + 0x28) + 1);
-    const uint8_t *lines = tm + 0x16A, *slots = rom_ptr(SYM_AttributeOffsetTbl);
+    *a0++ = (uint8_t)(rd16(tm + tmteam) + 1);
+    const uint8_t *lines = tm + tmlines, *slots = rom_ptr(SYM_AttributeOffsetTbl);
     uint16_t goalies = GetGoalieCount(tm), forwards = GetForwardCount(tm);
     int odd = 0;
     for (; !(*slots & 0x80); slots++) {
@@ -890,7 +890,7 @@ void UpdatePlayerListScroll(uint16_t v, uint8_t *tm)
     }
     uint16_t saved = g.disflags;
     g.disflags |= HI(dfng);
-    vdp_ctrl(0x40000010 + (2u << 16));
+    vdp_ctrl(VSRAM_W + (2u << 16));
     vdp_data((uint16_t)(0xFF90 + g.VertLineScrolling));
     g.disflags = saved;
 }
@@ -935,7 +935,7 @@ void DisplayPlayerList(uint8_t *tm)
     uint8_t *who = SATT;
     wr32(who, 0x01020304);                                /* the goalies */
     if ((int16_t)(g.SelectedPlayerIdx - 1) >= 0) {
-        who = tm + 0x16A + (int16_t)(uint16_t)((g.SelectedPlayerIdx - 1) << 3) + 1;
+        who = tm + tmlines + (int16_t)(uint16_t)((g.SelectedPlayerIdx - 1) << 3) + 1;
         text = SYM_PlayerPositionText;
         rows = (int16_t)g.SelectedPlayerIdx > 5 ? 3 : 4;
     }
@@ -1096,7 +1096,7 @@ void UpdateScoringScroll(uint16_t v)
     }
     uint16_t saved = g.disflags;
     g.disflags |= HI(dfng);
-    vdp_ctrl(0x40000010 + (2u << 16));
+    vdp_ctrl(VSRAM_W + (2u << 16));
     vdp_data((uint16_t)(0xFFB0 + g.VertLineScrolling));
     g.disflags = saved;
 }
@@ -1215,7 +1215,7 @@ void UpdatePenaltyScroll(uint16_t v)
     }
     uint16_t saved = g.disflags;
     g.disflags |= HI(dfng);
-    vdp_ctrl(0x40000010 + (2u << 16));
+    vdp_ctrl(VSRAM_W + (2u << 16));
     vdp_data((uint16_t)(0xFFB0 + g.VertLineScrolling));
     g.disflags = saved;
 }

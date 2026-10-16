@@ -388,8 +388,8 @@ void FallDown(struct SortObj *a2, struct SortObj *a3)
     }
     if (a3->position != 0) {                               /* a skater hit: check stats */
         uint8_t *tm = team_struct(a3->pflags & (1 << pfteam));
-        wr16(tm + 0x10, (uint16_t)(rd16(tm + 0x10) + 1));
-        tm[0x11C + a3->pnum]++;
+        wr16(tm + tmchecks, (uint16_t)(rd16(tm + tmchecks) + 1));
+        tm[tmpchecks + a3->pnum]++;
         g.ChkCnt++;
         if (a3->fighting == 0)
             g.ChkCnt += 2;
@@ -1364,7 +1364,7 @@ void SetPlList(uint8_t *team)
     const uint8_t *prio = rom_ptr(SYM_priolist);
     if ((int16_t)rd16(team + tmgoalie) < 0)
         prio++;                                            /* no goalie: an extra attacker */
-    const uint8_t *line = team + 0x16A + rd16(team + tmline) * 8;
+    const uint8_t *line = team + tmlines + rd16(team + tmline) * 8;
     for (int d4 = (int16_t)rd16(team + tmap) - 1; d4 >= 0; d4--) {
         uint8_t pos = prio[d4];
         g.PlList[d4] = line[pos];
@@ -1386,7 +1386,7 @@ void SetPlList(uint8_t *team)
             int8_t pos = (int8_t)*sub++;
             if (pos < 0)
                 break;
-            if (TryAddPlayerToList(team, (team + 0x16A)[pos], d4)) { ok = 1; break; }
+            if (TryAddPlayerToList(team, (team + tmlines)[pos], d4)) { ok = 1; break; }
         }
         if (!ok) {
             int16_t d3 = (int16_t)GetPlayerCount(team);

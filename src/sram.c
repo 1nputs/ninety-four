@@ -75,7 +75,7 @@ void InitSaveRAM(void)
     return;
 flash:
     for (uint16_t c = colour;; c = (uint16_t)(c - step)) {
-        vdp_ctrl(0xC0000000);                             /* CRAM colour 0: the background */
+        vdp_ctrl(CRAM_W);                                 /* colour 0: the background */
         vdp_data(c & colour);
         SRAMWaitVblank();
     }

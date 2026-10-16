@@ -320,7 +320,7 @@ void GetMatchupPlayers(void)
  * of the first of its line sets. */
 uint16_t GetMatchupPlayer(const uint8_t *tm)
 {
-    uint32_t data = rd32(tm + 0x1E);
+    uint32_t data = rd32(tm + tmdata);
     const uint8_t *lines = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 6)));
     int16_t slot = (int8_t)rom_ptr(SYM_MatchupLineSlots)[g.matchup];
     g.matchupslot = (uint16_t)slot;
@@ -357,7 +357,7 @@ void PrintAdvantageMarks(void)
 /* the team data Strings after the city (city, abbreviation, nickname, arena): String n of team a2 */
 static uint32_t team_string(const uint8_t *tm, int n)
 {
-    uint32_t a1 = rd32(tm + 0x1E);
+    uint32_t a1 = rd32(tm + tmdata);
     a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1 + 4));
     while (n-- > 0) a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1));
     return a1;

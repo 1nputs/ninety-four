@@ -9,13 +9,12 @@
 #include "period_strings_gen.h"
 
 #define PFLAG(o, b) ((o)->pflags & (1 << (b)))
-#define VSRAM_WRITE 0x40000010u
 
 /* period94.asm:EndShootout. Shootout over: freeze the window, then the 5 skaters of the winning
  * side are set up above or below the view and celebrate (assscore). */
 void EndShootout(void)
 {
-    g.sflags2 |= HI(2);
+    g.sflags2 |= HI(sf2drec);
     freezewindow();
     g.shootoutdelay = 0x60;
     struct SortObj *a3 = sortobj((int16_t)g.homeshootgoals > (int16_t)g.awayshootgoals ? 0 : 6);
@@ -74,7 +73,7 @@ void AddArenaAnimSprite(uint8_t **sat, uint16_t *link)
     if ((int16_t)g.arenaanim < 0) return;
     if (g.arenaspritelist == 0) return;
     if (g.sflags4 & HI(4)) return;
-    if (g.sflags2 & HI(3)) return;
+    if (g.sflags2 & HI(sf2replay)) return;
     if (g.sflags & HI(sfhor)) return;
     const uint8_t *a1 = rom_ptr(g.arenaspritelist);
     a1 += rd32(a1 + 4);
@@ -138,8 +137,8 @@ uint32_t SkipNameNumber(uint16_t player, uint8_t *tm)
 void SetStatScroll(void)
 {
     uint16_t saved = g.disflags;
-    g.disflags |= HI(2);
-    vdp_ctrl(VSRAM_WRITE + (2u << 16));
+    g.disflags |= HI(dfng);
+    vdp_ctrl(VSRAM_W + (2u << 16));
     vdp_data((uint16_t)(0xFFB0 + g.VertLineScrolling));
     g.disflags = saved;
 }
@@ -194,7 +193,7 @@ void PrintStatValue(const uint8_t *a0, const uint8_t *tm)
     wr16(ram_ptr(mes), 2);
     uint16_t off = rd16(a0);
     if (off == 0xFFFF) {
-        uint32_t d0 = (uint32_t)rd16(tm + 0xC) * 0x64;
+        uint32_t d0 = (uint32_t)rd16(tm + tmscore) * 0x64;
         uint16_t d1 = rd16(tm);
         if (d1 != 0) d0 = m68k_divu(d0, d1);
         appstring(PushNumber((uint16_t)d0), mes);
@@ -230,15 +229,15 @@ void PrintStatValue(const uint8_t *a0, const uint8_t *tm)
  * play. */
 void updatePPTeamTime(void)
 {
-    if (!(g.sflags2 & HI(5))) return;
-    uint8_t *tm = team_struct((g.sflags2 & HI(6)) != 0);
-    wr16(tm + 0x352, (uint16_t)(rd16(tm + 0x352) + 1));
+    if (!(g.sflags2 & HI(sf2pwrplay))) return;
+    uint8_t *tm = team_struct((g.sflags2 & HI(sf2pwrtm)) != 0);
+    wr16(tm + tmpptime, (uint16_t)(rd16(tm + tmpptime) + 1));
 }
 
 /* period94.asm:GetTeamRating. The TeamRatings byte of team $28(a2). */
 uint16_t GetTeamRating(const uint8_t *tm)
 {
-    return rom_ptr(SYM_TeamRatings)[rd16(tm + 0x28)];
+    return rom_ptr(SYM_TeamRatings)[rd16(tm + tmteam)];
 }
 
 /* period94.asm:ShortenMsgTimer. Cap msgtimer at 2, unless a second pad is on and a3 is not the

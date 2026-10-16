@@ -248,7 +248,7 @@ void onetimershot(struct SortObj *a2, struct SortObj *o)
     g.sflags8 |= 0x80;
     g.crowdlevel += 0x96;
     g.CwdExciteLvl += 0xA;
-    wr16(tm + 0x35C, (uint16_t)(rd16(tm + 0x35C) + 1));   /* one-timer attempts */
+    wr16(tm + tmonetimers, (uint16_t)(rd16(tm + tmonetimers) + 1));   /* one-timer attempts */
     g.onetimerflags |= HI(0);
     o->pflags2 |= 2;
     g.sflags6 |= HI(1);

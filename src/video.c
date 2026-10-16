@@ -10,8 +10,6 @@
 #include "rom.h"
 #include "symbols_gen.h"
 
-#define VSRAM_W 0x40000010u
-#define CRAM_W  0xC0000000u
 #define RAM_W(off) ram_ptr(RAM_BASE + (off))
 
 /* the address word pair of a VDP write command for VRAM address a: high word 01aa aaaa
@@ -253,25 +251,25 @@ uint16_t waitxsr(uint16_t frames)
         updatecrowdf();
         RunArenaAnim();
         g.pausepad = 0;
-        g.sflags &= (uint16_t)~HI(1);
+        g.sflags &= (uint16_t)~HI(sfpj);
         ReadJoy1(&d0, &d1, &d2, &d3);
         ProcessInputWithRepeat(&d1, d2, d3);
         int key = d1 != 0;
         if (!key) {
             g.pausepad = 0;
-            g.sflags |= HI(1);
+            g.sflags |= HI(sfpj);
             ReadJoy2(&d0, &d1, &d2, &d3);
             ProcessInputWithRepeat(&d1, d2, d3);
             key = d1 != 0;
         }
         if (!key && g.FourWayPlay) {
-            g.sflags &= (uint16_t)~HI(1);
+            g.sflags &= (uint16_t)~HI(sfpj);
             g.pausepad = 3;
             ReadJoy3(&d0, &d1, &d2, &d3);
             ProcessInputWithRepeat(&d1, d2, d3);
             key = d1 != 0;
             if (!key && g.FourWayPlay) {
-                g.sflags |= HI(1);
+                g.sflags |= HI(sfpj);
                 g.pausepad = 4;
                 ReadJoy4(&d0, &d1, &d2, &d3);
                 ProcessInputWithRepeat(&d1, d2, d3);

@@ -341,14 +341,14 @@ void PrintParenNumber(const uint8_t *table, uint16_t player)
 void PrintPlayerGoals(uint16_t player, uint8_t *tm)
 {
     printz(str_PrintPlayerGoals_1, sizeof str_PrintPlayerGoals_1);
-    PrintParenNumber(tm + 0xB4, player);
+    PrintParenNumber(tm + tmpgoals, player);
 }
 
 /* title94.asm:PrintPlayerAssists. d0 = player, a2 = team: " (assists)", next row. */
 void PrintPlayerAssists(uint16_t player, uint8_t *tm)
 {
     printz(str_PrintPlayerAssists_1, sizeof str_PrintPlayerAssists_1);
-    PrintParenNumber(tm + 0xCE, player);
+    PrintParenNumber(tm + tmpassists, player);
 }
 
 /* title94.asm:ReadLineData. Read the $100 bytes at save RAM LineDataBase to databuffer;
@@ -356,7 +356,7 @@ void PrintPlayerAssists(uint16_t player, uint8_t *tm)
 void ReadLineData(void)
 {
     ReadSRAM(SYM_LineDataBase, 0x100, RAM_BASE + RAM_OFF_databuffer);
-    g.sflags &= (uint16_t)~HI(4);
+    g.sflags &= (uint16_t)~HI(sfwrap);
     g.lastsfx = 0xFFFF;
     g.recbpr = RAM_BASE;
 }
@@ -517,7 +517,7 @@ void VBlank_TitleScreen(void)
 {
     if (!(g.disflags & HI(dfng))) {
         DoDMA(RAM_BASE + RAM_OFF_SortCords, 0x1C0, g.VSCRLPM);
-        vdp_ctrl(0x40000010);                             /* VSRAM 0 */
+        vdp_ctrl(VSRAM_W);
         vdp_data(g.Vscroll);
         if (g.Sattsize) {
             uint16_t n = g.Sattsize;
@@ -648,7 +648,7 @@ void WriteLineData(void)
 {
     WriteSRAM(SYM_LineDataBase, 0x100, RAM_BASE + RAM_OFF_databuffer);
     MakeSRAMChecksum();
-    g.sflags &= (uint16_t)~HI(4);
+    g.sflags &= (uint16_t)~HI(sfwrap);
     g.lastsfx = 0xFFFF;
     g.recbpr = RAM_BASE;
 }

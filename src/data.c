@@ -28,7 +28,7 @@ void box(void)
  * assists with theirs. */
 void ShowGoalBox(void)
 {
-    if (g.BA_PS_flags & HI(2)) g.sflags2 |= HI(2);
+    if (g.BA_PS_flags & HI(2)) g.sflags2 |= HI(sf2drec);
     lcfound2(team_struct(0));
     lcfound2(team_struct(1));
     const uint8_t *e = last_goal();
@@ -45,9 +45,9 @@ void ShowGoalBox(void)
     if (e[2] & 0x80) { tm = team_struct(1); g.scorergoalies = g.awaygoalies; }
     uint32_t text = SYM_GoalBigTxt;
     if (g.DelayedPen & 1) { g.DelayedPen &= (uint8_t)~1; text = SYM_PPGoalBigTxt; }
-    if (tm[0xB4 + e[3]] == 3 && e[3] >= g.scorergoalies) {      /* third goal of a skater */
+    if (tm[tmpgoals + e[3]] == 3 && e[3] >= g.scorergoalies) {      /* third goal of a skater */
         text += rd16(rom_ptr(text));                               /* HAT TRICK! */
-        if (rd16(tm + 0x28) == g.HomeTeam) StartArenaAnim(0);
+        if (rd16(tm + tmteam) == g.HomeTeam) StartArenaAnim(0);
     }
     printbig(text);
     uint16_t scorer = e[3];
@@ -151,10 +151,10 @@ int16_t CalcTeamStarScores(uint8_t *tm, const uint8_t *other, uint8_t **out, uin
     for (int16_t slot = 0x19; slot >= 0; slot--, stats++, time += 2, *out += 4) {
         uint32_t score = (uint32_t)(int32_t)diff;
         if ((uint16_t)slot > goalies) {                  /* goalie slot */
-            if (mintime > rd16(time + 0x136)) { wr32(*out, score); continue; }
-            uint16_t shots = stats[0xE8];
+            if (mintime > rd16(time + tmptoi)) { wr32(*out, score); continue; }
+            uint16_t shots = stats[tmpshots];
             if (shots == 0) { wr32(*out, score); continue; }
-            uint16_t pct = (uint16_t)m68k_divu((uint32_t)stats[0xB4] * 100, shots);
+            uint16_t pct = (uint16_t)m68k_divu((uint32_t)stats[tmpgoals] * 100, shots);
             if (pct <= 4) {
                 score += 32000;
                 if (pct == 0) score += 75000;
@@ -162,9 +162,9 @@ int16_t CalcTeamStarScores(uint8_t *tm, const uint8_t *other, uint8_t **out, uin
             wr32(*out, score);
             continue;
         }
-        score += stats[0xB4] * 11000u + stats[0xCE] * 10100u;
-        uint32_t shots = stats[0xE8] * 10u;
-        if (diff == 0) score += (uint16_t)shots * 100u + rd16(time + 0x136);
+        score += stats[tmpgoals] * 11000u + stats[tmpassists] * 10100u;
+        uint32_t shots = stats[tmpshots] * 10u;
+        if (diff == 0) score += (uint16_t)shots * 100u + rd16(time + tmptoi);
         else score += shots;
         wr32(*out, score);
     }
@@ -361,7 +361,7 @@ void AddPlayoffTeamStats(void)
     ReadTeamStats();
     uint16_t team = RAM_W(RAM_OFF_potree)[(int16_t)g.potreeteam];
     const uint8_t *tm = team_struct(0);
-    if (rd16(tm + 0x28) != team) tm = team_struct(1);
+    if (rd16(tm + tmteam) != team) tm = team_struct(1);
     tm += 0xB4;
     uint8_t *tot = RAM_W(RAM_OFF_statsbuffer);
     for (int i = 0; i < 0x68; i++) wr16(tot + 2 * i, (uint16_t)(rd16(tot + 2 * i) + tm[i]));
