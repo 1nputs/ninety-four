@@ -26,6 +26,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <direct.h>
+#define make_dir(d) _mkdir(d)
+#else
+#include <sys/stat.h>
+#define make_dir(d) mkdir(d, 0777)
+#endif
 #include "game.h"
 #include "hal.h"
 #include "rom.h"
@@ -399,6 +406,17 @@ static void wav_header(uint32_t rate)
     fwrite("data", 1, 4, wav); fwrite(&data, 4, 1, wav);
 }
 
+/* the directory a save file goes in, made when it is missing (one level: out/) */
+static void make_parent(const char *path)
+{
+    char d[1024];
+    snprintf(d, sizeof d, "%s", path);
+    char *slash = strrchr(d, '/');
+    if (!slash || slash == d) return;
+    *slash = 0;
+    make_dir(d);                                          /* (fails harmlessly when it exists) */
+}
+
 int main(int argc, char **argv)
 {
     const char *rom = "NHL 94 (UE) [!].gen", *sram = "out/nhl94.srm";
@@ -441,6 +459,8 @@ int main(int argc, char **argv)
         }
     }
     if (!rom_load(rom)) { fprintf(stderr, "cannot load the ROM %s\n", rom); return 1; }
+    if (sram) make_parent(sram);                          /* (a copy run outside the repository has no out/) */
+    if (state_file) make_parent(state_file);
     if (input_path && (lockstep_path || !read_script(input_path))) { if (lockstep_path) fprintf(stderr, "--input: not with --lockstep\n"); return 1; }
     if (snap && load_state_path) { fprintf(stderr, "--snap or --load-state, not both\n"); return 2; }
     if (snap) read_snapshot();
