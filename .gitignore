@@ -12,6 +12,3 @@
 __pycache__/
 *.o
 *.so
-
-# the README's GIF: made from your ROM by tools/readme_gif.py
-docs/media/

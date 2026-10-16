@@ -1,7 +1,5 @@
 # NHL '94, rebuilt in C 🏒
 
-![Blake scores, assisted by Gretzky: NHL '94 running natively](docs/media/nhl94-scoring.gif)
-
 **The greatest hockey game ever made, running natively on your machine, with no emulator in
 sight.** All of the roughly 1,500 routines of EA's 1993 Sega Genesis classic have been rewritten
 by hand in C and checked against the original, frame by frame, until the two can't be told
@@ -52,8 +50,8 @@ rewinds, P pauses, F11 is full screen, Esc quits.
 - **Read first.** `docs/HANDOFF.md` (the living guide: setup, recipe, status, quirks, next
   steps), `docs/PLAN.md`, `../md-runtime/README.md`, and `../md-recomp-playbook/` (the method
   for another game; the runtime's directions; netplay, mods and scripting; quality of life).
-- **Rules.** The ROM and everything made from it (states, traces, captures, screenshots, this
-  README's GIF: `tools/readme_gif.py`) stay out of git. Commit after each finished job.
+- **Rules.** The ROM and everything made from it (states, traces, captures, screenshots, GIFs
+  such as `tools/goal_gif.py` makes) stay out of git. Commit after each finished job.
   Before and after a change: `make test`, `make lockstep`, `make golden-check`; for a runtime
   change, also `make runtime-check` and `make runtime-selfcheck`.
 
@@ -104,3 +102,35 @@ From the least ambitious to the most.
 - [ ] Replays and spectating
 - [ ] Rollback netplay online
 - [ ] The next game on the same method and runtime
+
+## Greets
+
+Big, big greets to everyone whose work this stands on:
+
+- **EA Sports and Park Place Productions**, who made NHL '94 in 1993. Still the best.
+- **[abdulahmad/NHL94Genesis](https://github.com/abdulahmad/NHL94Genesis)**: the bitwise rebuild
+  of the ROM in assembly, with every label and the module split, built in the style of its
+  sibling [NHLPA93Genesis](https://github.com/abdulahmad/NHLPA93Genesis). Every C file here maps
+  to one of its files, and every routine has its name.
+- **[Chaos81/nhl94-disassembly](https://github.com/Chaos81/nhl94-disassembly)**: the IDA
+  database and listing with the names and comments that made the code readable, and
+  **[Mhopkinsinc/NHLHockey](https://github.com/Mhopkinsinc/NHLHockey)**, the NHL Hockey source
+  code it started from.
+- **The NHL '94 community** and its [Discord](https://discord.gg/KXJeQ6pyUc), keeping the game
+  alive for over thirty years.
+- **[Genesis Plus GX](https://github.com/ekeeke/Genesis-Plus-GX)** by Eke-Eke (after Charles
+  MacDonald's Genesis Plus): the oracle. Every routine and every frame here was checked against
+  it. A development tool only, never shipped.
+- **[Nuked-OPN2](https://github.com/nukeykt/Nuked-OPN2)** by nukeykt and
+  **[ymfm](https://github.com/aaronsgiles/ymfm)** by Aaron Giles: the YM2612 cores that make the
+  music.
+- **[vasm](http://sun.hasenbraten.de/vasm/)** by Volker Barthelmann and Frank Wille: the assembler
+  that rebuilds the ROM byte for byte on Linux.
+- **[SDL](https://www.libsdl.org)**: the window, the sound and the controllers.
+- **[libretro](https://www.libretro.com)**: the API the oracle is hosted through.
+- The documenters of the hardware: Charles MacDonald (`genvdp.txt`),
+  [Plutiedev](https://plutiedev.com), [Sega Retro](https://segaretro.org),
+  [SMS Power](https://www.smspower.org) (the SN76489) and the
+  [SpritesMind](https://gendev.spritesmind.net) forum (Nemesis's YM2612 and VDP research).
+- **[Zig](https://ziglang.org)**, whose bundled Clang checks md-runtime against a second
+  compiler.

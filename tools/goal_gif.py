@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""The README's GIF: a goal, as the native game plays it. From faceoff.snap (make vectors) with
+"""A GIF of a goal, as the native game plays it. From faceoff.snap (make vectors) with
 the seed 94 random input, nhl94 --watch on the scoring summary's length finds the goals; the
 state saved before the one chosen, loaded again, gives every frame around it; Pillow makes a GIF
 of every second frame at twice the size, with the frames' own colours (the console shows at
-most 64 at a time). The picture comes from your ROM, so the GIF is not committed: this makes it.
+most 64 at a time). The picture comes from your ROM, so the GIF stays in out/, out of git.
 
-    tools/readme_gif.py [--goal N] [--out docs/media/nhl94-scoring.gif]
+    tools/goal_gif.py [--goal N] [--out out/nhl94-goal.gif]
 
 --goal: which goal of the run (2: Blake from Gretzky at 7:30 of the first, with this build).
 """
@@ -35,7 +35,7 @@ def nhl94(*args):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--goal', type=int, default=2)
-    ap.add_argument('--out', default=os.path.join(ROOT, 'docs', 'media', 'nhl94-scoring.gif'))
+    ap.add_argument('--out', default=os.path.join(ROOT, 'out', 'nhl94-goal.gif'))
     a = ap.parse_args()
     from PIL import Image
     if not os.path.exists(NHL94) or not os.path.exists(SNAP):
@@ -47,7 +47,7 @@ def main():
         sys.exit('the run has %d goals' % len(goals))
     g = goals[a.goal - 1]
     print('goal %d at frame %d' % (a.goal, g))
-    work = os.path.join(ROOT, 'out', 'readme_gif')
+    work = os.path.join(ROOT, 'out', 'goal_gif')
     shutil.rmtree(work, ignore_errors=True)
     os.makedirs(work)
     state = os.path.join(work, 'before.state')
