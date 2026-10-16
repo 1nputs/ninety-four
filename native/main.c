@@ -6,13 +6,17 @@
  *
  * usage: nhl94 [--rom FILE] [--snap FILE | --boot] [--scale N] [--aspect] [--sram FILE]
  *              [--headless] [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE]
- *              [--input FILE] [--lockstep FILE | --golden FILE]
+ *              [--input FILE] [--state FILE] [--load-state FILE] [--save-state FRAME:FILE]
+ *              [--lockstep FILE | --golden FILE]
  *
  * --headless runs without a window or pacing (as fast as it goes): with --frames it stops, --shot
  * writes the last picture, --wav the sound, --input plays pad 1 from a script (tools/oracle/scripts)
  * and --golden writes a line of hashes a frame (make golden). Keys: md-runtime's
  * (include/mdrt/platform_sdl2.h): pad 1 arrows, Z / X / C = A / B / C, Enter = Start; pad 2 I J K L,
- * Q / W / E, Tab; two game controllers; Esc quits, P pauses, F11 full screen. */
+ * Q / W / E, Tab; two game controllers; Esc quits, P pauses, F11 full screen; F5 saves a state
+ * (into --state FILE, out/nhl94.state), F9 loads it, Backspace held steps back (state.c).
+ * --load-state FILE starts from a native state; --save-state FRAME:FILE (headless) saves one at
+ * the first game loop wait from that frame on. */
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,6 +30,9 @@
 #include "mdrt/platform_sdl2.h"
 
 static const char *snap, *shot_path, *shots_dir, *wav_path, *lockstep_path, *golden_path, *input_path;
+static const char *state_file = "out/nhl94.state", *load_state_path, *save_state_path;
+static long save_state_frame = -1;
+static int states, rewind_states;       /* states on (the window, or --save-state / --load-state); rewind (the window) */
 static long stop_after = -1, shots_every = 600;
 static int boot = 1;                    /* power on, unless --snap */
 static jmp_buf out;
@@ -154,6 +161,13 @@ void native_game(mdrt *m, void *user)
     (void)user;
     native_m = m;
     if (setjmp(out)) { lockstep_report(); return; }
+    if (states) native_states_init(m, rewind_states ? state_file : NULL, rewind_states);
+    if (save_state_path) native_save_state_at(save_state_frame, save_state_path);
+    if (load_state_path) {                                /* a native state: the game loop from its wait */
+        native_hal_start(m, 0);
+        if (native_load_state_file(load_state_path)) native_quit();
+        run68k(native_resume_game_loop);
+    }
     if (boot) {                                           /* power on */
         native_hal_start(m, 0);
         run68k(Start);
@@ -208,19 +222,23 @@ static void golden_present(void *user, const uint16_t *px, int w, int h, int pit
 }
 
 /* --input FILE: pad 1's buttons from a script ("FRAME:BUTTON+BUTTON,..." as tools/oracle/run.py
- * takes, # lines are comments), held from that frame (the handshakes so far) on */
-static struct { long frame; uint16_t buttons; } *script;
+ * takes, # lines are comments), held from that frame (the handshakes so far) on. SAVE, LOAD and
+ * REWIND are the window's F5, F9 and Backspace, by the handshakes of this process (SAVE and LOAD
+ * once, at the handshake they are given) */
+#define REQ(r) ((uint32_t)(r) << 16)
+static struct { long frame; uint32_t buttons; } *script;
 static size_t script_len;
-static long input_frame;
+static int script_requests;             /* the script has SAVE, LOAD or REWIND */
 
 static int read_script(const char *path)
 {
     FILE *f = fopen(path, "r");
     if (!f) { fprintf(stderr, "cannot open %s\n", path); return 0; }
-    static const struct { const char *name; uint16_t bit; } names[] = {
+    static const struct { const char *name; uint32_t bit; } names[] = {
         { "UP", MDRT_PAD_UP }, { "DOWN", MDRT_PAD_DOWN }, { "LEFT", MDRT_PAD_LEFT }, { "RIGHT", MDRT_PAD_RIGHT },
         { "A", MDRT_PAD_A }, { "B", MDRT_PAD_B }, { "C", MDRT_PAD_C }, { "START", MDRT_PAD_START },
         { "X", MDRT_PAD_X }, { "Y", MDRT_PAD_Y }, { "Z", MDRT_PAD_Z }, { "MODE", MDRT_PAD_MODE },
+        { "SAVE", REQ(MDRT_REQUEST_SAVE) }, { "LOAD", REQ(MDRT_REQUEST_LOAD) }, { "REWIND", REQ(MDRT_REQUEST_REWIND) },
     };
     char line[65536];
     size_t cap = 0;
@@ -231,7 +249,7 @@ static int read_script(const char *path)
             if (!colon) continue;
             if (script_len == cap) script = realloc(script, (cap = cap ? 2 * cap : 256) * sizeof *script);
             script[script_len].frame = atol(item);
-            uint16_t b = 0;
+            uint32_t b = 0;
             for (char *name = colon + 1; *name; ) {
                 size_t n = strcspn(name, "+");
                 size_t i = 0;
@@ -241,21 +259,41 @@ static int read_script(const char *path)
                 name += n + (name[n] == '+');
             }
             script[script_len++].buttons = b;
+            if (b >> 16) script_requests = 1;
         }
     }
     fclose(f);
     return 1;
 }
 
+/* the script's entry now (the handshakes so far: in a state) */
+static size_t script_now(mdrt *m)
+{
+    long frame = (long)mdrt_frame_count(m);
+    size_t now = script_len;
+    for (size_t i = 0; i < script_len; i++)
+        if (script[i].frame <= frame) now = i;
+    return now;
+}
 static void script_source(void *user, uint16_t b[2])
 {
-    (void)user;
-    uint16_t now = 0;
-    for (size_t i = 0; i < script_len; i++)
-        if (script[i].frame <= input_frame) now = script[i].buttons;
-    b[0] = now;
+    size_t i = script_now(user);
+    b[0] = i < script_len ? (uint16_t)script[i].buttons : 0;
     b[1] = 0;
-    input_frame++;
+}
+/* the requests by this process's handshakes, not the game's frames (a state loaded puts those
+ * back) */
+static unsigned script_request(void *user)
+{
+    (void)user;
+    long h = native_handshakes();
+    size_t now = script_len;
+    for (size_t i = 0; i < script_len; i++)
+        if (script[i].frame <= h) now = i;
+    if (now == script_len) return 0;
+    unsigned r = (unsigned)(script[now].buttons >> 16);
+    if (script[now].frame != h) r &= MDRT_REQUEST_REWIND;   /* (SAVE and LOAD once) */
+    return r;
 }
 
 /* pictures to files */
@@ -296,9 +334,12 @@ void native_frame_done(long frame, int wait)
 
 static FILE *wav;
 static uint32_t wav_frames;
+static long golden_lines;
+long native_golden_lines(void) { return golden_lines; }
 static void wav_audio(void *user, const int16_t *s, int n)
 {
     (void)user;
+    if (golden) golden_lines++;
     if (golden) fprintf(golden, "%016llx %016llx %016llx %016llx %016llx %d\n", (unsigned long long)golden_ram,
                         (unsigned long long)golden_vdp, (unsigned long long)golden_z80, (unsigned long long)golden_pic,
                         (unsigned long long)fnv(FNV0, s, (size_t)n * 4), n);
@@ -337,16 +378,25 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--lockstep") && i + 1 < argc) { lockstep_path = argv[++i]; headless = 1; }
         else if (!strcmp(argv[i], "--golden") && i + 1 < argc) { golden_path = argv[++i]; headless = 1; }
         else if (!strcmp(argv[i], "--input") && i + 1 < argc) input_path = argv[++i];
+        else if (!strcmp(argv[i], "--state") && i + 1 < argc) state_file = argv[++i];
+        else if (!strcmp(argv[i], "--load-state") && i + 1 < argc) { load_state_path = argv[++i]; boot = 0; }
+        else if (!strcmp(argv[i], "--save-state") && i + 1 < argc && strchr(argv[i + 1], ':')) {
+            save_state_frame = atol(argv[++i]);
+            save_state_path = strchr(argv[i], ':') + 1;
+        }
         else {
             fprintf(stderr, "usage: %s [--rom FILE] [--snap FILE | --boot] [--scale N] [--aspect] [--sram FILE] [--headless]\n"
                             "       [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE] [--input FILE]\n"
-                            "       [--lockstep FILE | --golden FILE]\n", argv[0]);
+                            "       [--state FILE] [--load-state FILE] [--save-state FRAME:FILE] [--lockstep FILE | --golden FILE]\n", argv[0]);
             return 2;
         }
     }
     if (!rom_load(rom)) { fprintf(stderr, "cannot load the ROM %s\n", rom); return 1; }
-    if (!boot) read_snapshot();
     if (input_path && (lockstep_path || !read_script(input_path))) { if (lockstep_path) fprintf(stderr, "--input: not with --lockstep\n"); return 1; }
+    if (snap && load_state_path) { fprintf(stderr, "--snap or --load-state, not both\n"); return 2; }
+    if (snap) read_snapshot();
+    states = !lockstep_path && (!headless || load_state_path || save_state_path || script_requests);
+    rewind_states = !headless || script_requests;
     mdrt_config c = { 0 };
     c.audio_rate = 48000;
     c.sram_size = 0x2000;
@@ -358,11 +408,12 @@ int main(int argc, char **argv)
     if (wav_path && !(wav = fopen(wav_path, "wb"))) { fprintf(stderr, "cannot write %s\n", wav_path); return 1; }
     if (wav) wav_header(c.audio_rate);
     if (golden_path && !(golden = fopen(golden_path, "w"))) { fprintf(stderr, "cannot write %s\n", golden_path); return 1; }
-    c.platform = (mdrt_platform){ NULL, golden ? golden_present : NULL, wav_audio, NULL, NULL };
+    c.platform = (mdrt_platform){ .present = golden ? golden_present : NULL, .audio = wav_audio };
+    if (script_requests) c.platform.requests = script_request;
     mdrt *m = mdrt_new(&c);
     if (lockstep_path && !lockstep_load(lockstep_path, m)) return 1;
     if (golden) mdrt_set_hv_source(m, golden_hv, m);
-    if (input_path) mdrt_set_pad_source(m, script_source, NULL);
+    if (input_path) mdrt_set_pad_source(m, script_source, m);
     if (lockstep_path || golden) sram = NULL;             /* lockstep, golden: save RAM blank, as the oracle's at power on */
     FILE *f = sram ? fopen(sram, "rb") : NULL;            /* save RAM: as the window's platform keeps it */
     if (f) { if (fread(mdrt_get_sram(m)->bytes, 1, 0x2000, f) != 0x2000) fprintf(stderr, "%s: short\n", sram); fclose(f); }

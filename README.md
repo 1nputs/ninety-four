@@ -18,8 +18,10 @@ make nhl94
 ./build/nhl94
 ```
 
-Arrows, Z / X / C, Enter (or a game controller); pad 2 is I J K L, Q / W / E, Tab. It starts at
-power on; `--snap FILE` starts from an oracle snapshot instead. See `docs/HANDOFF.md` section 9.
+Arrows, Z / X / C, Enter (or a game controller); pad 2 is I J K L, Q / W / E, Tab. F5 saves a
+state during play, F9 loads it, Backspace held rewinds. It starts at power on; `--snap FILE`
+starts from an oracle snapshot instead, `--load-state FILE` from a saved state. See
+`docs/HANDOFF.md` section 9.
 
 ## Setup
 

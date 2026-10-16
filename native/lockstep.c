@@ -51,6 +51,7 @@ static int hv_over;
 static long checked, lagged, resynced, skipped, masked, placed;
 static int insync = 1;                  /* checking: the native game and the oracle are in step */
 static int restarted;                   /* the wait after a restart is the same moment again */
+static int tracking;                    /* following the routines the game is in: lockstep, or states */
 
 static uint64_t fnv64(uint64_t h, const uint8_t *p, size_t n)
 {
@@ -141,6 +142,7 @@ int lockstep_load(const char *path, mdrt *m)
     }
     mdrt_set_hv_source(m, hv_source, NULL);
     mdrt_set_pad_source(m, pad_source, NULL);
+    tracking = 1;
     next_span();
     printf("%s: %zu vblanks\n", path, nrecs);
     return 1;
@@ -358,7 +360,7 @@ static int in_game_logic(void);
 void NI __cyg_profile_func_enter(void *fn, void *site)
 {
     (void)site;
-    if (!recs || native_in_vblank()) return;
+    if (!tracking || native_in_vblank()) return;
     if (depth < 512) where[depth] = routine_of(fn);
     depth++;
     if (fn == (void *)run68k) run68k_depth = depth;
@@ -371,7 +373,7 @@ void NI run68k_unwind(void) { depth = run68k_depth; }
 void NI __cyg_profile_func_exit(void *fn, void *site)
 {
     (void)fn; (void)site;
-    if (!recs || native_in_vblank()) return;
+    if (!tracking || native_in_vblank()) return;
     if (depth > 0) depth--;
     while (armed && recs[lag_next].at_rts && depth > 0 && depth <= 512 && where[depth - 1] == recs[lag_next].ret_routine) {
         place_next("at the return");                      /* the oracle was at an rts: the return into its caller */
@@ -395,6 +397,25 @@ static NI void place_next(const char *how)
                                          in_game_logic() ? " (in the game's logic)" : "");
     native_vblank_now();
 }
+/* follow the routines the native game is in from now on (states need to know where it waits;
+ * call it before the game starts) */
+void NI native_track_routines(void) { tracking = 1; }
+
+/* the native game is at the game loop's wait: setvideo's, in DoGameFrame from Gameloop (the C
+ * helpers between them aside). native_resume_game_loop goes on from there, so states are taken
+ * there, as lockstep takes the oracle's. */
+int NI native_at_game_loop_wait(void)
+{
+    static const uint32_t want[3] = { SYM_setvideo, SYM_DoGameFrame, SYM_Gameloop };
+    int k = 0;
+    for (int i = (depth < 512 ? depth : 512) - 1; i >= 0 && k < 3; i--) {
+        if (!where[i]) continue;
+        if (where[i] != want[k]) return 0;
+        k++;
+    }
+    return k == 3;
+}
+
 /* the native game is in a frame's game logic (DoGameFrame on its function stack, and not the
  * intermission or the game over a period's end runs from inside it, nor the pause menu and its
  * screens): the oracle's lag frames there fall in long stretches without port accesses, where a

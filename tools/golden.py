@@ -6,11 +6,18 @@ again and compares, frame by frame, so a change to md-runtime or the native clie
 to change nothing it was not meant to. The runs use a fixed HV counter stand-in (main.c), so
 changes to the runtime's HV model do not show; everything else must match bit for bit.
 
+`check` also saves a native state in three of the runs (at the first game loop wait from a given
+frame on), loads it in a new process and runs on: the frames after it must be the same as the
+run's own (a state holds everything the game goes on from). And it plays the window's keys from a
+script (states_faceoff.txt: F5, F9, Backspace held): the frames after the load must be those after
+the save, and the rewind must step back three frames a frame through frames already shown.
+
     tools/golden.py record [--force]     (make golden)
     tools/golden.py check                (make golden-check)
 """
 import argparse
 import os
+import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -30,11 +37,21 @@ RUNS = [
     ('name_entry', 3000, ['--input', 'name_entry.txt']),
     ('faceoff', 18000, ['--snap', 'out/states/faceoff.snap', '--input', 'random_seed94.txt']),
 ]
+# the runs a state is saved in (from this frame on) and loaded from
+STATES = {'full_game': 3000, 'playoff_game': 9000, 'faceoff': 6000}
 COLUMNS = ['work RAM', 'VDP state', 'Z80 RAM', 'picture', 'sound', 'samples']
+SAVED = re.compile(r'state saved at frame (\d+) \(golden line (\d+)\)')
 
 
-def run(name, frames, opts, out):
+def run(name, frames, opts, out, save=None, load=None):
+    """nhl94 headless; save: (frame, path) saves a state; load: a state to start from. Returns
+    (name, error or None, the golden line the state was saved after)."""
     args = [NHL94, '--frames', str(frames), '--golden', out]
+    if save:
+        args += ['--save-state', '%d:%s' % save]
+    if load:
+        opts = [o for k, o in enumerate(opts) if o != '--snap' and (k == 0 or opts[k - 1] != '--snap')]
+        args += ['--load-state', load]
     i = 0
     while i < len(opts):
         o = opts[i]
@@ -50,34 +67,44 @@ def run(name, frames, opts, out):
         else:
             args.append(o)
             i += 1
-    r = subprocess.run(args, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    r = subprocess.run(args, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if r.returncode != 0:
-        return name, 'nhl94 failed (%d): %s' % (r.returncode, r.stderr.strip()[-300:])
-    return name, None
+        return name, 'nhl94 failed (%d): %s' % (r.returncode, r.stderr.strip()[-300:]), None
+    m = SAVED.search(r.stdout)
+    if save and not m:
+        return name, 'no state saved from frame %d' % save[0], None
+    return name, None, int(m.group(2)) if m else None
 
 
-def record(dirname, jobs):
+def record(dirname, jobs, states=False):
+    """the runs into dirname; states: also save a state in the runs of STATES. Returns the golden
+    lines the states were saved after (by name), or None on a failure."""
     os.makedirs(dirname, exist_ok=True)
+
+    def one(r):
+        save = (STATES[r[0]], os.path.join(dirname, r[0] + '.mdrs')) if states and r[0] in STATES else None
+        return run(r[0], r[1], r[2], os.path.join(dirname, r[0] + '.golden'), save)
     with ThreadPoolExecutor(jobs) as ex:
-        results = list(ex.map(lambda r: run(r[0], r[1], r[2], os.path.join(dirname, r[0] + '.golden')), RUNS))
-    bad = [(n, e) for n, e in results if e]
+        results = list(ex.map(one, RUNS))
+    bad = [(n, e) for n, e, _ in results if e]
     for n, e in bad:
         print('%s: %s' % (n, e))
-    return not bad
+    return None if bad else {n: line for n, _, line in results if line is not None}
 
 
-def compare(want, got):
+def compare(want, got, skip=0):
+    """the first difference of got from want (after want's first skip lines), or None"""
     with open(want) as f:
-        a = f.read().split('\n')
+        a = f.read().split('\n')[skip:]
     with open(got) as f:
         b = f.read().split('\n')
     for i, (x, y) in enumerate(zip(a, b)):
         if x != y:
             xs, ys = x.split(), y.split()
             cols = [COLUMNS[k] for k in range(min(len(xs), len(ys))) if xs[k] != ys[k]]
-            return 'frame %d: %s differ' % (i + 1, ', '.join(cols) or 'lines')
+            return 'frame %d: %s differ' % (skip + i + 1, ', '.join(cols) or 'lines')
     if len(a) != len(b):
-        return '%d frames, the golden run has %d' % (len(b) - 1, len(a) - 1)
+        return '%d frames, the golden run has %d' % (skip + len(b) - 1, skip + len(a) - 1)
     return None
 
 
@@ -93,11 +120,12 @@ def main():
     if a.action == 'record':
         if os.path.exists(os.path.join(a.dir, RUNS[0][0] + '.golden')) and not a.force:
             sys.exit('%s has golden runs; --force to record over them' % a.dir)
-        ok = record(a.dir, a.jobs)
+        ok = record(a.dir, a.jobs) is not None
         print('golden: %d runs recorded in %s' % (len(RUNS), os.path.relpath(a.dir, ROOT)) if ok else 'golden: FAILED')
         sys.exit(0 if ok else 1)
     new = a.dir.rstrip('/') + '-new'
-    if not record(new, a.jobs):
+    saved = record(new, a.jobs, states=True)
+    if saved is None:
         sys.exit('golden: FAILED')
     bad = 0
     for name, frames, _ in RUNS:
@@ -110,7 +138,43 @@ def main():
         print('%-15s %s' % (name, d or 'identical, %d frames' % frames))
         bad += d is not None
     print('golden: %d of %d runs identical' % (len(RUNS) - bad, len(RUNS)))
-    sys.exit(1 if bad else 0)
+
+    # the states, each loaded in a new process: the frames after it as the run's own
+    def loaded(r):
+        name = r[0]
+        out = os.path.join(new, name + '.loaded')
+        return run(name, r[1], r[2], out, load=os.path.join(new, name + '.mdrs'))
+    with ThreadPoolExecutor(a.jobs) as ex:
+        results = list(ex.map(loaded, [r for r in RUNS if r[0] in STATES]))
+    sbad = 0
+    for name, err, _ in results:
+        line = saved[name]
+        d = err or compare(os.path.join(new, name + '.golden'), os.path.join(new, name + '.loaded'), line)
+        print('%-15s %s' % (name, d or 'a state loaded: the %d frames after it identical' % sum(1 for _ in open(os.path.join(new, name + '.loaded')))))
+        sbad += d is not None
+    print('golden: %d of %d states go on identically' % (len(STATES) - sbad, len(STATES)))
+    kbad = keys(new)
+    sys.exit(1 if bad or sbad or kbad else 0)
+
+
+def keys(dirname):
+    """F5 at handshake 1500, F9 at 2400, Backspace held 3000-3150 (states_faceoff.txt)"""
+    out = os.path.join(dirname, 'keys.golden')
+    name, err, _ = run('keys', 3600, ['--snap', 'out/states/faceoff.snap', '--input', 'states_faceoff.txt',
+                                      '--state', os.path.join(dirname, 'keys.mdrs')], out)
+    if not err:
+        lines = [l.split()[:4] for l in open(out)]     # (the sound aside for the rewind: it goes on)
+        full = [l.split() for l in open(out)]
+        # line h (from 0) is the h-th handshake's (line 0 the snapshot's own); a key's request comes
+        # with the handshake after the one it is given at, and is carried out at the next wait: the
+        # state saved before handshake 1502 is loaded before handshake 2402, and the rewind steps
+        # back before handshakes 3002 to 3151, to the frames of handshakes 2101, 2098 ...
+        same = sum(full[1502 + k] == full[2402 + k] for k in range(600))
+        back = sum(lines[3002 + k] == lines[2101 - 3 * k] for k in range(150))
+        err = None if same == 600 and back == 150 else \
+            'the load: %d of 600 frames as after the save; the rewind: %d of 150 frames three back' % (same, back)
+    print('%-15s %s' % ('keys', err or 'F5, F9: the 600 frames after the load as after the save; Backspace: 150 frames stepped back'))
+    return err is not None
 
 
 if __name__ == '__main__':

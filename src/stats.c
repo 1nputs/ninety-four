@@ -489,7 +489,7 @@ void DrawScrollArrows(void)
 
 /* the line editor's registers, kept across its routines as the 68k keeps them: d6, the player of
  * the slot under the cursor, and d7, the attribute he was printed with (DrawLineIcon) */
-static uint16_t le_player, le_attr;
+uint16_t le_player, le_attr;
 #define LE_SLOT() rd16((uint8_t *)RAM_W(RAM_OFF_TestList))    /* the cursor's line slot (TestList's first word) */
 enum { LE_REDRAW, LE_MENU, LE_SELECT, LE_EXIT, LE_DONE };
 

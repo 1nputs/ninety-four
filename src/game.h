@@ -926,6 +926,9 @@ void UpdateVertScrollReg(void);
 void DisplayGameInfo(uint16_t n);
 void PrintGameInfo(uint16_t team, uint16_t score);
 void DrawScrollArrows(void);
+/* the line editor's d6 and d7 across its routines: the player under the cursor and the attribute
+ * he was printed with (kept in a native state with the rest) */
+extern uint16_t le_player, le_attr;
 void LineEditor(uint8_t *tm);                           /* a2: the line editor */
 int LineEditorRedraw(uint8_t *tm);
 int LineEditorMenu(uint8_t *tm);

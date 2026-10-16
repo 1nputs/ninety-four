@@ -24,6 +24,20 @@ void native_hal_start(mdrt *m, uint64_t start);
 /* the game loop from setvideo's wait at a frame's end (main.c) */
 void native_resume_game_loop(void);
 
+/* states (state.c): md-runtime's console and the game's parts (work RAM, the Z80 relay, the C
+ * port's registers kept across routines, the HAL's clock), taken at the game loop's wait */
+void native_states_init(mdrt *m, const char *path, int rewind);   /* path: the F5 / F9 file */
+int native_load_state_file(const char *path);       /* 0: loaded (then run68k(native_resume_game_loop)) */
+void native_save_state_at(long frame, const char *path);   /* headless: at the first game loop wait from frame on */
+void native_states_wait(void);                       /* at each of the game's vblank waits, before the handshake */
+int native_at_game_loop_wait(void);                  /* (lockstep.c: the routines the game is in) */
+void native_track_routines(void);
+long native_frames(void);                            /* the game's vblank waits so far (hal_native.c) */
+long native_handshakes(void);                        /* the handshakes this process made */
+size_t native_hal_save(uint8_t *out);                /* the HAL's part of a state */
+int native_hal_load(const uint8_t *in, size_t size);
+long native_golden_lines(void);                      /* the golden run's lines so far (main.c) */
+
 /* lockstep against the oracle (lockstep.c) */
 int lockstep_load(const char *path, mdrt *m);
 void lockstep_check(long frame);

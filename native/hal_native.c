@@ -20,6 +20,7 @@ static uint32_t accesses;               /* the game's port accesses outside the 
 static int in_vblank;                   /* running the vblank interrupt's code */
 static uint32_t t68k;                   /* master clocks the game has spent in this frame */
 static long frames;
+static long handshakes;                 /* (this process's: not in a state) */
 
 #define BUS_ACCESS 56                   /* a 68k byte access through the Z80's bus, with its instruction */
 #define PORT_ACCESS 28                  /* a write to the PSG */
@@ -115,6 +116,7 @@ static void vblank(int wait)
 {
     native_frame_done(++frames, wait);
     if (mdrt_wait_vblank(native_m)) native_quit();
+    handshakes++;
     frame_base += mdrt_frame_mclks(native_m);
     t68k = 0;
     z80_relay_frame();                                    /* (the YM2612's busy grid) */
@@ -126,7 +128,30 @@ static void vblank(int wait)
     mdrt_vblank_end(native_m);
     if (wait && lockstep_vblank_again()) vblank(1);       /* (lockstep: the oracle's vblank code ran into the next one) */
 }
-void hal_wait_vblank(void) { vblank(1); }
+void hal_wait_vblank(void) { native_states_wait(); vblank(1); }
+
+long native_frames(void) { return frames; }
+long native_handshakes(void) { return handshakes; }
+
+/* the HAL's clock and counters, a part of the native game's states (state.c): little-endian u64s */
+size_t native_hal_save(uint8_t *out)
+{
+    uint64_t v[5] = { frame_base, t68k, sr, accesses, (uint64_t)frames };
+    if (out)
+        for (int i = 0; i < 5; i++)
+            for (int k = 0; k < 8; k++) out[8 * i + k] = (uint8_t)(v[i] >> (8 * k));
+    return sizeof v;
+}
+int native_hal_load(const uint8_t *in, size_t size)
+{
+    uint64_t v[5] = { 0 };
+    if (size != sizeof v) return -1;
+    for (int i = 0; i < 5; i++)
+        for (int k = 0; k < 8; k++) v[i] |= (uint64_t)in[8 * i + k] << (8 * k);
+    frame_base = v[0]; t68k = (uint32_t)v[1]; sr = (uint16_t)v[2]; accesses = (uint32_t)v[3]; frames = (long)v[4];
+    in_vblank = 0;
+    return 0;
+}
 
 /* a vblank in the middle of the game's work (lockstep: the oracle's lag frames) */
 void native_vblank_now(void) { vblank(0); }
