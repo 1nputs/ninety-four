@@ -14,11 +14,11 @@ B="$ROOT/build/asm"; V="$ROOT/ref/vasm-src/vasm/vasmm68k_mot"
 ROM="${ROM:-$ROOT/NHL 94 (UE) [!].gen}"
 CHECKSUM="${CHECKSUM:-1}"; REV="${REV:-0}"
 rm -rf "$B/src"; mkdir -p "$B"; cp -r "$SRC" "$B/src"
-ln -sfn "$ROOT/ref/NHL94Genesis/Extracted" "$B/Extracted"
+ln -sfn ../../ref/NHL94Genesis/Extracted "$B/Extracted"   # (relative: a moved checkout keeps them)
 cp "$ROOT/tools/asm/genesis_vasm.mac" "$B/src/macros/genesis.mac"
 python3 -I "$ROOT/tools/asm/expand_strings.py" "$B/src"
 [ -f "$ROOT/ref/NHL94Genesis/output/teamcounts.inc" ] || (cd "$ROOT/ref/NHL94Genesis" && node tools/prebuild.js >/dev/null)
-ln -sfn "$ROOT/ref/NHL94Genesis/output" "$B/output"
+ln -sfn ../../ref/NHL94Genesis/output "$B/output"
 find "$B/src" \( -name '*.asm' -o -name '*.inc' \) -print0 | xargs -0 sed -i -e 's/<>/!=/g' -e 's/HotList\.bin/Hotlist.bin/' \
   -e 's/^\(\s\+\)[Pp][Ll][Aa][Yy][Ee][Rr]\b/\1PLAYER/' -e 's/^\(\s\+\)[Vv][Mm][Ii][Nn][Cc]\b/\1VmInc/' \
   -e 's/^\(\s\+\)[Ss][Tt][Rr][Ii][Nn][Gg]\b/\1String/' -e 's/^\(\s\+\)[Hh][Ee][Xx]2\b/\1HEX2/' -e 's/^\(\s\+\)[Pp][Ii][Xx]\b/\1PIX/'
