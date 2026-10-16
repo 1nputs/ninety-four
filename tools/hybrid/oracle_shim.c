@@ -312,6 +312,9 @@ static FILE *ls;
 static uint32_t ls_vblank;
 static void lockstep_access(int write, int width, uint32_t a, uint32_t value);
 static void lockstep_vblank(void);
+static int ls_lag_open;
+static uint32_t ls_lag_ret, ls_lag_sp;
+static void lockstep_lag_end(void);
 
 static void hook(hook_type_t type, int width, unsigned int address, unsigned int value) {
   if (fm_write != chip_fm && fm_write != st_fm) {          /* GPGX set its chip up again: follow it */
@@ -326,6 +329,7 @@ static void hook(hook_type_t type, int width, unsigned int address, unsigned int
   if (ls) {
     if (type == HOOK_M68K_R) lockstep_access(0, width, address & 0xFFFFFF, value);
     else if (type == HOOK_M68K_E && address == ls_vblank) lockstep_vblank();
+    else if (type == HOOK_M68K_E && ls_lag_open && address == ls_lag_ret && m68k_get_reg(M68K_REG_A7) == ls_lag_sp) lockstep_lag_end();
   }
   if (st && type == HOOK_M68K_W) {
     uint32_t a = address & 0xFFFFFF;
@@ -687,7 +691,7 @@ void oracle_sndtrace_close(void) {
 }
 
 /* ---- lockstep vectors for the native game (.lockstep) ---------------------------------------
- * "MDLS", version u32 = 3, the vblank handler's address u32; then a record at each vblank
+ * "MDLS", version u32 = 4, the vblank handler's address u32; then a record at each vblank
  * interrupt (before the handler's first instruction): tag u8 = 1, flags u8 (bit 0: the 68k was
  * in a vblank wait loop, as the native game would be; bit 1: the whole state follows the record,
  * at the first such interrupt after one that was not), the frame u32, the address the 68k was
@@ -697,10 +701,14 @@ void oracle_sndtrace_close(void) {
  * below the stack ($0000-$DEFF) and of the VDP's 24 registers, VRAM, CRAM and VSRAM (as
  * oracle_vdp_get gives them); with bit 1: work RAM 64K, the 24 registers, VRAM 64K, CRAM 128 and
  * VSRAM 80 bytes, the 68k's D0-D7 and A0-A7 u32 each, Z80 RAM 8K and the Z80 (PC u16, HL u16, C u8,
- * bank u16, state u8, as a sound trace's header has it). End: tag u8 = 2.
+ * bank u16, state u8, as a sound trace's header has it), then the lag mask: what the vblank code
+ * changed in the interrupts since the last whole state that were not in a wait loop (a bit a
+ * byte, bit i & 7 of byte i >> 3): work RAM 8K, the registers 4, VRAM 8K, CRAM 16 and VSRAM 16
+ * bytes. End: tag u8 = 2.
  * A wait loop, as test/replay.c tells it: a conditional Bcc.s back (within 16 bytes, over code
  * reading vcount, palcount or disflags by absolute short address) at or just after the address. */
 static uint16_t ls_buttons, ls_nhv, ls_waitvars[3];
+static uint8_t ls_m_ram[0x2000], ls_m_reg[4], ls_m_vram[0x2000], ls_m_cram[16], ls_m_vsram[16];
 static uint8_t ls_hv_addr[8192];
 static uint16_t ls_hv[8192];
 static int ls_last_wait = 1;
@@ -745,9 +753,12 @@ int oracle_lockstep_open(const char *path, uint32_t vcount, uint32_t palcount, u
   ls = fopen(path, "wb");
   if (!ls) return 0;
   ls_vblank = (uint32_t)(READ_BYTE(cart.rom, 0x78) << 24 | READ_BYTE(cart.rom, 0x79) << 16 | READ_BYTE(cart.rom, 0x7A) << 8 | READ_BYTE(cart.rom, 0x7B));
-  fwrite("MDLS", 1, 4, ls); ls_u32(3); ls_u32(ls_vblank);
+  fwrite("MDLS", 1, 4, ls); ls_u32(4); ls_u32(ls_vblank);
   ls_nhv = 0;
   ls_records = 0;
+  ls_lag_open = 0;
+  memset(ls_m_ram, 0, sizeof ls_m_ram); memset(ls_m_reg, 0, sizeof ls_m_reg); memset(ls_m_vram, 0, sizeof ls_m_vram);
+  memset(ls_m_cram, 0, sizeof ls_m_cram); memset(ls_m_vsram, 0, sizeof ls_m_vsram);
   return 1;
 }
 
@@ -757,8 +768,24 @@ static void lockstep_access(int write, int width, uint32_t a, uint32_t value) {
   ls_hv[ls_nhv++] = (uint16_t)value;
 }
 
+/* the lag mask: what the vblank code changed when its interrupt came outside a wait loop (from its
+ * first instruction to its return to the interrupted address, or the next interrupt) */
+static uint8_t ls_l_ram[0x10000], ls_l_v[0x10000], ls_l_c[128], ls_l_s[80], ls_l_r[32];
+static void mask_diff(uint8_t *mask, const uint8_t *a, const uint8_t *b, size_t n) {
+  for (size_t i = 0; i < n; i++) if (a[i] != b[i]) mask[i >> 3] |= (uint8_t)(1 << (i & 7));
+}
+static void lockstep_lag_end(void) {
+  static uint8_t ram[0x10000], v[0x10000], c[128], s[80], r[32], z[0x2000];
+  ls_lag_open = 0;
+  ram_copy_be(ram);
+  oracle_vdp_get(v, c, s, r, z);
+  mask_diff(ls_m_ram, ls_l_ram, ram, sizeof ram); mask_diff(ls_m_reg, ls_l_r, r, 24);
+  mask_diff(ls_m_vram, ls_l_v, v, sizeof v); mask_diff(ls_m_cram, ls_l_c, c, sizeof c); mask_diff(ls_m_vsram, ls_l_s, s, sizeof s);
+}
+
 static void lockstep_vblank(void) {
   static uint8_t ram[0x10000], v[0x10000], c[128], s[80], r[32], z[0x2000];
+  if (ls_lag_open) lockstep_lag_end();                  /* (the vblank code ran into the next interrupt) */
   uint32_t sp = m68k_get_reg(M68K_REG_A7);
   uint32_t at = (uint32_t)(bus_byte(sp + 2) << 24 | bus_byte(sp + 3) << 16 | bus_byte(sp + 4) << 8 | bus_byte(sp + 5));
   int wait = in_wait_loop(at & 0xFFFFFF), full = wait && !ls_last_wait;
@@ -784,6 +811,15 @@ static void lockstep_vblank(void) {
     uint8_t zs[8];
     oracle_z80_get(zs);
     fwrite(z, 1, sizeof z, ls); fwrite(zs, 1, 8, ls);
+    fwrite(ls_m_ram, 1, sizeof ls_m_ram, ls); fwrite(ls_m_reg, 1, sizeof ls_m_reg, ls); fwrite(ls_m_vram, 1, sizeof ls_m_vram, ls);
+    fwrite(ls_m_cram, 1, sizeof ls_m_cram, ls); fwrite(ls_m_vsram, 1, sizeof ls_m_vsram, ls);
+    memset(ls_m_ram, 0, sizeof ls_m_ram); memset(ls_m_reg, 0, sizeof ls_m_reg); memset(ls_m_vram, 0, sizeof ls_m_vram);
+    memset(ls_m_cram, 0, sizeof ls_m_cram); memset(ls_m_vsram, 0, sizeof ls_m_vsram);
+  }
+  if (!wait) {                                          /* lag: follow what the vblank code changes */
+    memcpy(ls_l_ram, ram, sizeof ram); memcpy(ls_l_v, v, sizeof v); memcpy(ls_l_c, c, sizeof c);
+    memcpy(ls_l_s, s, sizeof s); memcpy(ls_l_r, r, sizeof r);
+    ls_lag_open = 1; ls_lag_ret = at & 0xFFFFFF; ls_lag_sp = sp + 6;
   }
 }
 

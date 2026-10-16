@@ -80,6 +80,9 @@ void z80_ram_write8(uint16_t off, uint8_t v) { t68k += BUS_ACCESS; relay_now(); 
 
 uint8_t pad_read(uint32_t port) { return mdrt_pad_read(mdrt_get_pads(native_m), port); }
 void pad_write(uint32_t port, uint8_t v) { mdrt_pad_write(mdrt_get_pads(native_m), port, v); }
+uint16_t io_read16(uint32_t addr) { uint8_t b = mdrt_pad_read(mdrt_get_pads(native_m), addr | 1); return (uint16_t)(b << 8 | b); }
+uint32_t io_read32(uint32_t addr) { return (uint32_t)io_read16(addr) << 16 | io_read16(addr + 2); }
+void tmss_write(uint32_t v) { (void)v; }                 /* (no TMSS: the VDP is always unlocked) */
 
 /* save RAM: the bytes on the odd addresses */
 uint8_t sram_read8(uint32_t off) { return mdrt_sram_read8(mdrt_get_sram(native_m), off | 1); }

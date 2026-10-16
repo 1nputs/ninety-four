@@ -1,14 +1,17 @@
-/* The front end is not ported yet: the routines that leave the game for it end the session.
- * Weak, so the real ports replace them. */
+/* The parts of the front end that are not ported yet end the session when the game reaches
+ * them. Weak, so the real ports replace them. */
 #include <stdio.h>
 #include "game.h"
 #include "native.h"
 
 static void no_front_end(const char *what)
 {
-    fprintf(stderr, "%s: the front end is not ported yet, the session ends here\n", what);
+    fprintf(stderr, "%s: not ported yet, the session ends here\n", what);
     native_quit();
 }
 
-__attribute__((weak)) void ExitToOpening(void) { no_front_end("ExitToOpening"); }
 __attribute__((weak)) void GameOver(void) { no_front_end("GameOver"); }
+__attribute__((weak)) void GameSetUp(void) { no_front_end("GameSetUp (the options screens)"); }
+__attribute__((weak)) void UserNameEntry(void) { no_front_end("UserNameEntry"); }
+__attribute__((weak)) void PlayoffScreen(void) { no_front_end("PlayoffScreen"); }
+__attribute__((weak)) void ScoutingReport(void) { no_front_end("ScoutingReport"); }

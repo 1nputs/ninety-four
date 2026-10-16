@@ -4,7 +4,8 @@ with the oracle's after the same number of frames from the same state: both redu
 3 bits a colour channel (the oracle's frame buffer is RGB565, the native PPM uses md-runtime's
 levels), so the comparison is of VDP colours.
 
-usage: compare_shot.py ROM --state STATE --frames N SHOT.ppm [--around K]   (also N-K .. N+K)
+usage: compare_shot.py ROM [--state STATE] --frames N SHOT.ppm [--around K]   (also N-K .. N+K;
+       without --state from power on: the native game's frames are its vblank waits, so --around)
 """
 import argparse, ctypes as C, os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'hybrid'))
@@ -32,7 +33,7 @@ def oracle_pixels(o):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('rom')
-    ap.add_argument('--state', required=True)
+    ap.add_argument('--state', help='a saved state (default: power on)')
     ap.add_argument('--frames', type=int, required=True)
     ap.add_argument('--around', type=int, default=0)
     ap.add_argument('shot')
@@ -40,7 +41,8 @@ def main():
     w, h, ours = read_ppm(a.shot)
     o = Oracle()
     o.load(a.rom)
-    o.unserialize(open(a.state, 'rb').read())
+    if a.state:
+        o.unserialize(open(a.state, 'rb').read())
     best = None
     for f in range(1, a.frames + a.around + 1):
         o.run()

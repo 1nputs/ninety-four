@@ -7,6 +7,8 @@ uint16_t vdp_read(void) { return (uint16_t)replay_io_read(VDP_DATA_PORT, 2); }
 uint8_t z80_busack(void) { return (uint8_t)replay_io_read(Z80_BUSREQ, 1); }
 uint8_t z80_ram_read8(uint16_t off) { return (uint8_t)replay_io_read(Z80_RAM_BASE + off, 1); }
 uint8_t pad_read(uint32_t port) { return (uint8_t)replay_io_read(port, 1); }
+uint32_t io_read32(uint32_t addr) { return (uint32_t)replay_io_read(addr, 4); }
+uint16_t io_read16(uint32_t addr) { return (uint16_t)replay_io_read(addr, 2); }
 uint8_t sram_read8(uint32_t off) { return (uint8_t)replay_io_read(SRAM_BASE + off, 1); }
 #include "game.h"
 /* A vblank wait: the interrupt the 68k took in its wait loop, replayed (its RAM changes; its
@@ -30,5 +32,6 @@ void sram_write16(uint32_t off, uint16_t v) { replay_io_write(SRAM_BASE + off, 2
 void z80_ram_write8(uint16_t off, uint8_t v) { replay_io_write(Z80_RAM_BASE + off, 1, v); }
 void z80_reset(uint16_t v) { replay_io_write(Z80_RESET, 2, v); }
 void pad_write(uint32_t port, uint8_t v) { replay_io_write(port, 1, v); }
+void tmss_write(uint32_t v) { (void)v; }                                  /* (the captures do not log $A14000) */
 void z80_ym_port(int port, uint8_t value) { (void)port; (void)value; }   /* the captures do not follow the Z80 */
 void z80_ym_reset(void) {}

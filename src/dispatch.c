@@ -10,6 +10,8 @@ static const struct { uint32_t addr; void (*fn)(void); } routines[] = {
     { SYM_SetupPauseScreen, SetupPauseScreen },
     { SYM_VBlank, VBlank },
     { SYM_vb2, vb2 },
+    { SYM_VBcount, VBcount },
+    { SYM_VBlank_TitleScreen, VBlank_TitleScreen },
     { SYM_ReplayMode, ReplayMode },
     { SYM_PeriodStatsScreen, PeriodStatsScreen },
     { SYM_GameStatisticsScreen, GameStatisticsScreen },

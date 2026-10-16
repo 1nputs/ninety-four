@@ -45,4 +45,7 @@ throttle; run sound1p      --state $S1 --script "$SCRIPT" --max 32 --frames 4000
 FRAME="$(tr -s ' \n' ',' < tools/hybrid/frame_fns.txt)"
 throttle; run frame1p      --state $S1 --script "$SCRIPT" --max 24 --frames 80000 --fn "$FRAME" &
 throttle; run frame        --state $S2 --max 24 --frames 80000 --fn "$FRAME" &
+# power on to the title, Start pressed there (the front end; --state "" starts at power on)
+BOOT=SegaInit,ValidationRoutine,EASportsScreen,Detect4WayPlay,DefaultMenus,InitSaveRAM,SRAMWaitVblank,VBcount,ValidateSRAM,ClearSRAM,ReadSRAM,WriteSRAM,MakeSRAMChecksum,ReadLineData,HiScoreScreen,newTitleScreen,CreditsPrintRow,CreditsWait,VBlank_TitleScreen,CreditsLineScroll,CreditsScrollStep
+throttle; run boot         --state "" --script "1200:START,1206:" --max 24 --frames 1300 --fn "$BOOT" &
 wait

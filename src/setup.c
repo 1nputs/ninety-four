@@ -379,3 +379,39 @@ void setupice_highlight(void)
     g.vbint = SYM_VBlank;
     g.disflags &= (uint16_t)~(HI(dfok) | HI(dfng));
 }
+
+/* setup94.asm:ExitToOpening. The title song, then the options again (Opening2, with a new
+ * stack). From the game over, the end of a demo and the end of a shootout. */
+void ExitToOpening(void)
+{
+    song(SYM_SngTitle);
+    restart_at(Opening2);
+}
+
+/* setup94.asm:Opening. The title screen, then into Opening2. From Begin. */
+void Opening(void)
+{
+    KillCrowd();
+    newTitleScreen();
+    Opening2();
+}
+
+/* setup94.asm:Opening2. With a new stack: clear the game's variables ($B000-$D03D), the
+ * options (GameSetUp), the name entry, then Opening3. Does not return. */
+void Opening2(void)
+{
+    KillCrowd();
+    memset(RAM_W(RAM_OFF_VSCRLPM), 0, 0xD03E - RAM_OFF_VSCRLPM);
+    GameSetUp();
+    UserNameEntry();
+    Opening3();
+}
+
+/* setup94.asm:Opening3. The playoff screen (in the playoffs), the scouting report (not in a
+ * shootout), then the game (StartGame). Does not return. */
+void Opening3(void)
+{
+    PlayoffScreen();
+    if (!(g.gmode2 & HI(0))) ScoutingReport();
+    StartGame();
+}

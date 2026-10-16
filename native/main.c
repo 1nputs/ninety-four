@@ -1,9 +1,10 @@
 /* NHL '94 on Linux: the C game on md-runtime (../md-runtime) in an SDL2 window, with sound. Until
  * the front end is ported it starts from a snapshot of the oracle taken at a faceoff
  * (tools/oracle/snapshot.py: RAM, VDP, Z80 RAM, the sound chips' registers, the Z80's place) and
- * enters the game loop.
+ * enters the game loop; --boot starts from power on instead (Start: the EA screen, the title,
+ * then as far as the front end is ported).
  *
- * usage: nhl94 [--rom FILE] [--snap FILE] [--scale N] [--aspect] [--sram FILE]
+ * usage: nhl94 [--rom FILE] [--snap FILE | --boot] [--scale N] [--aspect] [--sram FILE]
  *              [--headless] [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE]
  *              [--lockstep FILE]
  *
@@ -25,6 +26,7 @@
 
 static const char *snap = "out/states/faceoff.snap", *shot_path, *shots_dir, *wav_path, *lockstep_path;
 static long stop_after = -1, shots_every = 600;
+static int boot;
 static jmp_buf out;
 
 /* ---- the snapshot --------------------------------------------------------------------------- */
@@ -139,7 +141,11 @@ void native_game(mdrt *m, void *user)
 {
     (void)user;
     native_m = m;
-    if (setjmp(out)) return;
+    if (setjmp(out)) { lockstep_report(); return; }
+    if (boot) {                                           /* power on */
+        native_hal_start(m, 0);
+        run68k(Start);
+    }
     load_snapshot(m);
     resume();
     run68k(Gameloop);
@@ -207,6 +213,7 @@ int main(int argc, char **argv)
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--rom") && i + 1 < argc) rom = argv[++i];
         else if (!strcmp(argv[i], "--snap") && i + 1 < argc) snap = argv[++i];
+        else if (!strcmp(argv[i], "--boot")) boot = 1;
         else if (!strcmp(argv[i], "--scale") && i + 1 < argc) scale = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--aspect")) aspect = 1;
         else if (!strcmp(argv[i], "--frames") && i + 1 < argc) stop_after = atol(argv[++i]);
@@ -218,13 +225,13 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--headless")) headless = 1;
         else if (!strcmp(argv[i], "--lockstep") && i + 1 < argc) { lockstep_path = argv[++i]; headless = 1; }
         else {
-            fprintf(stderr, "usage: %s [--rom FILE] [--snap FILE] [--scale N] [--aspect] [--sram FILE] [--headless]\n"
+            fprintf(stderr, "usage: %s [--rom FILE] [--snap FILE | --boot] [--scale N] [--aspect] [--sram FILE] [--headless]\n"
                             "       [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE] [--lockstep FILE]\n", argv[0]);
             return 2;
         }
     }
     if (!rom_load(rom)) { fprintf(stderr, "cannot load the ROM %s\n", rom); return 1; }
-    read_snapshot();
+    if (!boot) read_snapshot();
     mdrt_config c = { 0 };
     c.audio_rate = 48000;
     c.sram_size = 0x2000;
@@ -238,10 +245,11 @@ int main(int argc, char **argv)
     c.platform = (mdrt_platform){ NULL, NULL, wav_audio, NULL, NULL };
     mdrt *m = mdrt_new(&c);
     if (lockstep_path && !lockstep_load(lockstep_path, m)) return 1;
-    FILE *f = fopen(sram, "rb");                          /* save RAM: as the window's platform keeps it */
+    if (lockstep_path) sram = NULL;                       /* lockstep: save RAM blank, as the oracle's at power on */
+    FILE *f = sram ? fopen(sram, "rb") : NULL;            /* save RAM: as the window's platform keeps it */
     if (f) { if (fread(mdrt_get_sram(m)->bytes, 1, 0x2000, f) != 0x2000) fprintf(stderr, "%s: short\n", sram); fclose(f); }
     native_game(m, NULL);
-    if (mdrt_get_sram(m)->dirty && (f = fopen(sram, "wb"))) { fwrite(mdrt_get_sram(m)->bytes, 1, 0x2000, f); fclose(f); }
+    if (sram && mdrt_get_sram(m)->dirty && (f = fopen(sram, "wb"))) { fwrite(mdrt_get_sram(m)->bytes, 1, 0x2000, f); fclose(f); }
     if (wav) { wav_header(c.audio_rate); fclose(wav); }
     mdrt_free(m);
     return 0;

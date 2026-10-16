@@ -669,8 +669,37 @@ void UpdateTeamRecord(uint32_t buf, uint32_t rec_no, uint16_t other, uint16_t te
 void UpdateCrowdRecord(uint32_t buf, uint32_t team, uint16_t opp, uint16_t user, uint16_t opp_user, uint16_t goalies, const uint8_t *tm);   /* a0, d1, d2, d4, d5, d6, a1 */
 void UpdateRecords(void);
 void MakeSRAMChecksum(void);
+/* power on and the front end */
+void Start(void);                                       /* main94: power on; does not return */
+void SegaInit(void);
+void ValidationRoutine(void);                           /* checksum94 */
+void Begin(void);                                       /* hockey94: does not return */
+void StartGame(void);                                   /* does not return */
+void EASportsScreen(void);                              /* attract94 */
+void Detect4WayPlay(void);                              /* fourway94 */
+void DefaultMenus(void);                                /* data94 */
+void InitSaveRAM(void);                                 /* sram94 */
+void SRAMWaitVblank(void);
+void VBcount(void);
+void ValidateSRAM(void);
+void ClearSRAM(void);
+void ReadLineData(void);                                /* title94 */
+void HiScoreScreen(void);
+void newTitleScreen(void);
+uint32_t CreditsPrintRow(uint32_t a1);                  /* a1 -> a1 */
+int CreditsWait(void);                                  /* -> Start pressed (the 68k returns from its caller too) */
+void VBlank_TitleScreen(void);
+void CreditsLineScroll(void);
+void CreditsScrollStep(void);
+void Opening(void);                                     /* setup94: none of the three returns */
+void Opening2(void);
+void Opening3(void);
 /* not ported yet (front end) */
 void GameOver(void);                                    /* setup94: passwords, playoff screens, back to the front end */
+void GameSetUp(void);                                   /* optsetup94: the options screens */
+void UserNameEntry(void);                               /* records94 */
+void PlayoffScreen(void);                               /* setup94 */
+void ScoutingReport(void);                              /* scout94 */
 /* jsr (a0) to a 68k routine address kept in RAM (dispatch.c) */
 void call68k(uint32_t addr);
 void call68k_missing(uint32_t addr);

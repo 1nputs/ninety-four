@@ -2,6 +2,7 @@
  * to the end of each period, handles the events that happen every so often and keeps the
  * clock. It also runs the pause mode and its screen. The frame drivers (StartPer, Gameloop,
  * DoGameFrame, Pausemode, Begin, StartGame) come with the standalone loop. */
+#include <string.h>
 #include "game.h"
 #include "hal.h"
 #include "rom.h"
@@ -394,4 +395,64 @@ void Pausemode(void)
     g.palcount = 0x18;
     while ((int16_t)g.palcount >= 0) hal_wait_vblank();
     g.oldvcount = g.vcount;
+}
+
+/* hockey94.asm:Begin. The cold start from Start: clear the game's RAM ($B000-$DEF3), note PAL,
+ * start the sound, look for the 4 Way Play adaptor, the EA Sports screen, save RAM, the line
+ * data, the attract screen, the default options, then the title (Opening). */
+void Begin(void)
+{
+    memset(ram_ptr(RAM_BASE + RAM_OFF_VSCRLPM), 0, 0xDEF4 - RAM_OFF_VSCRLPM);
+    uint8_t *palflag = ram_ptr(RAM_BASE + RAM_OFF_PALflag);
+    wr16(palflag, 0);
+    g.PalMode = vdp_status() & 1;                         /* status bit 0: PAL (50 Hz) */
+    if (g.PalMode) palflag[0] |= 1;
+    p_initialZ80();
+    p_turnoff();
+    p_music_vblank();
+    KillCrowd();
+    Detect4WayPlay();
+    g.PadControlBits34 = 0xFFFF;
+    EASportsScreen();
+    InitSaveRAM();
+    ReadLineData();
+    HiScoreScreen();
+    DefaultMenus();
+    g.TmpOptLine2 = g.OptLine;
+    g.TempOptPlayMode = g.OptPlayMode;
+    orjoy();                                              /* forget the presses so far */
+    Opening();
+}
+
+/* hockey94.asm:StartGame. A new game: the presses counted, 30 second periods when pad 1 holds
+ * Start+A+C, offsides, the shot buffer, the team stats (hot / cold tables in a shootout), the
+ * scores, the rink, the crowd record, then the intermission into the first period. Does not
+ * return. */
+void StartGame(void)
+{
+    ST_W(g.arenaanim);
+    g.homepresses = 0;
+    g.awaypresses = 0;
+    g.homedirpresses = 0;
+    g.awaydirpresses = 0;
+    uint16_t d0, d1, d2, d3;
+    ReadJoy1(&d0, &d1, &d2, &d3);
+    if ((uint8_t)d3 == 0xE0) g.OptPerlen = 3;
+    g.gmode = 0;
+    if (g.OptPen == 1) g.gmode |= 1 << gmoffs;
+    if ((int16_t)g.OptPlayMode > 1) ClearShotData();
+    clearTeamStats();
+    if (g.gmode2 & HI(0)) {
+        Create_HotCold_Table(g.tmstruct);
+        Create_HotCold_Table(g.AwShots);
+    }
+    g.ScoreSumbytes = 0;
+    g.PenSumLength = 0;
+    g.gsp = 0;
+    g.ChkCnt = 0;
+    restoreteams();
+    InitScores();
+    setupice();
+    LoadCrowdRec();
+    IntermissionStart();
 }

@@ -352,3 +352,12 @@ void AddPlayoffTeamStats(void)
         pos += w;
     }
 }
+
+/* data94.asm:DefaultMenus. The options at power on (defmenuoptions: regular season, one
+ * player, Montreal at Los Angeles, 10 minute periods ...); no demo has run yet. */
+void DefaultMenus(void)
+{
+    ST_W(g.demoflag);
+    for (int i = 0; i < 9; i++)
+        wr16(ram_ptr(RAM_BASE + RAM_OFF_OptPlayMode) + 2 * i, rd16(rom_ptr(SYM_defmenuoptions) + 2 * i));
+}

@@ -23,6 +23,7 @@ void expect_reg16(const Record *r, int reg, uint32_t got, const char *what)
 static int is_ported(uint32_t pc)
 {
     for (const Port *p = ports; p->name; p++) if (p->pc == pc) return 1;
+    for (const uint32_t *l = inner_labels; *l; l++) if (*l == pc) return 1;
     return 0;
 }
 

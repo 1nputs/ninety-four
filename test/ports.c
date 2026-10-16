@@ -520,6 +520,27 @@ static void run_UpdateCrowdRecord(const Record *r) { UpdateCrowdRecord(r->regs_i
 V(Intermission) V(DoHiLights) V(setupice_highlight) V(clearTeamStats) V(setteams) V(ReplayMode) V(PeriodStatsScreen) V(GameStatisticsScreen)
 V(rtsStatTables) V(ExitStatsScreen) V(AddPlayoffTeamStats) V(ReadTeamStats) V(CountPlayers) V(UpdateRecords) V(MakeSRAMChecksum)
 
+
+/* ---- power on and the front end ---- */
+static void run_SegaInit(const Record *r) { SegaInit(); }
+static void run_ValidationRoutine(const Record *r) { ValidationRoutine(); }
+static void run_EASportsScreen(const Record *r) { EASportsScreen(); }
+static void run_Detect4WayPlay(const Record *r) { Detect4WayPlay(); }
+static void run_DefaultMenus(const Record *r) { DefaultMenus(); }
+static void run_InitSaveRAM(const Record *r) { InitSaveRAM(); }
+static void run_SRAMWaitVblank(const Record *r) { SRAMWaitVblank(); }
+static void run_VBcount(const Record *r) { VBcount(); }
+static void run_ValidateSRAM(const Record *r) { ValidateSRAM(); }
+static void run_ClearSRAM(const Record *r) { ClearSRAM(); }
+static void run_ReadLineData(const Record *r) { ReadLineData(); }
+static void run_HiScoreScreen(const Record *r) { HiScoreScreen(); }
+static void run_newTitleScreen(const Record *r) { newTitleScreen(); }
+static void run_CreditsPrintRow(const Record *r) { expect_reg16(r, R_A1, (uint16_t)CreditsPrintRow(r->regs_in[R_A1]), "a1"); }
+static void run_CreditsWait(const Record *r) { CreditsWait(); }
+static void run_VBlank_TitleScreen(const Record *r) { VBlank_TitleScreen(); }
+static void run_CreditsLineScroll(const Record *r) { CreditsLineScroll(); }
+static void run_CreditsScrollStep(const Record *r) { CreditsScrollStep(); }
+
 const Port ports[] = {
     { SYM_checkwallcoll, "checkwallcoll", run_checkwallcoll },
     { SYM_checkgoal, "checkgoal", run_checkgoal },
@@ -1085,5 +1106,28 @@ const Port ports[] = {
     { SYM_CountPlayers, "CountPlayers", run_CountPlayers },
     { SYM_UpdateRecords, "UpdateRecords", run_UpdateRecords },
     { SYM_MakeSRAMChecksum, "MakeSRAMChecksum", run_MakeSRAMChecksum },
+    { SYM_SegaInit, "SegaInit", run_SegaInit },
+    { SYM_ValidationRoutine, "ValidationRoutine", run_ValidationRoutine },
+    { SYM_EASportsScreen, "EASportsScreen", run_EASportsScreen },
+    { SYM_Detect4WayPlay, "Detect4WayPlay", run_Detect4WayPlay },
+    { SYM_DefaultMenus, "DefaultMenus", run_DefaultMenus },
+    { SYM_InitSaveRAM, "InitSaveRAM", run_InitSaveRAM },
+    { SYM_SRAMWaitVblank, "SRAMWaitVblank", run_SRAMWaitVblank },
+    { SYM_VBcount, "VBcount", run_VBcount },
+    { SYM_ValidateSRAM, "ValidateSRAM", run_ValidateSRAM },
+    { SYM_ClearSRAM, "ClearSRAM", run_ClearSRAM },
+    { SYM_ReadLineData, "ReadLineData", run_ReadLineData },
+    { SYM_HiScoreScreen, "HiScoreScreen", run_HiScoreScreen },
+    { SYM_newTitleScreen, "newTitleScreen", run_newTitleScreen },
+    { SYM_CreditsPrintRow, "CreditsPrintRow", run_CreditsPrintRow },
+    { SYM_CreditsWait, "CreditsWait", run_CreditsWait },
+    { SYM_VBlank_TitleScreen, "VBlank_TitleScreen", run_VBlank_TitleScreen },
+    { SYM_CreditsLineScroll, "CreditsLineScroll", run_CreditsLineScroll },
+    { SYM_CreditsScrollStep, "CreditsScrollStep", run_CreditsScrollStep },
     { 0, NULL, NULL }
+};
+
+const uint32_t inner_labels[] = {
+    SYM_ValidationLoop, SYM_SkipIncrement, SYM_ContinueValidation, SYM_VDPErrorSetup, SYM_VRAMWriteLoop, SYM_Halt,   /* ValidationRoutine */
+    0
 };

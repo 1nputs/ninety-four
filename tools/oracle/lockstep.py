@@ -4,9 +4,11 @@
 (format: tools/hybrid/oracle_shim.c). The native game replays the pads and HV reads and checks
 the hashes at each of its vblank waits (nhl94 --lockstep FILE).
 
-usage: lockstep.py ROM --state STATE --out FILE.lockstep [--frames N] [--script S] [--skip N]
+usage: lockstep.py ROM [--state STATE] --out FILE.lockstep [--frames N] [--script S] [--skip N]
        (the script's frames count from the state; faceoff.snap is faceoff.state; --skip runs N
-       frames first, as snapshot.py --game-loop reported, so the recording starts at its snapshot)
+       frames first, as snapshot.py --game-loop reported, so the recording starts at its snapshot.
+       Without --state the recording starts at power on, with save RAM blank ($FF), for
+       `nhl94 --boot --lockstep FILE`)
 """
 import argparse, os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'hybrid'))
@@ -20,7 +22,7 @@ BITS = {'UP': 1, 'DOWN': 2, 'LEFT': 4, 'RIGHT': 8, 'B': 0x10, 'C': 0x20, 'A': 0x
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('rom')
-    ap.add_argument('--state', required=True)
+    ap.add_argument('--state', help='a saved state (default: power on)')
     ap.add_argument('--out', required=True)
     ap.add_argument('--frames', type=int, default=600)
     ap.add_argument('--script', default='')
@@ -29,7 +31,8 @@ def main():
     a = ap.parse_args()
     o = Oracle()
     o.load(a.rom)
-    o.unserialize(open(a.state, 'rb').read())
+    if a.state:
+        o.unserialize(open(a.state, 'rb').read())
     syms = o.symbols
     script = parse_script(a.script); si = 0; held = []
     for f in range(a.skip):

@@ -9,7 +9,11 @@
  * loop. When that one is the game loop's (setvideo's wait for dfok, called from DoGameFrame from
  * Gameloop: its stack says), the player takes the state (work RAM, the VDP, and `elapsed`, the d7
  * the game loop keeps) and restarts the native game there (restart_at, as the 68k's own restarts
- * do), wherever the native game was: then it checks again. Other resync points are passed over.
+ * do), wherever the native game was: then it checks again. Other resync points in the game are
+ * passed over. Outside the game (the vbint handler is not the game's VBlank: the front end, whose
+ * screens load for frames with the vblank on) the player compares the native state with the
+ * oracle's there, but for what the oracle's vblank code changed in the lag frames (the
+ * recording's lag mask, version 4), then takes the oracle's state in place and goes on.
  * A difference while in step stops the run, with work RAM in out/lockstep-native.ram for diffing
  * against the oracle's (lockstep.py --dump). */
 #include <stdio.h>
@@ -21,19 +25,21 @@
 #include "z80.h"
 
 #define STATE_SIZE (0x10000 + 24 + 0x10000 + 128 + 80 + 64 + 0x2000 + 8)
+#define MASK_SIZE (0x2000 + 4 + 0x2000 + 16 + 16)
 typedef struct record {
     uint8_t flags;              /* 1: in a wait loop, 2: the whole state follows */
     uint32_t frame, at;
     uint16_t buttons, nhv;
-    const uint8_t *hv, *state;
+    const uint8_t *hv, *state, *mask;
     uint64_t ram, vdp;
 } record;
+static int version;
 static record *recs;
 static size_t nrecs, next;              /* the oracle's next record */
 static size_t span_lo, span_hi;         /* the records whose HV reads this span replays */
 static size_t hv_rec, hv_used;
 static int hv_over;
-static long checked, lagged, resynced, skipped;
+static long checked, lagged, resynced, skipped, masked;
 static int insync = 1;                  /* checking: the native game and the oracle are in step */
 static int restarted;                   /* the wait after a restart is the same moment again */
 
@@ -79,10 +85,11 @@ int lockstep_load(const char *path, mdrt *m)
     long len = ftell(f);
     fseek(f, 0, SEEK_SET);
     uint8_t *d = malloc((size_t)len);
-    if (!d || fread(d, 1, (size_t)len, f) != (size_t)len || len < 12 || memcmp(d, "MDLS", 4) || le32(d + 4) != 3) {
-        fclose(f); fprintf(stderr, "%s: not a version 3 lockstep file\n", path); return 0;
+    if (!d || fread(d, 1, (size_t)len, f) != (size_t)len || len < 12 || memcmp(d, "MDLS", 4) || le32(d + 4) < 3 || le32(d + 4) > 4) {
+        fclose(f); fprintf(stderr, "%s: not a version 3 or 4 lockstep file\n", path); return 0;
     }
     fclose(f);
+    version = (int)le32(d + 4);
     size_t o = 12, cap = 1024;
     recs = malloc(cap * sizeof *recs);
     while (o + 14 <= (size_t)len && d[o] == 1) {
@@ -94,8 +101,9 @@ int lockstep_load(const char *path, mdrt *m)
         o += 14 + 3 * (size_t)r->nhv;
         r->ram = le64(d + o); r->vdp = le64(d + o + 8);
         o += 16;
-        r->state = NULL;
+        r->state = r->mask = NULL;
         if (r->flags & 2) { r->state = d + o; o += STATE_SIZE; }
+        if ((r->flags & 2) && version >= 4) { r->mask = d + o; o += MASK_SIZE; }
     }
     mdrt_set_hv_source(m, hv_source, NULL);
     mdrt_set_pad_source(m, pad_source, NULL);
@@ -129,8 +137,35 @@ static int at_game_loop(const record *r)
     return ret > SYM_Gameloop && ret < SYM_DoGameFrame;
 }
 
-/* the oracle's whole state at its record: work RAM and the VDP */
-static void take_state(const record *r)
+/* the native state against the oracle's whole state at record r, but for the lag mask: the first
+ * difference's description, or NULL */
+static const char *masked_diff(const record *r)
+{
+    static char what[160];
+    const uint8_t *p = r->state, *m = r->mask, *ram = ram_ptr(RAM_BASE);
+    #define MASKED(mask, i) ((mask)[(i) >> 3] & (1 << ((i) & 7)))
+    int n = 0, first = -1;
+    for (int i = 0; i < 0xDF00; i++) if (ram[i] != p[i] && !MASKED(m, i)) { if (first < 0) first = i; n++; }
+    if (n) { snprintf(what, sizeof what, "work RAM (%d bytes, the first at %04x: %02x, the oracle's %02x)", n, first, ram[first], p[first]); return what; }
+    mdrt_vdp_state s;
+    mdrt_vdp_get_state(mdrt_get_vdp(native_m), &s);
+    p += 0x10000; m += 0x2000;
+    for (int i = 0; i < 24; i++) if (s.reg[i] != p[i] && !MASKED(m, i)) { snprintf(what, sizeof what, "VDP register %d (%02x, the oracle's %02x)", i, s.reg[i], p[i]); return what; }
+    p += 24; m += 4;
+    for (int i = 0; i < 0x10000; i++) if (s.vram[i] != p[i] && !MASKED(m, i)) { if (first < 0) first = i; n++; }
+    if (n) { snprintf(what, sizeof what, "VRAM (%d bytes, the first at %04x: %02x, the oracle's %02x)", n, first, s.vram[first], p[first]); return what; }
+    p += 0x10000; m += 0x2000;
+    for (int i = 0; i < 128; i++)
+        if ((uint8_t)(s.cram[i >> 1] >> (i & 1 ? 0 : 8)) != p[i] && !MASKED(m, i)) { snprintf(what, sizeof what, "CRAM colour %d (%03x, the oracle's %02x%02x)", i >> 1, s.cram[i >> 1], p[i & ~1], p[i | 1]); return what; }
+    p += 128; m += 16;
+    for (int i = 0; i < 80; i++)
+        if ((uint8_t)(s.vsram[i >> 1] >> (i & 1 ? 0 : 8)) != p[i] && !MASKED(m, i)) { snprintf(what, sizeof what, "VSRAM word %d", i >> 1); return what; }
+    return NULL;
+}
+
+/* the oracle's whole state at its record: work RAM and the VDP (and d7 as the game loop's
+ * `elapsed`, in the game loop) */
+static void take_state(const record *r, int game_loop)
 {
     const uint8_t *p = r->state;
     memcpy(ram_ptr(RAM_BASE), p, 0x10000); p += 0x10000;
@@ -140,7 +175,7 @@ static void take_state(const record *r)
     for (int i = 0; i < 64; i++, p += 2) s.cram[i] = (uint16_t)(p[0] << 8 | p[1]);
     for (int i = 0; i < 40; i++, p += 2) s.vsram[i] = (uint16_t)(p[0] << 8 | p[1]);
     mdrt_vdp_set_state(mdrt_get_vdp(native_m), &s);
-    elapsed = (int16_t)le32(p + 7 * 4);                   /* d7: the frames the game loop's pass covers */
+    if (game_loop) elapsed = (int16_t)le32(p + 7 * 4);    /* d7: the frames the game loop's pass covers */
     p += 64;
     memcpy(z80_ram, p, 0x2000); p += 0x2000;              /* the Z80: its RAM and where it was */
     if (p[7] & 1) {
@@ -151,16 +186,37 @@ static void take_state(const record *r)
     } else z80_relay_reset(0);
 }
 
+static void differs(const char *what, long frame, const record *r)
+{
+    printf("lockstep: %s differs at the game's vblank wait %ld (the oracle's frame %u, the 68k at %06x); "
+           "%zu HV reads of %u; %ld waits checked, %ld lag frames before\n",
+           what, frame, r->frame, r->at, hv_used, r->nhv, checked, lagged);
+    FILE *f = fopen("out/lockstep-native.ram", "wb");
+    if (f) { fwrite(ram_ptr(RAM_BASE), 1, 0x10000, f); fclose(f); }
+    native_quit();
+}
+
+static int reported;
+void lockstep_report(void)
+{
+    if (!recs || reported) return;
+    reported = 1;
+    printf("lockstep: %zu of %zu vblanks: %ld of the game's vblank waits checked, all the same as the oracle's; %ld lag "
+           "frames (the oracle's vblank in the game's logic); the oracle's state taken %ld times in the game loop "
+           "(%ld times out of step until a point in the game loop) and %ld times elsewhere after a check but for "
+           "what its lag frames' vblank code changed\n",
+           span_lo, nrecs, checked, lagged, resynced, skipped, masked);
+}
+
 /* at the game's vblank wait: the check against the oracle's interrupt the span ended at */
 void lockstep_check(long frame)
 {
     if (!recs) return;
     const record *r = span_lo < nrecs ? &recs[span_hi - 1] : NULL;
     if (!r || !(r->flags & 1)) {                          /* the recording's end (perhaps in lag frames) */
-        printf("lockstep: %zu vblanks: %ld of the game's vblank waits checked, all the same as the oracle's; %ld lag "
-               "frames (the oracle's vblank in the game's logic) after which the oracle's state was taken %ld times "
-               "(%ld times out of step until a point in the game loop)\n",
-               nrecs, checked, lagged + (r ? (long)(span_hi - span_lo) : 0), resynced, skipped);
+        if (r) lagged += (long)(span_hi - span_lo);
+        span_lo = nrecs;
+        lockstep_report();
         native_quit();
     }
     if (restarted) { restarted = 0; return; }             /* the same wait, from the restart */
@@ -171,11 +227,19 @@ void lockstep_check(long frame)
         next = span_hi;
         next_span();
         if (at_game_loop(r)) {                            /* take the oracle's state and go on from there */
-            take_state(r);
+            take_state(r, 1);
             resynced++;
             insync = 1;
             restarted = 1;
             restart_at(native_resume_game_loop);
+        }
+        if (r->mask && g.vbint != SYM_VBlank) {           /* outside the game: check, then take it here */
+            const char *bad = masked_diff(r);
+            if (bad) differs(bad, frame, r);
+            take_state(r, 0);
+            masked++;
+            insync = 1;
+            return;
         }
         if (insync) skipped++;
         insync = 0;
@@ -183,14 +247,7 @@ void lockstep_check(long frame)
     } else {
         uint64_t rh = fnv64(0xCBF29CE484222325ull, ram_ptr(RAM_BASE), 0xDF00), vh = vdp_hash();
         const char *bad = rh != r->ram ? "work RAM" : vh != r->vdp ? "VDP state" : hv_over || hv_used != r->nhv ? "HV reads" : NULL;
-        if (bad) {
-            printf("lockstep: %s differs at the game's vblank wait %ld (the oracle's frame %u, the 68k at %06x); "
-                   "%zu HV reads of %u; %ld waits checked, %ld lag frames before\n",
-                   bad, frame, r->frame, r->at, hv_used, r->nhv, checked, lagged);
-            FILE *f = fopen("out/lockstep-native.ram", "wb");
-            if (f) { fwrite(ram_ptr(RAM_BASE), 1, 0x10000, f); fclose(f); }
-            native_quit();
-        }
+        if (bad) differs(bad, frame, r);
         checked++;
     }
     buttons = r->buttons;

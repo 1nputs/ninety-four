@@ -21,3 +21,4 @@ void native_resume_game_loop(void);
 /* lockstep against the oracle (lockstep.c) */
 int lockstep_load(const char *path, mdrt *m);
 void lockstep_check(long frame);
+void lockstep_report(void);              /* (at the session's end) */
