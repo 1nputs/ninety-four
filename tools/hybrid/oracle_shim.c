@@ -307,6 +307,7 @@ void oracle_chips_get(uint8_t *ym, uint8_t *psg) {
 }
 
 static void st_fm(unsigned int cycles, unsigned int address, unsigned int data);
+void oracle_z80_get(uint8_t *out);
 static FILE *ls;
 static uint32_t ls_vblank;
 static void lockstep_access(int write, int width, uint32_t a, uint32_t value);
@@ -686,7 +687,7 @@ void oracle_sndtrace_close(void) {
 }
 
 /* ---- lockstep vectors for the native game (.lockstep) ---------------------------------------
- * "MDLS", version u32 = 2, the vblank handler's address u32; then a record at each vblank
+ * "MDLS", version u32 = 3, the vblank handler's address u32; then a record at each vblank
  * interrupt (before the handler's first instruction): tag u8 = 1, flags u8 (bit 0: the 68k was
  * in a vblank wait loop, as the native game would be; bit 1: the whole state follows the record,
  * at the first such interrupt after one that was not), the frame u32, the address the 68k was
@@ -695,7 +696,8 @@ void oracle_sndtrace_close(void) {
  * 1 $C00009 H, 2 a word) and value u16 each), the hashes (FNV-1a 64) of work RAM (68k order)
  * below the stack ($0000-$DEFF) and of the VDP's 24 registers, VRAM, CRAM and VSRAM (as
  * oracle_vdp_get gives them); with bit 1: work RAM 64K, the 24 registers, VRAM 64K, CRAM 128 and
- * VSRAM 80 bytes, the 68k's D0-D7 and A0-A7 u32 each. End: tag u8 = 2.
+ * VSRAM 80 bytes, the 68k's D0-D7 and A0-A7 u32 each, Z80 RAM 8K and the Z80 (PC u16, HL u16, C u8,
+ * bank u16, state u8, as a sound trace's header has it). End: tag u8 = 2.
  * A wait loop, as test/replay.c tells it: a conditional Bcc.s back (within 16 bytes, over code
  * reading vcount, palcount or disflags by absolute short address) at or just after the address. */
 static uint16_t ls_buttons, ls_nhv, ls_waitvars[3];
@@ -743,7 +745,7 @@ int oracle_lockstep_open(const char *path, uint32_t vcount, uint32_t palcount, u
   ls = fopen(path, "wb");
   if (!ls) return 0;
   ls_vblank = (uint32_t)(READ_BYTE(cart.rom, 0x78) << 24 | READ_BYTE(cart.rom, 0x79) << 16 | READ_BYTE(cart.rom, 0x7A) << 8 | READ_BYTE(cart.rom, 0x7B));
-  fwrite("MDLS", 1, 4, ls); ls_u32(2); ls_u32(ls_vblank);
+  fwrite("MDLS", 1, 4, ls); ls_u32(3); ls_u32(ls_vblank);
   ls_nhv = 0;
   ls_records = 0;
   return 1;
@@ -779,6 +781,9 @@ static void lockstep_vblank(void) {
     fwrite(ram, 1, sizeof ram, ls); fwrite(r, 1, 24, ls); fwrite(v, 1, sizeof v, ls); fwrite(c, 1, sizeof c, ls); fwrite(s, 1, sizeof s, ls);
     for (int i = 0; i < 8; i++) ls_u32(m68k_get_reg(M68K_REG_D0 + i));   /* (the native keeps some in C) */
     for (int i = 0; i < 8; i++) ls_u32(m68k_get_reg(M68K_REG_A0 + i));
+    uint8_t zs[8];
+    oracle_z80_get(zs);
+    fwrite(z, 1, sizeof z, ls); fwrite(zs, 1, 8, ls);
   }
 }
 

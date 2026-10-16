@@ -4,6 +4,9 @@ registers, Z80 RAM, and the sound chips (their registers, the Z80's place in its
 
 usage: snapshot.py ROM --out FILE.snap --frames N [--script S]      (from power on: N frames)
        snapshot.py ROM --out FILE.snap --state STATE [--frames N]   (from a saved state)
+       [--game-loop]: then on frame by frame until the 68k waits in the game loop's setvideo for the
+       vblank (dfok set: where the native game can resume); prints the frames run, for lockstep.py
+       --skip
 
 The sound chips' registers are known only from power on (the shim follows every write from
 there), so a snapshot from a saved state has none (flags bit 0 clear).
@@ -30,6 +33,7 @@ def main():
     ap.add_argument('--out', required=True)
     ap.add_argument('--frames', type=int, default=0)
     ap.add_argument('--script', default='')
+    ap.add_argument('--game-loop', action='store_true')
     a = ap.parse_args()
     o = Oracle()
     o.load(a.rom)
@@ -41,6 +45,19 @@ def main():
         while si < len(script) and script[si][0] <= f:
             o.set_buttons(0, script[si][1]); si += 1
         o.run()
+    frames = a.frames
+    if a.game_loop:
+        setvideo, disflags = o.addr('setvideo'), o.addr('disflags') & 0xFFFF
+        regs = (C.c_uint32 * 18)(); ram = (C.c_uint8 * 0x10000)()
+        for _ in range(600):
+            o.lib.oracle_regs_get(regs); o.lib.oracle_ram_get(ram)
+            if setvideo <= regs[16] < setvideo + 12 and ram[disflags] & 1:   # waiting: dfok set
+                break
+            while si < len(script) and script[si][0] <= frames:
+                o.set_buttons(0, script[si][1]); si += 1
+            o.run(); frames += 1
+        else:
+            sys.exit('the 68k did not wait in setvideo within 600 frames')
     ram = (C.c_uint8 * 0x10000)(); o.lib.oracle_ram_get(ram)
     vram = (C.c_uint8 * 0x10000)(); cram = (C.c_uint8 * 128)(); vsram = (C.c_uint8 * 80)()
     reg = (C.c_uint8 * 32)(); zram = (C.c_uint8 * 0x2000)()
@@ -59,7 +76,7 @@ def main():
         f.write(struct.pack('<I', regs[16]))
         io = (C.c_uint8 * 16)(); o.lib.oracle_io_get(io)
         f.write(bytes(io))
-    print(f'{a.out}: snapshot after {a.frames} frames')
+    print(f'{a.out}: snapshot after {frames} frames')
 
 
 if __name__ == '__main__':

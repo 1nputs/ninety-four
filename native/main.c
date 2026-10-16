@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "game.h"
+#include "hal.h"
 #include "rom.h"
 #include "symbols_gen.h"
 #include "z80.h"
@@ -59,10 +60,10 @@ static void load_snapshot(mdrt *m)
         for (int i = 1; i < 16; i++) mdrt_pad_write(mdrt_get_pads(m), 0xA10001u + 2u * (unsigned)i, io[i]);
     }
     native_hal_start(m, 0);
-    int chips = snapshot_len >= sizeof snapshot && (p[0] & 1);
-    if (!chips) fprintf(stderr, "%s: no sound chip registers (a snapshot from a saved state): the FM sounds start blank\n", snap);
+    int full = snapshot_len >= sizeof snapshot, chips = full && (p[0] & 1);
+    const uint8_t *ym = p + 4, *psg = p + 4 + 512, *zs = p + 4 + 512 + 17;
+    if (full && !chips) fprintf(stderr, "%s: no sound chip registers (a snapshot from a saved state): the FM sounds start blank\n", snap);
     if (chips) {
-        const uint8_t *ym = p + 4, *psg = p + 4 + 512, *zs = p + 4 + 512 + 17;
         uint32_t at = 0;
         for (int part = 0; part < 2; part++) {            /* every register but the key and DAC ones, A4 before A0 */
             static const uint8_t order[] = { 0xA4, 0xA5, 0xA6, 0xA0, 0xA1, 0xA2, 0xAC, 0xAD, 0xAE, 0xA8, 0xA9, 0xAA };
@@ -91,10 +92,10 @@ static void load_snapshot(mdrt *m)
         native_hal_start(m, mdrt_frame_mclks(m));
         z80.now = mdrt_frame_mclks(m);
         z80_relay_frame();
-        if (zs[7] & 1) {
-            z80_relay_seed((uint16_t)(zs[0] | zs[1] << 8), (uint16_t)(zs[2] | zs[3] << 8), zs[4], zs[5]);
-            z80.bus_taken = (zs[7] & 2) ? 1 : 0;
-        }
+    }
+    if (full && (zs[7] & 1)) {                            /* the Z80 where it was (in every snapshot) */
+        z80_relay_seed((uint16_t)(zs[0] | zs[1] << 8), (uint16_t)(zs[2] | zs[3] << 8), zs[4], zs[5]);
+        z80.bus_taken = (zs[7] & 2) ? 1 : 0;
     }
 }
 
@@ -104,14 +105,22 @@ static uint8_t read68k(void *user, uint32_t addr) { (void)user; return *mem_ptr(
 
 void native_quit(void) { longjmp(out, 1); }
 
-/* the game loop, from the 68k waiting in setvideo at the end of a frame of DoGameFrame: the rest
- * of that frame, then the loop (also lockstep's way in after it takes the oracle's state) */
-void native_resume_game_loop(void)
+/* the game loop, from the 68k at setvideo's wait at the end of a frame of DoGameFrame: the rest
+ * of that frame, then the loop */
+static void resume_game_loop(void)
 {
     setvideo();
     demoread();
     if (g.sflags & HI(sfpz)) Pausemode();
     Gameloop();
+}
+
+/* the same from the moment of a vblank interrupt there (lockstep, after it takes the oracle's
+ * state): the vblank first, whether or not setvideo would have waited for it */
+void native_resume_game_loop(void)
+{
+    hal_wait_vblank();
+    resume_game_loop();
 }
 
 /* where the snapshot's 68k was: the rest of what it was doing, before the game loop goes on */
@@ -120,7 +129,7 @@ static void resume(void)
     const uint8_t *p = snapshot + sizeof snapshot - 20;
     uint32_t pc = snapshot_len >= sizeof snapshot ? (uint32_t)(p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24) : 0;
     if (pc >= SYM_setvideo && pc < SYM_setvideo + 12) {   /* in setvideo's wait for dfok, at a game frame's end */
-        run68k(native_resume_game_loop);
+        run68k(resume_game_loop);
     } else if (pc) {
         fprintf(stderr, "%s: the 68k was at %06x, not a place the native game resumes from: it starts the game loop\n", snap, pc);
     }

@@ -18,7 +18,9 @@
 #include "game.h"
 #include "native.h"
 #include "symbols_gen.h"
+#include "z80.h"
 
+#define STATE_SIZE (0x10000 + 24 + 0x10000 + 128 + 80 + 64 + 0x2000 + 8)
 typedef struct record {
     uint8_t flags;              /* 1: in a wait loop, 2: the whole state follows */
     uint32_t frame, at;
@@ -77,8 +79,8 @@ int lockstep_load(const char *path, mdrt *m)
     long len = ftell(f);
     fseek(f, 0, SEEK_SET);
     uint8_t *d = malloc((size_t)len);
-    if (!d || fread(d, 1, (size_t)len, f) != (size_t)len || len < 12 || memcmp(d, "MDLS", 4) || le32(d + 4) != 2) {
-        fclose(f); fprintf(stderr, "%s: not a version 2 lockstep file\n", path); return 0;
+    if (!d || fread(d, 1, (size_t)len, f) != (size_t)len || len < 12 || memcmp(d, "MDLS", 4) || le32(d + 4) != 3) {
+        fclose(f); fprintf(stderr, "%s: not a version 3 lockstep file\n", path); return 0;
     }
     fclose(f);
     size_t o = 12, cap = 1024;
@@ -93,7 +95,7 @@ int lockstep_load(const char *path, mdrt *m)
         r->ram = le64(d + o); r->vdp = le64(d + o + 8);
         o += 16;
         r->state = NULL;
-        if (r->flags & 2) { r->state = d + o; o += 0x10000 + 24 + 0x10000 + 128 + 80 + 64; }
+        if (r->flags & 2) { r->state = d + o; o += STATE_SIZE; }
     }
     mdrt_set_hv_source(m, hv_source, NULL);
     mdrt_set_pad_source(m, pad_source, NULL);
@@ -120,7 +122,7 @@ static uint32_t be32(const uint8_t *p) { return (uint32_t)p[0] << 24 | p[1] << 1
 static int at_game_loop(const record *r)
 {
     if (!r->state || r->at < SYM_setvideo || r->at >= SYM_setvideo + 12) return 0;
-    const uint8_t *regs = r->state + 0x10000 + 24 + 0x10000 + 128 + 80;
+    const uint8_t *regs = r->state + 0x10000 + 24 + 0x10000 + 128 + 80;   /* (D0-D7, A0-A7) */
     uint32_t sp = le32(regs + 15 * 4) & 0xFFFF;
     if (sp + 70 > 0x10000) return 0;
     uint32_t ret = be32(r->state + sp + 66) & 0xFFFFFF;
@@ -139,6 +141,14 @@ static void take_state(const record *r)
     for (int i = 0; i < 40; i++, p += 2) s.vsram[i] = (uint16_t)(p[0] << 8 | p[1]);
     mdrt_vdp_set_state(mdrt_get_vdp(native_m), &s);
     elapsed = (int16_t)le32(p + 7 * 4);                   /* d7: the frames the game loop's pass covers */
+    p += 64;
+    memcpy(z80_ram, p, 0x2000); p += 0x2000;              /* the Z80: its RAM and where it was */
+    if (p[7] & 1) {
+        uint64_t now = z80.now;
+        z80_relay_seed((uint16_t)(p[0] | p[1] << 8), (uint16_t)(p[2] | p[3] << 8), p[4], p[5]);
+        z80.now = z80.zc = now;
+        z80.bus_taken = (p[7] & 2) ? 1 : 0;
+    } else z80_relay_reset(0);
 }
 
 /* at the game's vblank wait: the check against the oracle's interrupt the span ended at */
