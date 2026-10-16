@@ -8,7 +8,7 @@ by hand in C and checked against the original, frame by frame, until the two can
 apart. The same one-timers, the same diving saves, the same organ, the same Gretzky. Smooth 60
 frames a second, without the cartridge's slowdown.
 
-And things the cartridge never had: **save in the middle of a game (F7), load it back (F8), and
+And things the cartridge never had: **save in the middle of a game (F9), load it back (F10), and
 hold F4 to rewind** the goal you just gave up. Hold F6 to fast-forward, slow the replay of that
 one-timer down, step through it a frame at a time, and press F12 to keep it.
 
@@ -37,11 +37,11 @@ Game controllers work too (the first two are players 1 and 2).
 | F1 | mute |
 | F2 / F3 | volume down / up |
 | F4 (held) | rewind |
-| F5 | slow motion on / off |
+| F5 | pause |
 | F6 (held) | fast-forward |
-| F7 / F8 | save / load a state |
-| F9 | a frame at a time, while paused |
-| F10 | pause |
+| F7 | slow motion on / off |
+| F8 | a frame at a time, while paused |
+| F9 / F10 | save / load a state |
 | F11 or Alt+Enter | full screen |
 | F12 | screenshot (a PNG in `screenshots/`) |
 | Esc | the menu |
@@ -149,7 +149,7 @@ From the least ambitious to the most.
 - [x] Window scaling, full screen, 4:3 aspect
 - [x] Battery save (save RAM) kept in a file
 - [x] Smooth 60 frames a second (no cartridge slowdown)
-- [x] Save states (F7 / F8) and rewind (F4)
+- [x] Save states (F9 / F10) and rewind (F4)
 - [x] FM core and chip model choice (`--fm-core nuked|ymfm`, `--fm-model ym2612|ym3438`)
 - [x] Headless runs: screenshots, WAV, scripted input, RAM watch (`--watch`), trace recording (`--record`)
 - [x] Mute, volume, audio device and latency options

@@ -27,7 +27,7 @@ void native_resume_game_loop(void);
 
 /* states (state.c): pulseman's console and the game's parts (work RAM, the Z80 relay, the C
  * port's registers kept across routines, the HAL's clock), taken at the game loop's wait */
-void native_states_init(mdrt *m, const char *path, int rewind);   /* path: the F7 / F8 file */
+void native_states_init(mdrt *m, const char *path, int rewind);   /* path: the F9 / F10 file */
 int native_load_state_file(const char *path);       /* 0: loaded (then run68k(native_resume_game_loop)) */
 void native_save_state_at(long frame, const char *path);   /* headless: at the first game loop wait from frame on */
 void native_states_wait(void);                       /* at each of the game's vblank waits, before the handshake */

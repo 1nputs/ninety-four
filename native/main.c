@@ -15,9 +15,9 @@
  * and --golden writes a line of hashes a frame (make golden). Keys: pulseman's
  * (include/mdrt/platform_sdl2.h, all of them changeable in its settings file): pad 1 arrows,
  * Z / X / C = A / B / C, Enter = Start; pad 2 I J K L, Q / W / E, Tab; two game controllers; F1
- * mute, F2 / F3 volume, F5 slow motion, F6 held fast-forward, F9 a frame while paused, F10 pause,
- * F11 full screen, F12 a screenshot, Esc the menu; F7 saves a state (into --state FILE,
- * out/nhl94.state), F8 loads it, F4 held steps back (state.c). The settings are settings.ini in
+ * mute, F2 / F3 volume, F5 pause, F6 held fast-forward, F7 slow motion, F8 a frame while paused,
+ * F11 full screen, F12 a screenshot, Esc the menu; F9 saves a state (into --state FILE,
+ * out/nhl94.state), F10 loads it, F4 held steps back (state.c). The settings are settings.ini in
  * the working directory. --scale and --aspect set the window for this run (otherwise the
  * settings' size and aspect).
  * --load-state FILE starts from a native state; --save-state FRAME:FILE (headless) saves one at
@@ -301,7 +301,7 @@ static void golden_present(void *user, const uint16_t *px, int w, int h, int pit
 
 /* --input FILE: pad 1's buttons from a script ("FRAME:BUTTON+BUTTON,..." as tools/oracle/run.py
  * takes, # lines are comments), held from that frame (the handshakes so far) on. SAVE, LOAD and
- * REWIND are the window's F7, F8 and F4, by the handshakes of this process (SAVE and LOAD
+ * REWIND are the window's F9, F10 and F4, by the handshakes of this process (SAVE and LOAD
  * once, at the handshake they are given) */
 #define REQ(r) ((uint32_t)(r) << 16)
 static struct { long frame; uint32_t buttons; } *script;

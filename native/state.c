@@ -6,7 +6,7 @@
  * redo, which is how lockstep goes on after it takes the oracle's state. Loading one restarts the
  * game there (restart_at), from wherever it was.
  *
- * In the window: F7 saves a state to a file, F8 loads it, F4 held steps back (a state every
+ * In the window: F9 saves a state to a file, F10 loads it, F4 held steps back (a state every
  * third frame of play, ten seconds of them). Headless: --save-state FRAME:FILE, --load-state FILE
  * (tools/golden.py checks that a loaded state goes on bit for bit as the run it was taken from). */
 #include <stddef.h>
@@ -18,7 +18,7 @@
 #include "z80.h"
 
 static mdrt *m;
-static const char *file;                /* F7 / F8 */
+static const char *file;                /* F9 / F10 */
 static long save_frame = -1;            /* --save-state */
 static const char *save_path;
 static long seen;                       /* the handshake whose requests were taken */

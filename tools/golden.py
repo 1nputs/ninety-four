@@ -9,7 +9,7 @@ changes to the runtime's HV model do not show; everything else must match bit fo
 `check` also saves a native state in three of the runs (at the first game loop wait from a given
 frame on), loads it in a new process and runs on: the frames after it must be the same as the
 run's own (a state holds everything the game goes on from). And it plays the window's keys from a
-script (states_faceoff.txt: F7, F8, F4 held): the frames after the load must be those after
+script (states_faceoff.txt: F9, F10, F4 held): the frames after the load must be those after
 the save, and the rewind must step back three frames a frame through frames already shown. And it
 starts the game again in the same process (--restart-at, as the window menu's reset does): the
 frames after that must be a fresh power on's.
@@ -161,7 +161,7 @@ def main():
 
 
 def keys(dirname):
-    """F7 at handshake 1500, F8 at 2400, F4 held 3000-3150 (states_faceoff.txt)"""
+    """F9 at handshake 1500, F10 at 2400, F4 held 3000-3150 (states_faceoff.txt)"""
     out = os.path.join(dirname, 'keys.golden')
     name, err, _ = run('keys', 3600, ['--snap', 'out/states/faceoff.snap', '--input', 'states_faceoff.txt',
                                       '--state', os.path.join(dirname, 'keys.mdrs')], out)
@@ -176,7 +176,7 @@ def keys(dirname):
         back = sum(lines[3002 + k] == lines[2101 - 3 * k] for k in range(150))
         err = None if same == 600 and back == 150 else \
             'the load: %d of 600 frames as after the save; the rewind: %d of 150 frames three back' % (same, back)
-    print('%-15s %s' % ('keys', err or 'F7, F8: the 600 frames after the load as after the save; F4: 150 frames stepped back'))
+    print('%-15s %s' % ('keys', err or 'F9, F10: the 600 frames after the load as after the save; F4: 150 frames stepped back'))
     return err is not None
 
 
