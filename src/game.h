@@ -755,9 +755,30 @@ void NameLogIO(void);
 void AppendUserName(uint32_t buf, uint16_t user);       /* a1, d2 */
 void AppendTeamName(uint16_t team, uint32_t buf);       /* d0, a1 */
 void TrimSpaces(uint32_t str);                          /* a2 */
+void UserNameEntry(void);                               /* records94: the name entry */
+void NameEntryScreen(void);
+void NameLetterGrid(void);
+void NameEntryHelp(void);
+void PrintNamePrompt(void);
+uint16_t SyncLetterCursor(void);                        /* -> d5 */
+uint16_t FindLetter(uint16_t letter);                   /* d0 -> d0 */
+void PrintNameCursor(uint16_t at);                      /* d4 */
+void rtsNameCursor(void);
+void PrintCurLetter(uint16_t letter);                   /* d5 */
+void LetterGridPos(uint16_t letter, uint16_t *w, uint16_t *h);   /* d5 -> d0, d1 */
+void PrintNameLog(void);
+void MoveLogArrows(void);
+void PrintLogArrows(uint32_t strs);                     /* a1 */
+void GetNameLength(void);
+void PrintNameField(uint32_t name);                     /* a1 */
+void NameEntryFramer(uint16_t w, uint16_t h);           /* d0, d1 */
+void GetLogName(uint32_t dst);                          /* a1 */
+void StoreUserName(void);
+void WriteNameRecord(void);
+int SkipOtherUserName(int16_t dir);                     /* d0 (on the stack) -> Z: stepped */
+void WriteNameLog(void);                                /* cards94 */
 /* not ported yet (front end) */
 void GameOver(void);                                    /* setup94: passwords, playoff screens, back to the front end */
-void UserNameEntry(void);                               /* records94 */
 void PlayoffScreen(void);                               /* setup94 */
 void ScoutingReport(void);                              /* scout94 */
 /* jsr (a0) to a 68k routine address kept in RAM (dispatch.c) */

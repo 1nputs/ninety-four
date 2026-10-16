@@ -419,6 +419,13 @@ void AppendRecordVs(uint32_t buf, uint16_t team, uint16_t player, uint32_t rec)
     AppendTeamName(r[2], buf);
 }
 
+/* cards94.asm:WriteNameLog. The user name log to save RAM (NameLogIO). */
+void WriteNameLog(void)
+{
+    g.sflags6 |= HI(6);
+    NameLogIO();
+}
+
 /* cards94.asm:ReadNameLog. The user name log from save RAM to namelog (NameLogIO). */
 void ReadNameLog(void)
 {

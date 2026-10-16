@@ -615,6 +615,34 @@ static void run_LogoBoxLeft(const Record *r) { LogoBoxLeft(); }
 static void run_LogoBoxVis(const Record *r) { LogoBoxVis(); }
 static void run_DrawLogoBox(const Record *r) { DrawLogoBox(R16(R_D4)); }
 
+/* ---- the name entry (records94) ---- */
+static void run_UserNameEntry(const Record *r) { UserNameEntry(); }
+static void run_NameEntryScreen(const Record *r) { NameEntryScreen(); }
+static void run_NameLetterGrid(const Record *r) { NameLetterGrid(); }
+static void run_NameEntryHelp(const Record *r) { NameEntryHelp(); }
+static void run_PrintNamePrompt(const Record *r) { PrintNamePrompt(); }
+static void run_SyncLetterCursor(const Record *r) { expect_reg16(r, R_D5, SyncLetterCursor(), "d5"); }
+static void run_FindLetter(const Record *r) { expect_reg16(r, R_D0, FindLetter(R16(R_D0)), "d0"); }
+static void run_PrintNameCursor(const Record *r) { PrintNameCursor(R16(R_D4)); }
+static void run_rtsNameCursor(const Record *r) { rtsNameCursor(); }
+static void run_PrintCurLetter(const Record *r) { PrintCurLetter(R16(R_D5)); }
+static void run_LetterGridPos(const Record *r) { uint16_t w, h; LetterGridPos(R16(R_D5), &w, &h); expect_reg16(r, R_D0, w, "d0"); expect_reg16(r, R_D1, h, "d1"); }
+static void run_PrintNameLog(const Record *r) { PrintNameLog(); }
+static void run_MoveLogArrows(const Record *r) { MoveLogArrows(); }
+static void run_PrintLogArrows(const Record *r) { PrintLogArrows(A(R_A1)); }
+static void run_GetNameLength(const Record *r) { GetNameLength(); }
+static void run_PrintNameField(const Record *r) { PrintNameField(A(R_A1)); }
+static void run_NameEntryFramer(const Record *r) { NameEntryFramer(R16(R_D0), R16(R_D1)); }
+static void run_GetLogName(const Record *r) { GetLogName(A(R_A1)); }
+static void run_StoreUserName(const Record *r) { StoreUserName(); }
+static void run_WriteNameRecord(const Record *r) { WriteNameRecord(); }
+static void run_SkipOtherUserName(const Record *r)
+{
+    int stepped = SkipOtherUserName(D16(R_D0));           /* -> Z */
+    expect_reg16(r, R_SR, (uint16_t)((r->regs_out[R_SR] & ~4u) | (stepped ? 4 : 0)), "sr (Z)");
+}
+static void run_WriteNameLog(const Record *r) { WriteNameLog(); }
+
 const Port ports[] = {
     { SYM_checkwallcoll, "checkwallcoll", run_checkwallcoll },
     { SYM_checkgoal, "checkgoal", run_checkgoal },
@@ -1259,6 +1287,28 @@ const Port ports[] = {
     { SYM_LogoBoxLeft, "LogoBoxLeft", run_LogoBoxLeft },
     { SYM_LogoBoxVis, "LogoBoxVis", run_LogoBoxVis },
     { SYM_DrawLogoBox, "DrawLogoBox", run_DrawLogoBox },
+    { SYM_UserNameEntry, "UserNameEntry", run_UserNameEntry },
+    { SYM_NameEntryScreen, "NameEntryScreen", run_NameEntryScreen },
+    { SYM_NameLetterGrid, "NameLetterGrid", run_NameLetterGrid },
+    { SYM_NameEntryHelp, "NameEntryHelp", run_NameEntryHelp },
+    { SYM_PrintNamePrompt, "PrintNamePrompt", run_PrintNamePrompt },
+    { SYM_SyncLetterCursor, "SyncLetterCursor", run_SyncLetterCursor },
+    { SYM_FindLetter, "FindLetter", run_FindLetter },
+    { SYM_PrintNameCursor, "PrintNameCursor", run_PrintNameCursor },
+    { SYM_rtsNameCursor, "rtsNameCursor", run_rtsNameCursor },
+    { SYM_PrintCurLetter, "PrintCurLetter", run_PrintCurLetter },
+    { SYM_LetterGridPos, "LetterGridPos", run_LetterGridPos },
+    { SYM_PrintNameLog, "PrintNameLog", run_PrintNameLog },
+    { SYM_MoveLogArrows, "MoveLogArrows", run_MoveLogArrows },
+    { SYM_PrintLogArrows, "PrintLogArrows", run_PrintLogArrows },
+    { SYM_GetNameLength, "GetNameLength", run_GetNameLength },
+    { SYM_PrintNameField, "PrintNameField", run_PrintNameField },
+    { SYM_NameEntryFramer, "NameEntryFramer", run_NameEntryFramer },
+    { SYM_GetLogName, "GetLogName", run_GetLogName },
+    { SYM_StoreUserName, "StoreUserName", run_StoreUserName },
+    { SYM_WriteNameRecord, "WriteNameRecord", run_WriteNameRecord },
+    { SYM_SkipOtherUserName, "SkipOtherUserName", run_SkipOtherUserName },
+    { SYM_WriteNameLog, "WriteNameLog", run_WriteNameLog },
     { 0, NULL, NULL }
 };
 
