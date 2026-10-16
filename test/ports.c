@@ -714,6 +714,106 @@ static void run_ReadStatColumn(const Record *r) { expect_reg16(r, R_D2, ReadStat
 static void run_GetStatsValue(const Record *r) { expect_reg16(r, R_D2, GetStatsValue(R16(R_D1), R16(R_D0), R16(R_D2)), "d2"); }
 static void run_DrawStatsListArrows(const Record *r) { DrawStatsListArrows(); }
 
+/* ---- the menu screens (stats94, cards94, records94, shootout94; data94 / title94 helpers) ---- */
+static void run_ShowScores(const Record *r) { ShowScores(); }
+static void run_UpdateScoresScroll(const Record *r) { UpdateScoresScroll(); }
+static void run_UpdateVertScrollReg(const Record *r) { UpdateVertScrollReg(); }
+static void run_DisplayGameInfo(const Record *r) { DisplayGameInfo(R16(R_D3)); }
+static void run_PrintGameInfo(const Record *r) { PrintGameInfo(R16(R_D0), R16(R_D1)); }
+static void run_DrawScrollArrows(const Record *r) { DrawScrollArrows(); }
+static void run_LineEditor(const Record *r) { LineEditor(TEAM(R_A2)); }
+static void run_DrawLineIcon(const Record *r) { DrawLineIcon(R16(R_D5), TEAM(R_A2)); }
+static void run_ClearLineArea(const Record *r) { ClearLineArea(); }
+static void run_DrawTeamScreen(const Record *r) { DrawTeamScreen(TEAM(R_A2)); }
+static void run_ClearLineEditorTop(const Record *r) { ClearLineEditorTop(); }
+static void run_ClearMenuFlags(const Record *r) { ClearMenuFlags(); }
+static void run_SetLineSlot(const Record *r) { SetLineSlot((uint8_t)R16(R_D0), R16(R_D2), TEAM(R_A2)); }
+static void run_DecodeTeamLines(const Record *r) { DecodeTeamLines(TEAM(R_A2)); }
+static void run_EncodeTeamLines(const Record *r) { EncodeTeamLines(TEAM(R_A2)); }
+static void run_TeamRosterScreen(const Record *r) { TeamRosterScreen(TEAM(R_A2)); }
+static void run_CheckPlayerListScroll(const Record *r) { CheckPlayerListScroll(TEAM(R_A2)); }
+static void run_UpdatePlayerListScroll(const Record *r) { UpdatePlayerListScroll(R16(R_D0), TEAM(R_A2)); }
+static void run_StopPlayerListScroll(const Record *r) { StopPlayerListScroll(); }
+static void run_DisplayPlayerListUp(const Record *r) { DisplayPlayerListUp((uint16_t)(A(R_D0) >> 16), TEAM(R_A2)); }
+static void run_DisplayPlayerListDown(const Record *r) { DisplayPlayerListDown((uint16_t)(A(R_D0) >> 16), TEAM(R_A2)); }
+static void run_DisplayPlayerList(const Record *r) { DisplayPlayerList(TEAM(R_A2)); }
+static void run_GetNameandAttrib(const Record *r) { GetNameandAttrib(R16(R_D0), A(R_D4), TEAM(R_A2)); }
+static void run_AttribStatus(const Record *r) { AttribStatus(R16(R_D0), TEAM(R_A2)); }
+static void run_AttribEnergy(const Record *r) { AttribEnergy(R16(R_D0), TEAM(R_A2)); }
+static void run_AttribFighting(const Record *r) { AttribFighting(R16(R_D0), R16(R_D1)); }
+static void run_AttribRating(const Record *r) { AttribRating(R16(R_D0), R16(R_D1)); }
+static void run_AttribPrintPct(const Record *r) { AttribPrintPct(R16(R_D0)); }
+static void run_AttribHanded(const Record *r) { AttribHanded(R16(R_D0)); }
+static void run_AttribWeight(const Record *r) { AttribWeight(R16(R_D0)); }
+static void run_ScoringSummaryScreen(const Record *r) { ScoringSummaryScreen(); }
+static void run_CheckScoringScroll(const Record *r) { CheckScoringScroll(); }
+static void run_UpdateScoringScroll(const Record *r) { UpdateScoringScroll(R16(R_D0)); }
+static void run_DrawScoringRowUp(const Record *r) { DrawScoringRowUp((uint16_t)(A(R_D0) >> 16)); }
+static void run_DrawScoringRowDown(const Record *r) { DrawScoringRowDown((uint16_t)(A(R_D0) >> 16)); }
+static void run_DrawScoringRow(const Record *r) { DrawScoringRow(R16(R_D3)); }
+static void run_PrintScorerName(const Record *r) { PrintScorerName((uint8_t)R16(R_D0), TEAM(R_A2)); }
+static void run_PenaltySummaryScreen(const Record *r) { PenaltySummaryScreen(); }
+static void run_CheckPenaltyScroll(const Record *r) { CheckPenaltyScroll(); }
+static void run_UpdatePenaltyScroll(const Record *r) { UpdatePenaltyScroll(R16(R_D0)); }
+static void run_DisplayPenaltyLineUp(const Record *r) { DisplayPenaltyLineUp((uint16_t)(A(R_D0) >> 16)); }
+static void run_DisplayPenaltyLineDown(const Record *r) { DisplayPenaltyLineDown((uint16_t)(A(R_D0) >> 16)); }
+static void run_DisplayPenaltyEntry(const Record *r) { DisplayPenaltyEntry(R16(R_D3)); }
+static void run_DrawScrollArrowsPenalty(const Record *r) { DrawScrollArrowsPenalty(); }
+static void run_CrowdMeterScreen(const Record *r) { CrowdMeterScreen(); }
+static void run_PrintCrowdMeter(const Record *r) { PrintCrowdMeter(); }
+static void run_PrintCrowdDB(const Record *r) { PrintCrowdDB(R16(R_D0)); }
+static void run_TimeoutMenu(const Record *r) { TimeoutMenu(TEAM(R_A2)); }
+static void run_SelectGoalieMenu(const Record *r) { SelectGoalieMenu(TEAM(R_A2)); }
+static void run_DrawGoalieSelectList(const Record *r) { DrawGoalieSelectList(TEAM(R_A2)); }
+static void run_GetDefenseStart(const Record *r) { expect_reg16(r, R_D0, GetDefenseStart(TEAM(R_A2)), "d0"); }
+static void run_GetForwardCount(const Record *r) { expect_reg16(r, R_D0, GetForwardCount(TEAM(R_A2)), "d0"); }
+static void run_PlayerCards(const Record *r) { PlayerCards(); }
+static void run_WrapCardIndex(const Record *r) { WrapCardIndex((uint16_t)A(R_A0)); }
+static void run_DrawPlayerCard(const Record *r) { DrawPlayerCard((uint16_t)A(R_A0)); }
+static void run_PrintCardRecords(const Record *r) { PrintCardRecords(); }
+static void run_ClearCardText(const Record *r) { ClearCardText(R16(R_D0), R16(R_D1)); }
+#define CARD_LINE(fn) static void run_##fn(const Record *r) { fn(R16(R_D0), R16(R_D1), (uint8_t)R16(R_D2), (uint8_t)R16(R_D3), (uint8_t)R16(R_D4), (uint8_t)R16(R_D5)); }
+CARD_LINE(PrintCardRecordLine)
+CARD_LINE(PrintCrowdRecordLine)
+CARD_LINE(PrintSaveRecordLine)
+CARD_LINE(PrintGoalRecordLine)
+static void run_PrintOverallRating(const Record *r) { PrintOverallRating(R16(R_D0), R16(R_D1), R16(R_D2)); }
+static void run_PrintStartingLine(const Record *r) { PrintStartingLine(R16(R_D0), R16(R_D1)); }
+static void run_PrintCardPosition(const Record *r) { PrintCardPosition(R16(R_D0), R16(R_D1), R16(R_D2)); }
+static void run_PrintTeamRating(const Record *r) { PrintTeamRating(R16(R_D0), R16(R_D1)); }
+static void run_PrintCardTeam(const Record *r) { PrintCardTeam(R16(R_D1)); }
+static void run_PrintCentered(const Record *r) { PrintCentered(A(R_A0)); }
+static void run_GetJerseyString(const Record *r) { GetJerseyString(R16(R_D0), A(R_A1)); }
+static void run_PrintGoalsAssists(const Record *r) { PrintGoalsAssists(R16(R_D0), R16(R_D1), R16(R_D2)); }
+static void run_PrintSaves(const Record *r) { PrintSaves(R16(R_D0), R16(R_D1), R16(R_D2)); }
+static void run_DrawPictureBox(const Record *r) { DrawPictureBox(); }
+static void run_GetCardTeam(const Record *r) { expect_reg32(r, R_A0, ram_addr(GetCardTeam()), "a0"); }
+static void run_GetCardPlayer(const Record *r) { expect_reg16(r, R_D0, GetCardPlayer(), "d0"); }
+static void run_BuildCardPlayerLists(const Record *r) { BuildCardPlayerLists(); }
+static void run_BuildCardPlayerList(const Record *r) { BuildCardPlayerList(TEAM(R_A0), ram_ptr(A(R_A1))); }
+static void run_RecordHoldersScreen(const Record *r) { RecordHoldersScreen(); }
+static void run_PrintRecordPage(const Record *r) { PrintRecordPage(); }
+static void run_PrintRecordTitles(const Record *r) { PrintRecordTitles(); }
+static void run_PrintWinRecords(const Record *r) { PrintWinRecords(); }
+static void run_ClearRecordArea(const Record *r) { ClearRecordArea(R16(R_D2)); }
+static void run_PrintPlayerRecords(const Record *r) { PrintPlayerRecords(); }
+static void run_PrintRecordName(const Record *r) { PrintRecordName(R16(R_D7), *mem_ptr(A(R_A0) - 1)); }
+static void run_CalcWinPercents(const Record *r) { CalcWinPercents(); }
+static void run_ReadTeamRecords(const Record *r) { ReadTeamRecords(); }
+static void run_ShootoutShooters(const Record *r) { ShootoutShooters(TEAM(R_A2)); }
+static void run_PrintShooterList(const Record *r) { PrintShooterList(TEAM(R_A2)); }
+static void run_ShootersBackground(const Record *r) { ShootersBackground(TEAM(R_A2)); }
+static void run_ClearShooterScreen(const Record *r) { ClearShooterScreen(); }
+static void run_ResetShooterScroll(const Record *r) { ResetShooterScroll(); }
+static void run_PrintShooterSlots(const Record *r) { PrintShooterSlots(); }
+static void run_PrintShooterBox(const Record *r) { PrintShooterBox(TEAM(R_A2)); }
+static void run_PrintShooterNames(const Record *r) { PrintShooterNames(TEAM(R_A2)); }
+static void run_FormatPlayerNameShort(const Record *r) { expect_reg32(r, R_A1, FormatPlayerNameShort(R16(R_D0), TEAM(R_A2)), "a1"); }
+static void run_FormatPlayerNameLast(const Record *r) { expect_reg32(r, R_A1, FormatPlayerNameLast(R16(R_D0), TEAM(R_A2)), "a1"); }
+static void run_GetLeagueCrowdRecord(const Record *r) { expect_reg16(r, R_D0, GetLeagueCrowdRecord(), "d0"); }
+static void run_ClearWinRecords(const Record *r) { ClearWinRecords(); }
+static void run_GetTeamStruct(const Record *r) { expect_reg32(r, R_A2, ram_addr(GetTeamStruct(R16(R_D2))), "a2"); }
+
 const Port ports[] = {
     { SYM_checkwallcoll, "checkwallcoll", run_checkwallcoll },
     { SYM_checkgoal, "checkgoal", run_checkgoal },
@@ -1440,10 +1540,108 @@ const Port ports[] = {
     { SYM_ReadStatColumn, "ReadStatColumn", run_ReadStatColumn },
     { SYM_GetStatsValue, "GetStatsValue", run_GetStatsValue },
     { SYM_DrawStatsListArrows, "DrawStatsListArrows", run_DrawStatsListArrows },
+    { SYM_ShowScores, "ShowScores", run_ShowScores },
+    { SYM_UpdateScoresScroll, "UpdateScoresScroll", run_UpdateScoresScroll },
+    { SYM_UpdateVertScrollReg, "UpdateVertScrollReg", run_UpdateVertScrollReg },
+    { SYM_DisplayGameInfo, "DisplayGameInfo", run_DisplayGameInfo },
+    { SYM_PrintGameInfo, "PrintGameInfo", run_PrintGameInfo },
+    { SYM_DrawScrollArrows, "DrawScrollArrows", run_DrawScrollArrows },
+    { SYM_LineEditor, "LineEditor", run_LineEditor },
+    { SYM_DrawLineIcon, "DrawLineIcon", run_DrawLineIcon },
+    { SYM_ClearLineArea, "ClearLineArea", run_ClearLineArea },
+    { SYM_DrawTeamScreen, "DrawTeamScreen", run_DrawTeamScreen },
+    { SYM_ClearLineEditorTop, "ClearLineEditorTop", run_ClearLineEditorTop },
+    { SYM_ClearMenuFlags, "ClearMenuFlags", run_ClearMenuFlags },
+    { SYM_SetLineSlot, "SetLineSlot", run_SetLineSlot },
+    { SYM_DecodeTeamLines, "DecodeTeamLines", run_DecodeTeamLines },
+    { SYM_EncodeTeamLines, "EncodeTeamLines", run_EncodeTeamLines },
+    { SYM_TeamRosterScreen, "TeamRosterScreen", run_TeamRosterScreen },
+    { SYM_CheckPlayerListScroll, "CheckPlayerListScroll", run_CheckPlayerListScroll },
+    { SYM_UpdatePlayerListScroll, "UpdatePlayerListScroll", run_UpdatePlayerListScroll },
+    { SYM_StopPlayerListScroll, "StopPlayerListScroll", run_StopPlayerListScroll },
+    { SYM_DisplayPlayerListUp, "DisplayPlayerListUp", run_DisplayPlayerListUp },
+    { SYM_DisplayPlayerListDown, "DisplayPlayerListDown", run_DisplayPlayerListDown },
+    { SYM_DisplayPlayerList, "DisplayPlayerList", run_DisplayPlayerList },
+    { SYM_GetNameandAttrib, "GetNameandAttrib", run_GetNameandAttrib },
+    { SYM_AttribStatus, "AttribStatus", run_AttribStatus },
+    { SYM_AttribEnergy, "AttribEnergy", run_AttribEnergy },
+    { SYM_AttribFighting, "AttribFighting", run_AttribFighting },
+    { SYM_AttribRating, "AttribRating", run_AttribRating },
+    { SYM_AttribPrintPct, "AttribPrintPct", run_AttribPrintPct },
+    { SYM_AttribHanded, "AttribHanded", run_AttribHanded },
+    { SYM_AttribWeight, "AttribWeight", run_AttribWeight },
+    { SYM_ScoringSummaryScreen, "ScoringSummaryScreen", run_ScoringSummaryScreen },
+    { SYM_CheckScoringScroll, "CheckScoringScroll", run_CheckScoringScroll },
+    { SYM_UpdateScoringScroll, "UpdateScoringScroll", run_UpdateScoringScroll },
+    { SYM_DrawScoringRowUp, "DrawScoringRowUp", run_DrawScoringRowUp },
+    { SYM_DrawScoringRowDown, "DrawScoringRowDown", run_DrawScoringRowDown },
+    { SYM_DrawScoringRow, "DrawScoringRow", run_DrawScoringRow },
+    { SYM_PrintScorerName, "PrintScorerName", run_PrintScorerName },
+    { SYM_PenaltySummaryScreen, "PenaltySummaryScreen", run_PenaltySummaryScreen },
+    { SYM_CheckPenaltyScroll, "CheckPenaltyScroll", run_CheckPenaltyScroll },
+    { SYM_UpdatePenaltyScroll, "UpdatePenaltyScroll", run_UpdatePenaltyScroll },
+    { SYM_DisplayPenaltyLineUp, "DisplayPenaltyLineUp", run_DisplayPenaltyLineUp },
+    { SYM_DisplayPenaltyLineDown, "DisplayPenaltyLineDown", run_DisplayPenaltyLineDown },
+    { SYM_DisplayPenaltyEntry, "DisplayPenaltyEntry", run_DisplayPenaltyEntry },
+    { SYM_DrawScrollArrowsPenalty, "DrawScrollArrowsPenalty", run_DrawScrollArrowsPenalty },
+    { SYM_CrowdMeterScreen, "CrowdMeterScreen", run_CrowdMeterScreen },
+    { SYM_PrintCrowdMeter, "PrintCrowdMeter", run_PrintCrowdMeter },
+    { SYM_PrintCrowdDB, "PrintCrowdDB", run_PrintCrowdDB },
+    { SYM_TimeoutMenu, "TimeoutMenu", run_TimeoutMenu },
+    { SYM_SelectGoalieMenu, "SelectGoalieMenu", run_SelectGoalieMenu },
+    { SYM_DrawGoalieSelectList, "DrawGoalieSelectList", run_DrawGoalieSelectList },
+    { SYM_GetDefenseStart, "GetDefenseStart", run_GetDefenseStart },
+    { SYM_GetForwardCount, "GetForwardCount", run_GetForwardCount },
+    { SYM_PlayerCards, "PlayerCards", run_PlayerCards },
+    { SYM_WrapCardIndex, "WrapCardIndex", run_WrapCardIndex },
+    { SYM_DrawPlayerCard, "DrawPlayerCard", run_DrawPlayerCard },
+    { SYM_PrintCardRecords, "PrintCardRecords", run_PrintCardRecords },
+    { SYM_ClearCardText, "ClearCardText", run_ClearCardText },
+    { SYM_PrintOverallRating, "PrintOverallRating", run_PrintOverallRating },
+    { SYM_PrintStartingLine, "PrintStartingLine", run_PrintStartingLine },
+    { SYM_PrintCardPosition, "PrintCardPosition", run_PrintCardPosition },
+    { SYM_PrintTeamRating, "PrintTeamRating", run_PrintTeamRating },
+    { SYM_PrintCardTeam, "PrintCardTeam", run_PrintCardTeam },
+    { SYM_PrintCentered, "PrintCentered", run_PrintCentered },
+    { SYM_GetJerseyString, "GetJerseyString", run_GetJerseyString },
+    { SYM_PrintGoalsAssists, "PrintGoalsAssists", run_PrintGoalsAssists },
+    { SYM_PrintSaves, "PrintSaves", run_PrintSaves },
+    { SYM_DrawPictureBox, "DrawPictureBox", run_DrawPictureBox },
+    { SYM_GetCardTeam, "GetCardTeam", run_GetCardTeam },
+    { SYM_GetCardPlayer, "GetCardPlayer", run_GetCardPlayer },
+    { SYM_BuildCardPlayerLists, "BuildCardPlayerLists", run_BuildCardPlayerLists },
+    { SYM_BuildCardPlayerList, "BuildCardPlayerList", run_BuildCardPlayerList },
+    { SYM_RecordHoldersScreen, "RecordHoldersScreen", run_RecordHoldersScreen },
+    { SYM_PrintRecordPage, "PrintRecordPage", run_PrintRecordPage },
+    { SYM_PrintRecordTitles, "PrintRecordTitles", run_PrintRecordTitles },
+    { SYM_PrintWinRecords, "PrintWinRecords", run_PrintWinRecords },
+    { SYM_ClearRecordArea, "ClearRecordArea", run_ClearRecordArea },
+    { SYM_PrintPlayerRecords, "PrintPlayerRecords", run_PrintPlayerRecords },
+    { SYM_PrintRecordName, "PrintRecordName", run_PrintRecordName },
+    { SYM_CalcWinPercents, "CalcWinPercents", run_CalcWinPercents },
+    { SYM_ReadTeamRecords, "ReadTeamRecords", run_ReadTeamRecords },
+    { SYM_ShootoutShooters, "ShootoutShooters", run_ShootoutShooters },
+    { SYM_PrintShooterList, "PrintShooterList", run_PrintShooterList },
+    { SYM_ShootersBackground, "ShootersBackground", run_ShootersBackground },
+    { SYM_ClearShooterScreen, "ClearShooterScreen", run_ClearShooterScreen },
+    { SYM_ResetShooterScroll, "ResetShooterScroll", run_ResetShooterScroll },
+    { SYM_PrintShooterSlots, "PrintShooterSlots", run_PrintShooterSlots },
+    { SYM_PrintShooterBox, "PrintShooterBox", run_PrintShooterBox },
+    { SYM_PrintShooterNames, "PrintShooterNames", run_PrintShooterNames },
+    { SYM_FormatPlayerNameShort, "FormatPlayerNameShort", run_FormatPlayerNameShort },
+    { SYM_FormatPlayerNameLast, "FormatPlayerNameLast", run_FormatPlayerNameLast },
+    { SYM_GetLeagueCrowdRecord, "GetLeagueCrowdRecord", run_GetLeagueCrowdRecord },
+    { SYM_ClearWinRecords, "ClearWinRecords", run_ClearWinRecords },
+    { SYM_GetTeamStruct, "GetTeamStruct", run_GetTeamStruct },
+    { SYM_PrintCardRecordLine, "PrintCardRecordLine", run_PrintCardRecordLine },
+    { SYM_PrintCrowdRecordLine, "PrintCrowdRecordLine", run_PrintCrowdRecordLine },
+    { SYM_PrintSaveRecordLine, "PrintSaveRecordLine", run_PrintSaveRecordLine },
+    { SYM_PrintGoalRecordLine, "PrintGoalRecordLine", run_PrintGoalRecordLine },
     { 0, NULL, NULL }
 };
 
 const uint32_t inner_labels[] = {
     SYM_ValidationLoop, SYM_SkipIncrement, SYM_ContinueValidation, SYM_VDPErrorSetup, SYM_VRAMWriteLoop, SYM_Halt,   /* ValidationRoutine */
+    SYM_FormatLastName,                                   /* FormatPlayerNameShort / FormatPlayerNameLast branch into it */
     0
 };

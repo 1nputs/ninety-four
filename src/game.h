@@ -647,6 +647,7 @@ void setupice_highlight(void);                          /* setup94 */
 void clearTeamStats(void);                              /* setup94, falls into setteams */
 void setteams(void);
 void InitTeamStructure(uint16_t team, uint8_t *tm);     /* d0, a2 */
+void InitTeamLines(uint8_t *tm);                        /* setup94: InitTeamStructure+$10, a2 */
 uint16_t ReloadRefTiles(void);                          /* -> d4 */
 uint16_t ReloadFaceOffTiles(void);                      /* -> d4 */
 uint16_t ReloadFaceOffMap(void);                        /* -> d4 */
@@ -840,6 +841,112 @@ uint16_t GetStatColumn(uint16_t player, uint16_t col, uint8_t *tm, int playoff);
 uint16_t ReadStatColumn(uint16_t player, uint16_t col, uint8_t *tm, int playoff);   /* d0, d1, a2, d7 -> d2 */
 uint16_t GetStatsValue(uint16_t at, uint16_t off, uint16_t v);   /* d1, d0, d2 -> d2 */
 void DrawStatsListArrows(void);
+/* the menu screens (stats94, cards94, records94, shootout94): menu item handlers and their parts */
+void ShowScores(void);                                  /* stats94: the other scores */
+void UpdateScoresScroll(void);
+void UpdateVertScrollReg(void);
+void DisplayGameInfo(uint16_t n);
+void PrintGameInfo(uint16_t team, uint16_t score);
+void DrawScrollArrows(void);
+void LineEditor(uint8_t *tm);                           /* a2: the line editor */
+int LineEditorRedraw(uint8_t *tm);
+int LineEditorMenu(uint8_t *tm);
+int SelectLinePlayer(uint8_t *tm);
+int LineEditorExit(uint8_t *tm);
+void PrintAttribHeader(uint8_t *tm);
+void DrawLineIcons(uint8_t *tm);
+void DrawLineIcon(uint16_t line, uint8_t *tm);
+void ClearLineArea(void);
+void DrawTeamScreen(uint8_t *tm);
+void ClearLineEditorTop(void);
+void ClearMenuFlags(void);
+void SetLineSlot(uint8_t player, uint16_t slot, uint8_t *tm);
+void DecodeTeamLines(uint8_t *tm);                      /* a2 */
+void EncodeTeamLines(uint8_t *tm);                      /* a2 */
+void TeamRosterScreen(uint8_t *tm);                     /* a2: the team roster */
+void CheckPlayerListScroll(uint8_t *tm);
+void UpdatePlayerListScroll(uint16_t v, uint8_t *tm);   /* d0, a2 */
+void StopPlayerListScroll(void);
+void DisplayPlayerListUp(uint16_t page, uint8_t *tm);
+void DisplayPlayerListDown(uint16_t page, uint8_t *tm);
+void DisplayPlayerList(uint8_t *tm);
+void GetNameandAttrib(uint16_t player, uint32_t sel, uint8_t *tm);   /* d0, d4, a2 */
+void AttribStatus(uint16_t player, uint8_t *tm);
+void AttribEnergy(uint16_t player, uint8_t *tm);
+void AttribFighting(uint16_t v, uint16_t div);          /* d0, d1 */
+void AttribRating(uint16_t v, uint16_t div);            /* d0, d1 */
+void AttribPrintPct(uint16_t v);
+void AttribHanded(uint16_t v);
+void AttribWeight(uint16_t v);
+void ScoringSummaryScreen(void);
+void CheckScoringScroll(void);
+void UpdateScoringScroll(uint16_t v);                   /* d0 */
+void DrawScoringRowUp(uint16_t entry);
+void DrawScoringRowDown(uint16_t entry);
+void DrawScoringRow(uint16_t at);                       /* d3 */
+void PrintScorerName(uint8_t player, uint8_t *tm);      /* d0, a2 */
+void PenaltySummaryScreen(void);
+void CheckPenaltyScroll(void);
+void UpdatePenaltyScroll(uint16_t v);                   /* d0 */
+void DisplayPenaltyLineUp(uint16_t entry);
+void DisplayPenaltyLineDown(uint16_t entry);
+void DisplayPenaltyEntry(uint16_t at);                  /* d3 */
+void DrawScrollArrowsPenalty(void);
+void CrowdMeterScreen(void);
+void PrintCrowdMeter(void);
+void PrintCrowdDB(uint16_t level);                      /* d0 */
+void TimeoutMenu(uint8_t *tm);                          /* a2 */
+void SelectGoalieMenu(uint8_t *tm);                     /* a2 */
+void DrawGoalieSelectList(uint8_t *tm);
+uint16_t GetDefenseStart(const uint8_t *tm);            /* a2 -> d0 */
+uint16_t GetForwardCount(const uint8_t *tm);            /* a2 -> d0 */
+void PlayerCards(void);                                 /* cards94: the player cards */
+void WrapCardIndex(uint16_t idx);                       /* a0 (a RAM word) */
+void DrawPlayerCard(uint16_t idx);                      /* a0 (a RAM word) */
+void PrintCardRecords(void);
+void ClearCardText(uint16_t x, uint16_t y);             /* d0, d1 */
+void PrintCardRecordLine(uint16_t x, uint16_t y, uint8_t value, uint8_t holder, uint8_t vsuser, uint8_t vsteam);   /* d0-d5 */
+void PrintCrowdRecordLine(uint16_t x, uint16_t y, uint8_t value, uint8_t holder, uint8_t vsuser, uint8_t vsteam);
+void PrintSaveRecordLine(uint16_t x, uint16_t y, uint8_t value, uint8_t holder, uint8_t vsuser, uint8_t vsteam);
+void PrintGoalRecordLine(uint16_t x, uint16_t y, uint8_t value, uint8_t holder, uint8_t vsuser, uint8_t vsteam);
+void PrintOverallRating(uint16_t player, uint16_t x, uint16_t y);   /* d0, d1, d2 */
+void PrintStartingLine(uint16_t x, uint16_t y);         /* d0, d1 */
+void PrintCardPosition(uint16_t player, uint16_t x, uint16_t y);    /* d0, d1, d2 */
+void PrintTeamRating(uint16_t x, uint16_t y);           /* d0, d1 */
+void PrintCardTeam(uint16_t y);                         /* d1 */
+void PrintCentered(uint32_t s);                         /* a0 */
+void GetJerseyString(uint16_t player, uint32_t buf);    /* d0, a1 */
+void PrintGoalsAssists(uint16_t player, uint16_t x, uint16_t y);    /* d0, d1, d2 */
+void PrintSaves(uint16_t player, uint16_t x, uint16_t y);           /* d0, d1, d2 */
+void DrawPictureBox(void);
+uint8_t *GetCardTeam(void);                             /* -> a0 */
+uint16_t GetCardPlayer(void);                           /* -> d0 */
+void BuildCardPlayerLists(void);
+void BuildCardPlayerList(const uint8_t *tm, uint8_t *list);   /* a0, a1 */
+void RecordHoldersScreen(void);                         /* records94: the record holders */
+void PrintRecordPage(void);
+void PrintRecordTitles(void);
+void PrintWinRecords(void);
+void ClearRecordArea(uint16_t tile);                    /* d2 (not loaded: the caller's) */
+void PrintPlayerRecords(void);
+void PrintRecordName(uint16_t row, uint8_t user);       /* d7, a0[-1] */
+void CalcWinPercents(void);
+void ReadTeamRecords(void);
+void ShootoutShooters(uint8_t *tm);                     /* shootout94: a2, the shootout shooters */
+void ShooterSelectList(uint8_t *tm);
+void PrintShooterList(uint8_t *tm);
+void ShootersBackground(uint8_t *tm);
+void ClearShooterScreen(void);
+void ResetShooterScroll(void);
+void PrintShooterSlots(void);
+void PrintShooterBox(uint8_t *tm);
+void PrintShooterNames(uint8_t *tm);
+uint32_t FormatLastName(uint32_t name, uint8_t *out);   /* data94: a0, a1 -> a1 = mesarea */
+uint32_t FormatPlayerNameShort(uint16_t player, const uint8_t *tm);  /* d0, a2 -> a1 */
+uint32_t FormatPlayerNameLast(uint16_t player, const uint8_t *tm);   /* d0, a2 -> a1 */
+uint16_t GetLeagueCrowdRecord(void);                    /* title94: -> d0 */
+void ClearWinRecords(void);
+uint8_t *GetTeamStruct(uint16_t team);                  /* d2 -> a2 */
 /* jsr (a0) to a 68k routine address kept in RAM (dispatch.c) */
 void call68k(uint32_t addr);
 void call68k_missing(uint32_t addr);

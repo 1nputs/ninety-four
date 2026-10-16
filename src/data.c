@@ -1,6 +1,6 @@
 /* data94.asm: the boxes shown over the rink during play (goal, penalty shot, injury, the three
- * stars) and the player name formatting they use. The front-end parts of data94 (playoffs,
- * passwords) come with the front end. */
+ * stars), the player name formatting, the playoff tree and its password. Not ported: the 68k's
+ * exception handlers (AddError, Illinst, ZeroDiv, crash: the crash screen; the C cannot fault). */
 #include <string.h>
 #include "game.h"
 #include "hal.h"
@@ -241,6 +241,34 @@ uint32_t FormatPlayerName(uint16_t player, uint8_t *tm) { return format_name(pla
 
 /* data94.asm:FormatPlayerNumInitial. d0 = roster slot, a2 = team -> a1 = mesarea "NN F. Last". */
 uint32_t FormatPlayerNumInitial(uint16_t player, uint8_t *tm) { return format_name(player, tm, 1); }
+
+/* data94.asm:FormatLastName. Name string a0 (a length word String): from after the first space
+ * (the first name) to its end or a 0 byte, to a1, space padded to TextBuffer + 12 -> a1 =
+ * mesarea (FinalizeTextBuffer). */
+uint32_t FormatLastName(uint32_t name, uint8_t *out)
+{
+    const uint8_t *p = rom_ptr(name);
+    const uint8_t *end = p + rd16(p);
+    p += 2;
+    while (*p++ != ' ') {}
+    do *out++ = *p++; while (p != end && *p != 0);
+    for (uint8_t *lim = RAM_W(RAM_OFF_TextBuffer) + 12; out < lim;) *out++ = ' ';
+    return FinalizeTextBuffer(out);
+}
+
+/* data94.asm:FormatPlayerNameShort. d0 = roster slot, a2 = team -> a1 = mesarea " Last". */
+uint32_t FormatPlayerNameShort(uint16_t player, const uint8_t *tm)
+{
+    uint8_t *out = RAM_W(RAM_OFF_TextBuffer);
+    *out++ = ' ';
+    return FormatLastName(GetPlayerNamePointer(player, tm), out);
+}
+
+/* data94.asm:FormatPlayerNameLast. d0 = roster slot, a2 = team -> a1 = mesarea "Last". */
+uint32_t FormatPlayerNameLast(uint16_t player, const uint8_t *tm)
+{
+    return FormatLastName(GetPlayerNamePointer(player, tm), RAM_W(RAM_OFF_TextBuffer));
+}
 
 /* data94.asm:getname. d0 = roster slot, a2 = team -> a1 = mesarea "NN First Last" (the
  * number, then appendz / appstring). */

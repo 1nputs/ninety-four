@@ -651,3 +651,37 @@ void WriteLineData(void)
     g.lastsfx = 0xFFFF;
     g.recbpr = RAM_BASE;
 }
+
+/* title94.asm:GetLeagueCrowdRecord. d0 = the team (of NumTeams, the last first) with the loudest
+ * crowd record (byte 8 of ReadCrowdRecord's buffer at ThreeStars; 0 counts as $50). */
+uint16_t GetLeagueCrowdRecord(void)
+{
+    uint16_t best = 0, team = 0;
+    for (int16_t t = (int16_t)(SYM_NumTeams - 1); t >= 0; t--) {
+        ReadCrowdRecord((uint32_t)t, RAM_BASE + RAM_OFF_ThreeStars);
+        uint16_t db = g.ThreeStars[8];
+        if (db == 0) db = 0x50;
+        if ((int16_t)db > (int16_t)best) {
+            best = db;
+            team = (uint16_t)t;
+        }
+    }
+    return team;
+}
+
+/* title94.asm:ClearWinRecords. The win records (bytes 8-$B of the 8 records of $10 at ThreeStars)
+ * cleared, the $80 bytes written back at TeamRecBase (WriteSRAM, MakeSRAMChecksum). */
+void ClearWinRecords(void)
+{
+    for (int i = 0; i < 8; i++) memset(g.ThreeStars + i * 0x10 + 8, 0, 4);
+    WriteSRAM(SYM_TeamRecBase, 0x80, RAM_BASE + RAM_OFF_ThreeStars);
+    MakeSRAMChecksum();
+}
+
+/* title94.asm:GetTeamStruct. a2 = the home team struct, or the visitors' when team d2 is not its
+ * team ($28 of the struct). */
+uint8_t *GetTeamStruct(uint16_t team)
+{
+    uint8_t *tm = team_struct(0);
+    return rd16(tm + SO_Xvel) == team ? tm : team_struct(1);
+}

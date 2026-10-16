@@ -7,6 +7,14 @@
 
 /* the menu handlers that take the pause pad's team (a2, which HandleMenuInput set with seta2) */
 static void player_stats(void) { PlayerStatsScreen(seta2()); }
+static void line_editor(void) { LineEditor(seta2()); }
+static void team_roster(void) { TeamRosterScreen(seta2()); }
+static void timeout_menu(void) { TimeoutMenu(seta2()); }
+static void select_goalie(void) { SelectGoalieMenu(seta2()); }
+static void shootout_shooters(void) { ShootoutShooters(seta2()); }
+static void encode_lines(void) { EncodeTeamLines(seta2()); }
+static void decode_lines(void) { DecodeTeamLines(seta2()); }
+static void original_lines(void) { InitTeamLines(seta2()); }
 static void rts(void) {}
 
 static const struct { uint32_t addr; void (*fn)(void); } routines[] = {
@@ -14,6 +22,20 @@ static const struct { uint32_t addr; void (*fn)(void); } routines[] = {
     { SYM_PlayerStatsScreen, player_stats },
     { SYM_PlayoffStatsScreen, PlayoffStatsScreen },
     { SYM_ManualGoalieMenu, ManualGoalieMenu },
+    { SYM_LineEditor, line_editor },
+    { SYM_TeamRosterScreen, team_roster },
+    { SYM_TimeoutMenu, timeout_menu },
+    { SYM_SelectGoalieMenu, select_goalie },
+    { SYM_ShootoutShooters, shootout_shooters },
+    { SYM_EncodeTeamLines, encode_lines },
+    { SYM_DecodeTeamLines, decode_lines },
+    { SYM_InitTeamStructure + 0x10, original_lines },     /* Set Original lines */
+    { SYM_ScoringSummaryScreen, ScoringSummaryScreen },
+    { SYM_PenaltySummaryScreen, PenaltySummaryScreen },
+    { SYM_ShowScores, ShowScores },
+    { SYM_CrowdMeterScreen, CrowdMeterScreen },
+    { SYM_PlayerCards, PlayerCards },
+    { SYM_RecordHoldersScreen, RecordHoldersScreen },
     { SYM_ReloadRinkGraphics, ReloadRinkGraphics },
     { SYM_SetupPauseScreen, SetupPauseScreen },
     { SYM_VBlank, VBlank },

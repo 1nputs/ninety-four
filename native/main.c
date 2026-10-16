@@ -131,6 +131,7 @@ static void resume(void)
     const uint8_t *p = snapshot + sizeof snapshot - 20;
     uint32_t pc = snapshot_len >= sizeof snapshot ? (uint32_t)(p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24) : 0;
     if (pc >= SYM_setvideo && pc < SYM_setvideo + 12) {   /* in setvideo's wait for dfok, at a game frame's end */
+        native_set_sr(0x2300);                            /* the game plays unmasked, as setupice left it */
         run68k(resume_game_loop);
     } else if (pc) {
         fprintf(stderr, "%s: the 68k was at %06x, not a place the native game resumes from: it starts the game loop\n", snap, pc);

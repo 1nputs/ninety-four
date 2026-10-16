@@ -1,5 +1,6 @@
-/* cards94.asm: player cards and the save RAM records. Only the parts the game play calls are
- * here so far; the card and record screens come with the front end. */
+/* cards94.asm: player cards and the save RAM records: the setup screen's cards, the Player Cards
+ * menu screen, the user records read from and written to save RAM. Complete (CardStub, an rts
+ * nothing calls, aside). */
 #include <string.h>
 #include "game.h"
 #include "symbols_gen.h"
@@ -554,4 +555,464 @@ uint16_t CalcAttrib(uint16_t player, uint8_t *tm, uint32_t mask, uint16_t *div)
     }
     *div = d1;
     return d0;
+}
+
+/* ---- the Player Cards menu item ------------------------------------------------------------------ */
+
+/* the card's team: the visitors when cardvis is set */
+static uint16_t card_team(void) { return g.cardvis ? g.VisTeam : g.HomeTeam; }
+
+/* cards94.asm:GetCardTeam. a0 = the card's team struct. */
+uint8_t *GetCardTeam(void) { return team_struct(g.cardvis != 0); }
+
+/* cards94.asm:PlayerCards. The Player Cards (a menu item, with save RAM only): 40 columns, the
+ * card screen picture, the corner logo and the arena, the card orders (BuildCardPlayerLists),
+ * then the cards of the team of the pad that paused (DrawPlayerCard): left / right and C page,
+ * A the other team, Start leaves. Card 0 is the team's records. */
+void PlayerCards(void)
+{
+    static const uint8_t remap[8] = { 0x05, 0x23, 0x41, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
+    if ((int16_t)g.ValidSRAM < 0) return;
+    forceblack();
+    g.disflags &= (uint16_t)~HI(dfok);
+    uint16_t saved = g.disflags;
+    g.disflags |= HI(dfng);
+    Vmaddr(g.VSPRITES);
+    vdp_data32(0);
+    vdp_ctrl16(SYM_VDPR_MODE4 + 0x81);
+    g.Map3col1 = 6;
+    vdp_ctrl16(SYM_VDPR_HSCROLL);
+    Vmaddr(0);
+    vdp_data32(0);
+    g.disflags = saved;
+    g.disflags &= (uint16_t)~HI(df32c);
+    CountGoalies();
+    CountPlayers();
+    DecompressGraphicsWithCallback(SYM_SmallFontMap + 8, g.smallfontchars, rom_find(SYM_PlayerCards, SYM_PlayerCards + 0x100, remap, 8));
+    printz(str_PlayerCards_1, sizeof str_PlayerCards_1);
+    uint32_t pic = SYM_PlayerCardsScreenPic;
+    uint16_t c = dobitmap(pic + rd32(rom_ptr(pic)), pic + rd32(rom_ptr(pic + 4)), pic + 8, 0, 0, 0x28, 0x1C, 1, 0xD);
+    g.cardlogochars1 = c;
+    c = (uint16_t)(c + 0x24);
+    g.cardlogochars2 = c;
+    c = (uint16_t)(c + 0x24);
+    printz(str_PlayerCards_2, sizeof str_PlayerCards_2);
+    eraser(0x40, 0x20, 0x7FF);
+    printz(str_PlayerCards_3, sizeof str_PlayerCards_3);
+    pic = SYM_CornerLogoMap;
+    c = dobitmap(pic + rd32(rom_ptr(pic)), pic + rd32(rom_ptr(pic + 4)), pic + 8, 0, 0, 6, 6, c, 8);
+    printz(str_PlayerCards_4, sizeof str_PlayerCards_4);
+    pic = SYM_ArenaGfxBank;
+    dobitmap(pic + rd32(rom_ptr(pic)), pic + rd32(rom_ptr(pic + 4)), pic + 8, 0, 0, 6, 6, c, 0);
+    BuildCardPlayerLists();
+    g.palcount = 0x18;
+    g.homecardidx = 0;
+    g.awaycardidx = 0;
+    int second = g.FourWayPlay ? g.pausepad != 3 : (g.sflags & HI(1)) != 0;
+    int16_t side = (int16_t)((second ? g.cont2team : g.cont1team) - 1);
+    if (side < 0) side = 0;
+    g.cardvis = (uint16_t)(side & 1);
+    DrawPlayerCard(g.cardvis ? RAM_OFF_awaycardidx : RAM_OFF_homecardidx);
+    for (;;) {
+        vcountwait();
+        uint16_t d0, d1, d2, d3;
+        getpzjoy(&d0, &d1, &d2, &d3);
+        ProcessInputWithRepeat(&d1, d2, d3);
+        if (d3 & 0x80) break;
+        int16_t by;
+        if (d1 & 0x40) {
+            g.cardvis ^= 1;
+            by = 0;
+        } else if (d1 & 0x20) {
+            by = 1;
+        } else {
+            nodiag(&d1, d3);
+            if (d1 & 8) by = 1;
+            else if (d1 & 4) by = -1;
+            else continue;
+        }
+        uint16_t idx = RAM_OFF_homecardidx;
+        g.cardcount = g.homeplayers;
+        if (g.cardvis) {
+            idx = RAM_OFF_awaycardidx;
+            g.cardcount = g.awayplayers;
+        }
+        wr16(RAM_W(idx), (uint16_t)(rd16(RAM_W(idx)) + by));
+        WrapCardIndex(idx);
+        DrawPlayerCard(idx);
+    }
+    ExitStatsScreen();
+}
+
+/* cards94.asm:WrapCardIndex. Card index (a0) wrapped into 0 ... cardcount. */
+void WrapCardIndex(uint16_t idx)
+{
+    uint8_t *p = RAM_W(idx);
+    uint16_t n = (uint16_t)(g.cardcount + 1);
+    if (rd16(p) == n) wr16(p, 0);
+    if ((int16_t)rd16(p) < 0) wr16(p, (uint16_t)(n - 1));
+}
+
+/* cards94.asm:DrawPlayerCard. The card of index (a0) in the team's colours: card 0 the team's
+ * records (PrintCardRecords); else the player's picture, his first and last names, his team, his
+ * records and this game's goals and assists or saves, his overall rating and his number and
+ * position. */
+void DrawPlayerCard(uint16_t idx)
+{
+    uint32_t pal = SYM_TeamPalettes + (uint32_t)(int16_t)(uint16_t)(card_team() << 6) + 0x26;
+    memcpy(RAM_W(RAM_OFF_palfadenew + 0x22), rom_ptr(pal), 4);
+    g.palcount = 0x64;
+    printz(str_DrawPlayerCard_1, sizeof str_DrawPlayerCard_1);
+    eraser(0x28, 0x15, 0x7FF);
+    printz(str_DrawPlayerCard_2, sizeof str_DrawPlayerCard_2);
+    if (rd16(RAM_W(idx)) == 0) {
+        PrintCardRecords();
+        return;
+    }
+    g.cardindex = rd16(RAM_W(idx));
+    DrawPictureBox();
+    ClearCardText(0x21, 8);
+    g.palcount = 0x64;
+    printz(str_DrawPlayerCard_3, sizeof str_DrawPlayerCard_3);
+    uint16_t team = card_team();
+    g.TempWord2 = team;
+    uint32_t a2 = rd32(rom_ptr(SYM_TeamList + (uint32_t)(int16_t)(uint16_t)(team << 2)));
+    a2 += (uint32_t)(int16_t)rd16(rom_ptr(a2));
+    for (uint16_t n = GetCardPlayer(); n-- != 0;) a2 += (uint32_t)(int16_t)rd16(rom_ptr(a2)) + 8;
+    uint8_t *ts = g.ThreeStars;
+    CopyString(a2, RAM_BASE + RAM_OFF_ThreeStars);        /* his first name */
+    uint16_t len = 0;
+    while (ts[2 + len] != ' ') len++;
+    ts[2 + len] = 0;
+    wr16(ts, (uint16_t)(((len + 1) & 0xFE) + 2));
+    g.printx = 8;
+    g.printy = 0xB;
+    printsmall(RAM_BASE + RAM_OFF_ThreeStars);
+    uint16_t player = GetCardPlayer();
+    uint32_t a1 = FormatPlayerNameLast(player, GetCardTeam());
+    g.printx = 8;
+    g.printy = 0xC;
+    printsmall(a1);
+    PrintCardTeam(8);
+    g.printx = 0x15;
+    g.printy = 0xC;
+    printsmallz(str_DrawPlayerCard_4, sizeof str_DrawPlayerCard_4);
+    g.printx = 0x15;
+    g.printy++;
+    printsmallz(str_DrawPlayerCard_5, sizeof str_DrawPlayerCard_5);
+    g.printx = 0x15;
+    g.printy = 0x12;
+    printsmallz(str_DrawPlayerCard_6, sizeof str_DrawPlayerCard_6);
+    g.printx = 0x15;
+    g.printy++;
+    printsmallz(str_DrawPlayerCard_7, sizeof str_DrawPlayerCard_7);
+    team = card_team();
+    player = GetCardPlayer();
+    ReadPlayerRecord((uint32_t)(int32_t)(int16_t)player, team, RAM_BASE + RAM_OFF_ThreeStars);
+    uint8_t r0 = ts[0], r1 = ts[1], r2 = ts[2], r3 = ts[3];
+    uint16_t goalies = g.cardvis ? g.awaygoalies : g.homegoalies;
+    if ((int16_t)goalies > (int16_t)g.cardplayer) {
+        PrintSaveRecordLine(0x15, 0xE, r0, r1, r3, r2);
+        PrintSaves(GetCardPlayer(), 0x15, 0x14);
+        ST_W(g.matchup);
+    } else {
+        PrintGoalRecordLine(0x15, 0xE, r0, r1, r3, r2);
+        PrintGoalsAssists(GetCardPlayer(), 0x15, 0x14);
+        g.matchup = 0;
+    }
+    PrintOverallRating(GetCardPlayer(), 3, 0x11);
+    PrintCardPosition(GetCardPlayer(), 3, 0xF);
+}
+
+/* cards94.asm:PrintCardRecords. Card 0: both sides cleared to the logo, the team's name, its
+ * starting line and rating, and its records (the crowd record block): goals, saves and the crowd
+ * level. */
+void PrintCardRecords(void)
+{
+    ClearCardText(0x21, 8);
+    g.sflags6 |= HI(0);
+    ClearCardText(1, 8);
+    g.sflags6 &= (uint16_t)~HI(0);
+    g.palcount = 0x64;
+    printz(str_PrintCardRecords_1, sizeof str_PrintCardRecords_1);
+    PrintCardTeam(8);
+    PrintStartingLine(3, 0xF);
+    PrintTeamRating(8, 0xB);
+    g.printx = 0x15;
+    g.printy = 0xC;
+    printsmallz(str_PrintCardRecords_2, sizeof str_PrintCardRecords_2);
+    g.printx = 0x15;
+    g.printy++;
+    printsmallz(str_PrintCardRecords_3, sizeof str_PrintCardRecords_3);
+    ReadCrowdRecord((uint32_t)(int32_t)(int16_t)card_team(), RAM_BASE + RAM_OFF_ThreeStars);
+    const uint8_t *r = g.ThreeStars;
+    PrintGoalRecordLine(0x15, 0xE, r[0], r[1], r[3], r[2]);
+    PrintSaveRecordLine(0x15, 0x12, r[4], r[5], r[7], r[6]);
+    PrintCrowdRecordLine(0x15, 0x16, r[8], r[9], r[0xB], r[0xA]);
+}
+
+/* cards94.asm:ClearCardText. Erase a card side at (d0, d1): the team's logo bitmap
+ * (TeamLogoBitmaps, TeamLogoPalettes) drawn over it, palettes 1's second half kept. */
+void ClearCardText(uint16_t x, uint16_t y)
+{
+    printz(str_ClearCardText_1, sizeof str_ClearCardText_1);
+    g.printx = x;
+    g.printy = y;
+    uint16_t t = (uint16_t)(card_team() << 2);
+    uint32_t bm = rd32(rom_ptr(SYM_TeamLogoBitmaps + (int16_t)t));
+    uint32_t pal = SYM_TeamLogoPalettes + (uint32_t)(int16_t)(uint16_t)((uint16_t)(t << 3) - 0x20);
+    uint8_t keep[8];
+    memcpy(keep, RAM_W(RAM_OFF_palfadenew + 0x22), 8);
+    dobitmap(pal, bm + rd32(rom_ptr(bm + 4)), bm + 8, 0, 0, 6, 6, g.cardlogochars1, 2);
+    memcpy(RAM_W(RAM_OFF_palfadenew + 0x22), keep, 8);
+}
+
+/* cards94.asm:PrintCardRecordLine. A record line at (d0, d1) when there is one (d2): the value and
+ * its label (TempMaxSpd), then the holder (d3) and " vs.", then the opponent's user (d4) and
+ * city (d5). */
+void PrintCardRecordLine(uint16_t x, uint16_t y, uint8_t value, uint8_t holder, uint8_t vsuser, uint8_t vsteam)
+{
+    if (value == 0) return;
+    g.printx = x;
+    g.printy = y;
+    AppendNumber(value, MESAREA);
+    appstring(g.TempMaxSpd, MESAREA);
+    printsmall(MESAREA);
+    g.printx = x;
+    g.printy++;
+    g.sflags6 |= HI(7);
+    AppendUserName(MESAREA, (uint16_t)(int16_t)(int8_t)holder);
+    appstring(SYM_CardVsTxt, MESAREA);
+    printsmall(MESAREA);
+    g.printx = x;
+    g.printy++;
+    g.sflags6 |= HI(7);
+    AppendUserName(MESAREA, (uint16_t)(int16_t)(int8_t)vsuser);
+    appstring(SYM_CardEmptyTxt, MESAREA);
+    AppendTeamName(vsteam, MESAREA);
+    printsmall(MESAREA);
+}
+
+/* cards94.asm:PrintCrowdRecordLine. The crowd level record line (CrowdLevelTxt). */
+void PrintCrowdRecordLine(uint16_t x, uint16_t y, uint8_t value, uint8_t holder, uint8_t vsuser, uint8_t vsteam)
+{
+    g.TempMaxSpd = SYM_CrowdLevelTxt;
+    PrintCardRecordLine(x, y, value, holder, vsuser, vsteam);
+}
+
+/* the record label: "<n> Saves" / "Saves by" (with a holder), the singular after it for 1 */
+static uint32_t record_label(uint32_t plain, uint32_t by, uint8_t value, uint8_t holder)
+{
+    uint32_t a1 = holder ? by : plain;
+    if (value == 1) a1 += rd16(rom_ptr(a1));
+    return a1;
+}
+
+/* cards94.asm:PrintSaveRecordLine. The saves record line (CardSavesTxt / CardSavesByTxt). */
+void PrintSaveRecordLine(uint16_t x, uint16_t y, uint8_t value, uint8_t holder, uint8_t vsuser, uint8_t vsteam)
+{
+    g.TempMaxSpd = record_label(SYM_CardSavesTxt, SYM_CardSavesByTxt, value, holder);
+    PrintCardRecordLine(x, y, value, holder, vsuser, vsteam);
+}
+
+/* cards94.asm:PrintGoalRecordLine. The goals record line (CardGoalsTxt / CardGoalsByTxt). */
+void PrintGoalRecordLine(uint16_t x, uint16_t y, uint8_t value, uint8_t holder, uint8_t vsuser, uint8_t vsteam)
+{
+    g.TempMaxSpd = record_label(SYM_CardGoalsTxt, SYM_CardGoalsByTxt, value, holder);
+    PrintCardRecordLine(x, y, value, holder, vsuser, vsteam);
+}
+
+/* cards94.asm:PrintOverallRating. "Overall Rating" at (d1, d2): player d0's (CalcAttrib with the
+ * goalie mask when matchup is set), x 100 / d1, adjusted (AttribAdjust). */
+void PrintOverallRating(uint16_t player, uint16_t x, uint16_t y)
+{
+    g.printx = x;
+    g.printy = y;
+    printsmallz(str_PrintOverallRating_1, sizeof str_PrintOverallRating_1);
+    g.printx = x;
+    g.printy++;
+    printsmallz(str_PrintOverallRating_2, sizeof str_PrintOverallRating_2);
+    uint32_t mask = rd32(rom_ptr(g.matchup ? SYM_GAttribOverallMask : SYM_PAttribOverallMask));
+    uint16_t div, v = CalcAttrib(player, GetCardTeam(), mask, &div);
+    v = AttribAdjust((uint16_t)m68k_divu((uint32_t)v * 100u, div));
+    AppendNumber(v, MESAREA);
+    printsmall(MESAREA);
+}
+
+/* cards94.asm:PrintStartingLine. "Starting Line" at (d0, d1), then a row a position
+ * (LinePosNames): the team's starter there (its TeamList line at +6, FormatPlayerNameShort). */
+void PrintStartingLine(uint16_t x, uint16_t y)
+{
+    uint16_t team = g.HomeTeam;
+    uint8_t *tm = GetTeamStruct(team);
+    if (g.cardvis) {
+        team = g.VisTeam;
+        tm = GetTeamStruct(team);
+    }
+    uint32_t a0 = rd32(rom_ptr(SYM_TeamList + (uint32_t)(int32_t)(int16_t)(uint16_t)(team << 2)));
+    a0 += (uint32_t)(int32_t)(int16_t)rd16(rom_ptr(a0 + 6));
+    g.printx = x;
+    g.printy = y;
+    printsmallz(str_PrintStartingLine_1, sizeof str_PrintStartingLine_1);
+    g.printy += 2;
+    g.printx = x;
+    for (uint32_t a1 = SYM_LinePosNames; rd16(rom_ptr(a1)) != 2; a1 += (uint32_t)(int32_t)(int16_t)rd16(rom_ptr(a1))) {
+        g.printx = x;
+        printsmall(a1);
+        uint16_t p = (uint16_t)((int16_t)(int8_t)*rom_ptr(a0++) - 1);
+        printsmall(FormatPlayerNameShort(p, tm));
+        g.printy++;
+    }
+}
+
+/* cards94.asm:PrintCardPosition. At (d1, d2) player d0's number (GetJerseyString) and Goalie,
+ * Forward or Defenseman (his roster index against GetGoalieCount and GetDefenseStart). */
+void PrintCardPosition(uint16_t player, uint16_t x, uint16_t y)
+{
+    GetJerseyString(player, MESAREA);
+    g.printx = x;
+    g.printy = y;
+    printsmall(MESAREA);
+    uint8_t *tm = GetCardTeam();
+    if ((int16_t)GetDefenseStart(tm) <= (int16_t)player)
+        printsmallz(str_PrintCardPosition_3, sizeof str_PrintCardPosition_3);
+    else if ((int16_t)GetGoalieCount(tm) <= (int16_t)player)
+        printsmallz(str_PrintCardPosition_2, sizeof str_PrintCardPosition_2);
+    else
+        printsmallz(str_PrintCardPosition_1, sizeof str_PrintCardPosition_1);
+}
+
+/* cards94.asm:PrintTeamRating. "Team Rating" at (d0, d1): the card team's (GetTeamRating), 2 wide. */
+void PrintTeamRating(uint16_t x, uint16_t y)
+{
+    g.printx = x;
+    g.printy = y;
+    printsmallz(str_PrintTeamRating_1, sizeof str_PrintTeamRating_1);
+    g.printx = x;
+    g.printy++;
+    printsmallz(str_PrintTeamRating_2, sizeof str_PrintTeamRating_2);
+    printsmall(PushNumberWidth(GetTeamRating(GetCardTeam()), 2));
+}
+
+/* cards94.asm:PrintCardTeam. The card team's city and nickname centred on rows d1 and d1 + 1. */
+void PrintCardTeam(uint16_t y)
+{
+    g.printy = y;
+    uint32_t a0 = rd32(GetCardTeam() + tmdata);
+    a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0 + 4));
+    PrintCentered(a0);
+    a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0));
+    a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0));
+    g.printy++;
+    PrintCentered(a0);
+}
+
+/* cards94.asm:PrintCentered. printsmall String a0 centred on column $14. */
+void PrintCentered(uint32_t s)
+{
+    g.printx = (uint16_t)(0x14 - ((uint16_t)(rd16(mem_ptr(s)) - 2) >> 1));
+    printsmall(s);
+}
+
+/* cards94.asm:GetJerseyString. Player d0 of the card team: his number as a 2 digit String at a1
+ * (a space for a leading 0). */
+void GetJerseyString(uint16_t player, uint32_t buf)
+{
+    uint32_t a0 = rd32(GetCardTeam() + tmdata);
+    a0 += (uint32_t)(int32_t)(int16_t)rd16(rom_ptr(a0));
+    uint16_t n = player;
+    do a0 += (uint32_t)(int32_t)(int16_t)rd16(rom_ptr(a0)) + 8; while (n-- != 0);
+    uint8_t num = *rom_ptr(a0 - 8);
+    uint8_t *b = mem_ptr(buf);
+    wr16(b, 4);
+    b[2] = (num >> 4) ? (uint8_t)((num >> 4) + '0') : ' ';
+    b[3] = (uint8_t)((num & 0xF) + '0');
+}
+
+/* cards94.asm:PrintGoalsAssists. "Goals" and "Assists" at (d1, d2): player d0's this game ($B4
+ * and $CE of the team struct). */
+void PrintGoalsAssists(uint16_t player, uint16_t x, uint16_t y)
+{
+    const uint8_t *tm = GetCardTeam();
+    uint16_t goals = (uint16_t)(int16_t)(int8_t)tm[0xB4 + (int16_t)player];
+    uint16_t assists = (uint16_t)(int16_t)(int8_t)tm[0xCE + (int16_t)player];
+    g.printx = x;
+    g.printy = y;
+    printsmallz(str_PrintGoalsAssists_1, sizeof str_PrintGoalsAssists_1);
+    AppendNumber(goals, MESAREA);
+    printsmall(MESAREA);
+    g.printx = x;
+    g.printy++;
+    printsmallz(str_PrintGoalsAssists_2, sizeof str_PrintGoalsAssists_2);
+    AppendNumber(assists, MESAREA);
+    printsmall(MESAREA);
+}
+
+/* cards94.asm:PrintSaves. "Saves" and "Save %" at (d1, d2): goalie d0's shots ($E8 of the team
+ * struct) less his goals against ($B4), and that x 100 / the shots (0 with none). */
+void PrintSaves(uint16_t player, uint16_t x, uint16_t y)
+{
+    const uint8_t *tm = GetCardTeam();
+    int16_t against = (int8_t)tm[0xB4 + (int16_t)player];
+    int16_t shots = (int8_t)tm[0xE8 + (int16_t)player];
+    uint16_t saves = (uint16_t)(shots - against);
+    g.printx = x;
+    g.printy = y;
+    printsmallz(str_PrintSaves_1, sizeof str_PrintSaves_1);
+    AppendNumber(saves, MESAREA);
+    printsmall(MESAREA);
+    g.printx = x;
+    g.printy++;
+    printsmallz(str_PrintSaves_2, sizeof str_PrintSaves_2);
+    uint32_t pct = (uint32_t)saves * 100u;
+    pct = shots == 0 ? (pct & 0xFFFF0000u) : m68k_divu(pct, (uint16_t)shots);
+    AppendNumber((uint16_t)pct, MESAREA);
+    printsmall(MESAREA);
+}
+
+/* cards94.asm:DrawPictureBox. The card player's picture (DrawPlayerPicture; no map: the common
+ * one) unpacked and drawn at (1, 8), its palette's second half to palette 2. */
+void DrawPictureBox(void)
+{
+    uint16_t player = GetCardPlayer();
+    uint32_t pic = DrawPlayerPicture(player, card_team());
+    printz(str_DrawPictureBox_1, sizeof str_DrawPictureBox_1);
+    uint32_t pal = SYM_PicturePalette + rd32(rom_ptr(SYM_PicturePalette)), map;
+    if (rd32(rom_ptr(pic + 4)) == 0) map = SYM_PicturePalette + rd32(rom_ptr(SYM_PicturePalette + 4));
+    else map = pic + rd32(rom_ptr(pic + 4));
+    UnpackPicture(pic + 8);
+    memcpy(RAM_W(RAM_OFF_palfadenew + 0x40), rom_ptr(pal + 0x20), 0x20);
+    dobitmap(pal, map, RAM_BASE + RAM_OFF_picturebuf, 0, 0, 6, 6, g.cardlogochars2, 0);
+}
+
+/* cards94.asm:GetCardPlayer. cardplayer = the roster index of card cardindex (from 1) of the card
+ * team's order (homecardlist / awaycardlist). */
+uint16_t GetCardPlayer(void)
+{
+    uint16_t list = g.cardvis ? RAM_OFF_awaycardlist : RAM_OFF_homecardlist;
+    g.cardplayer = (uint16_t)(int16_t)(int8_t)*RAM_W((uint16_t)(list + g.cardindex - 1));
+    return g.cardplayer;
+}
+
+/* cards94.asm:BuildCardPlayerLists. Both teams' card orders. */
+void BuildCardPlayerLists(void)
+{
+    BuildCardPlayerList(team_struct(0), RAM_W(RAM_OFF_homecardlist));
+    BuildCardPlayerList(team_struct(1), RAM_W(RAM_OFF_awaycardlist));
+}
+
+/* cards94.asm:BuildCardPlayerList. The card order of team a0 at a1: its 6 starters (its TeamList
+ * line at +6) in roster order, then the others from a1 + 6. */
+void BuildCardPlayerList(const uint8_t *tm, uint8_t *list)
+{
+    uint32_t a0 = rd32(tm + tmdata);
+    const uint8_t *line = rom_ptr(a0 + (uint32_t)(int16_t)rd16(rom_ptr(a0 + 6)));
+    uint8_t *rest = list + 6;
+    for (uint16_t p = 0; p < SYM_RosterSlots; p++) {
+        int starter = 0;
+        for (int i = 5; i >= 0; i--)
+            if ((uint8_t)(line[i] - 1) == (uint8_t)p) { starter = 1; break; }
+        if (starter) *list++ = (uint8_t)p;
+        else *rest++ = (uint8_t)p;
+    }
 }

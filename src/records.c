@@ -1,6 +1,6 @@
 /* records94.asm: new in 94, the user records. The players enter their names (the NAME ENTRY
  * screen: a name log of seven names, a letter grid to edit one) before a game with user records
- * on; the Record Holders screen of the menus comes later. */
+ * on, and the Record Holders screen of the menus. Complete. */
 #include "game.h"
 #include "hal.h"
 #include "rom.h"
@@ -478,4 +478,228 @@ int SkipOtherUserName(int16_t dir)
     if (other != g.namelogsel) return 0;
     g.namelogsel += dir >= 0 ? 1 : (uint16_t)-1;
     return 1;
+}
+
+/* ---- the Record Holders menu item ---------------------------------------------------------------- */
+
+#define MESAREA (RAM_BASE + RAM_OFF_mesarea)
+
+/* records94.asm:RecordHoldersScreen. The Record Holders (a menu item): the corner logo and the
+ * arena, the user records from save RAM sorted three ways (ReadTeamRecords, CalcWinPercents);
+ * page 0 the win records (A + C held clears them: ClearWinRecords), pages 1 and 2 the goals and
+ * saves records, left / right; Start leaves. */
+void RecordHoldersScreen(void)
+{
+    uint16_t c = SetupScreen(0, 0x1A);
+    PRINTZ(str_RecordHoldersScreen_1);
+    uint32_t pic = SYM_CornerLogoMap;
+    c = dobitmap(pic + rd32(rom_ptr(pic)), pic + rd32(rom_ptr(pic + 4)), pic + 8, 0, 0, 6, 6, c, 8);
+    PRINTZ(str_RecordHoldersScreen_2);
+    pic = SYM_ArenaGfxBank;
+    dobitmap(pic + rd32(rom_ptr(pic)), pic + rd32(rom_ptr(pic + 4)), pic + 8, 0, 0, 6, 6, c, 0);
+    PRINTZ(str_RecordHoldersScreen_3);
+    Framer(0x12, 7);
+    printbigz(str_RecordHoldersScreen_4, sizeof str_RecordHoldersScreen_4);
+    printsmallz(str_RecordHoldersScreen_5, sizeof str_RecordHoldersScreen_5);
+    ReadNameLog();
+    g.TempWord1 = 0;
+    g.sflags6 &= (uint16_t)~HI(6);
+    ReadTeamRecords();
+    g.sflags6 |= HI(6);
+    ReadTeamRecords();
+    CalcWinPercents();
+    PrintRecordTitles();
+    PrintWinRecords();
+    for (;;) {
+        vcountwait();
+        uint16_t d0, d1, d2, d3;
+        getpzjoy(&d0, &d1, &d2, &d3);
+        ProcessInputWithRepeat(&d1, d2, d3);
+        if (d3 & 0x80) break;
+        if (g.TempWord1 == 0 && (d3 & 0x40) && (d3 & 0x20)) {
+            ClearWinRecords();
+            CalcWinPercents();
+            PrintWinRecords();
+        } else if (d1 & 8) {
+            if (g.TempWord1 == 2) continue;
+            ClearRecordArea(d2);
+            g.TempWord1++;
+            PrintRecordTitles();
+            PrintRecordPage();
+        } else if (d1 & 4) {
+            if (g.TempWord1 == 0) continue;
+            ClearRecordArea(d2);
+            g.TempWord1--;
+            PrintRecordTitles();
+            PrintRecordPage();
+        }
+    }
+    ExitStatsScreen();
+}
+
+/* records94.asm:PrintRecordPage. Page TempWord1: 0 the win records, else the player records. */
+void PrintRecordPage(void)
+{
+    if (g.TempWord1 == 0) PrintWinRecords();
+    else PrintPlayerRecords();
+}
+
+/* records94.asm:PrintRecordTitles. The column titles of page TempWord1 (WinRecTitles,
+ * GoalRecTitles, SaveRecTitles). */
+void PrintRecordTitles(void)
+{
+    uint32_t a1 = SYM_WinRecTitles;
+    if (g.TempWord1 != 0) a1 = g.TempWord1 == 2 ? SYM_SaveRecTitles : SYM_GoalRecTitles;
+    printsmall(a1);
+}
+
+/* records94.asm:PrintWinRecords. The 7 rows of the win records in winsort's order: the user's
+ * name (PrintRecordName), win %, wins, losses (games less wins and ties) and ties; a blank row
+ * (RecParenTxt) without games. The win % is a byte over the caller's d5 (0 here). */
+void PrintWinRecords(void)
+{
+    printsmallz(str_PrintWinRecords_1, sizeof str_PrintWinRecords_1);
+    const uint8_t *sort = g.winsort;
+    for (int16_t row = 6; row >= 0; row--) {
+        g.printx = 2;
+        int16_t u = (int8_t)*sort++;
+        uint8_t pct = g.winpcts[u];
+        const uint8_t *r = g.ThreeStars + (int16_t)(uint16_t)(u << 4);
+        uint16_t games = rd16(r + 0xA);
+        g.recties = rd16(r + 0xC);
+        g.recwins = rd16(r + 8);
+        g.reclosses = (uint16_t)-(int16_t)(uint16_t)(g.recwins + g.recties - games);
+        uint32_t a1 = SYM_RecParenTxt;
+        if (games != 0) {
+            PrintRecordName((uint16_t)row, sort[-1]);
+            g.printx = 0x13;
+            printsmall(PushNumberWidth(pct, 3));
+            g.printx = 0x1A;
+            printsmall(PushNumberWidth(g.recwins, 4));
+            g.printx = 0x1F;
+            printsmall(PushNumberWidth(g.reclosses, 4));
+            g.printx = 0x24;
+            a1 = PushNumberWidth(g.recties, 3);
+        }
+        printsmall(a1);
+        g.printy += 2;
+    }
+}
+
+/* records94.asm:ClearRecordArea. The record rows erased ($28 x $12 at row $A) with the caller's d2
+ * as the tile (the pad's changed buttons: the 68k never loads it), printx / printy / printm kept. */
+void ClearRecordArea(uint16_t tile)
+{
+    uint16_t x = g.printx, y = g.printy, m = g.printm;
+    printsmallz(str_ClearRecordArea_1, sizeof str_ClearRecordArea_1);
+    eraser(0x28, 0x12, tile);
+    g.printm = m;
+    g.printy = y;
+    g.printx = x;
+}
+
+/* records94.asm:PrintPlayerRecords. The 7 rows of page 1 (goals: record bytes 0-2, recsort1) or
+ * 2 (saves: bytes 4-6, recsort2): the user's name, the record, "by" its team, "vs." the other;
+ * a blank row without one. */
+void PrintPlayerRecords(void)
+{
+    printsmallz(str_PrintPlayerRecords_1, sizeof str_PrintPlayerRecords_1);
+    int goals = g.TempWord1 == 1;
+    const uint8_t *sort = goals ? g.recsort1 : g.recsort2;
+    for (int16_t row = 6; row >= 0; row--) {
+        g.printx = 2;
+        const uint8_t *r = g.ThreeStars + (int16_t)(uint16_t)((int16_t)(int8_t)*sort++ << 4) + (goals ? 0 : 4);
+        uint32_t a1 = SYM_RecParenTxt;
+        if (r[0] != 0) {
+            PrintRecordName((uint16_t)row, sort[-1]);
+            g.printx = 0x12;
+            printsmall(PushNumberWidth(r[0], 3));
+            g.printx = 0x19;
+            CopyString(SYM_RecHolderByTxt, MESAREA);
+            AppendTeamName(r[1], MESAREA);
+            appstring(SYM_RecHolderVsTxt, MESAREA);
+            AppendTeamName(r[2], MESAREA);
+            a1 = MESAREA;
+        }
+        printsmall(a1);
+        g.printy += 2;
+    }
+}
+
+/* records94.asm:PrintRecordName. Row d7's number ("1. " ... "7. ") and user a0[-1]'s name
+ * (AppendUserName, untrimmed). */
+void PrintRecordName(uint16_t row, uint8_t user)
+{
+    uint8_t *m = RAM_W(RAM_OFF_mesarea);
+    wr16(m, 6);
+    m[2] = (uint8_t)(7 - row + '0');
+    m[3] = '.';
+    m[4] = ' ';
+    m[5] = 0;
+    printsmall(MESAREA);
+    g.sflags6 &= (uint16_t)~HI(7);
+    AppendUserName(MESAREA, (uint16_t)(int16_t)(int8_t)user);
+    printsmall(MESAREA);
+}
+
+/* records94.asm:CalcWinPercents. For the 8 user records at ThreeStars: the win % byte (wins x 100
+ * / games, 0 without games: winpcts), the games (wingames) and ties (winties); then rows 1-7
+ * (winsort) bubble sorted on the win % (a signed byte), the ties, then the games, each
+ * descending. */
+void CalcWinPercents(void)
+{
+    for (int i = 0; i < 8; i++) {
+        const uint8_t *r = g.ThreeStars + i * 0x10;
+        uint16_t wins = rd16(r + 8), games = rd16(r + 0xA);
+        wr16(g.wingames + i * 2, games);
+        uint32_t pct = games == 0 ? 0 : m68k_divu((uint32_t)wins * 100u, games);
+        g.winpcts[i] = (uint8_t)pct;
+        g.winties[i * 2] = r[0xC];
+        g.winties[i * 2 + 1] = r[0xD];
+    }
+    for (int i = 0; i < 7; i++) g.winsort[i] = (uint8_t)(i + 1);
+    int swapped;
+    do {
+        swapped = 0;
+        for (int i = 0; i < 6; i++) {
+            int16_t a = (int8_t)g.winsort[i], b = (int8_t)g.winsort[i + 1];
+            int8_t pa = (int8_t)g.winpcts[a], pb = (int8_t)g.winpcts[b];
+            if (pa > pb) continue;
+            if (pa == pb) {
+                int16_t ta = (int16_t)rd16(g.winties + (int16_t)(a * 2)), tb = (int16_t)rd16(g.winties + (int16_t)(b * 2));
+                if (ta > tb) continue;
+                if (ta == tb) {
+                    int16_t ga = (int16_t)rd16(g.wingames + (int16_t)(a * 2)), gb = (int16_t)rd16(g.wingames + (int16_t)(b * 2));
+                    if (ga >= gb) continue;
+                }
+            }
+            g.winsort[i] = (uint8_t)b;
+            g.winsort[i + 1] = (uint8_t)a;
+            swapped = 1;
+        }
+    } while (swapped);
+}
+
+/* records94.asm:ReadTeamRecords. The $80 bytes of user records from save RAM to ThreeStars, then
+ * rows 1-7 bubble sorted on record byte 0 (recsort1) or, with sflags6 bit 6, byte 4 (recsort2),
+ * descending as signed bytes. */
+void ReadTeamRecords(void)
+{
+    ReadSRAM(SYM_TeamRecBase, 0x80, RAM_BASE + RAM_OFF_ThreeStars);
+    int saves = (g.sflags6 & HI(6)) != 0;
+    uint8_t *sort = saves ? g.recsort2 : g.recsort1;
+    for (int i = 0; i < 7; i++) sort[i] = (uint8_t)(i + 1);
+    int swapped;
+    do {
+        swapped = 0;
+        for (int i = 0; i < 6; i++) {
+            int16_t a = (int16_t)(uint16_t)((int16_t)(int8_t)sort[i] << 4), b = (int16_t)(uint16_t)((int16_t)(int8_t)sort[i + 1] << 4);
+            int8_t va = (int8_t)g.ThreeStars[a + (saves ? 4 : 0)], vb = (int8_t)g.ThreeStars[b + (saves ? 4 : 0)];
+            if (va >= vb) continue;
+            uint8_t t = sort[i];
+            sort[i] = sort[i + 1];
+            sort[i + 1] = t;
+            swapped = 1;
+        }
+    } while (swapped);
 }

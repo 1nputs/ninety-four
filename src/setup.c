@@ -299,9 +299,16 @@ void setupice(void)
 void InitTeamStructure(uint16_t team, uint8_t *tm)
 {
     wr16(tm + 0x28, team);
-    uint32_t data = rd32(rom_ptr(SYM_TeamList + (uint16_t)(team << 2)));
-    wr32(tm + tmdata, data);
-    const uint8_t *src = rom_ptr(rd32(tm + tmdata) + (int16_t)rd16(rom_ptr(data + 6)));
+    wr32(tm + tmdata, rd32(rom_ptr(SYM_TeamList + (uint16_t)(team << 2))));
+    InitTeamLines(tm);
+}
+
+/* setup94.asm:InitTeamStructure+$10. Team struct a2's line sets at $16A from its data's (the
+ * layout by OptLine); the line editor's "Set Original lines". */
+void InitTeamLines(uint8_t *tm)
+{
+    uint32_t data = rd32(tm + tmdata);
+    const uint8_t *src = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 6)));
     uint8_t *dst = tm + 0x16A;
     if (g.OptLine != 0) {
         memcpy(dst, src, 8);

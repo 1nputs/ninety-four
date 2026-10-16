@@ -88,8 +88,12 @@ static void pad_source(void *user, uint16_t b[2]) { (void)user; b[0] = buttons; 
 static size_t lag_next;                 /* the span's next lag interrupt to place */
 
 /* the span up to the oracle's next interrupt in a wait loop */
+static int logic_lags;                  /* lag frames of this span placed in the game's logic */
+static int span_end_logic;              /* the span ends with the oracle in the game's logic (-1: not known yet) */
 static void next_span(void)
 {
+    logic_lags = 0;
+    span_end_logic = -1;
     lag_next = span_lo = hv_rec = next;
     hv_used = 0;
     hv_over = 0;
@@ -165,6 +169,38 @@ static int at_game_loop(const record *r)
     if (sp + 70 > 0x10000) return 0;
     uint32_t ret = be32(r->state + sp + 66) & 0xFFFFFF;
     return ret > SYM_Gameloop && ret < SYM_DoGameFrame;
+}
+
+/* the end of routine a's code: the next routine's address */
+static uint32_t routine_end(uint32_t a)
+{
+    uint32_t best = 0xFFFFFFFFu;
+    for (size_t i = 0; i < sizeof rom_syms / sizeof *rom_syms; i++)
+        if (rom_syms[i].addr > a && rom_syms[i].addr < best) best = rom_syms[i].addr;
+    return best;
+}
+
+/* the oracle at record r (its whole state) out of the game's logic: in Pausemode or
+ * IntermissionStart, or on its stack, from the top, a return into one of them before one into
+ * DoGameFrame (any long word there that is such an address counts); else (DoGameFrame, the game
+ * loop between two frames, no state) in it */
+static int oracle_out_of_game_logic(const record *r)
+{
+    static uint32_t dgf_end, int_end, pause_end;
+    if (!dgf_end) {
+        dgf_end = routine_end(SYM_DoGameFrame);
+        int_end = routine_end(SYM_IntermissionStart);
+        pause_end = routine_end(SYM_Pausemode);
+    }
+    if (!r->state) return 0;
+    if (r->routine == SYM_Pausemode || r->routine == SYM_IntermissionStart) return 1;
+    const uint8_t *regs = r->state + 0x10000 + 24 + 0x10000 + 128 + 80;   /* (D0-D7, A0-A7) */
+    for (uint32_t a = le32(regs + 15 * 4) & 0xFFFF; a + 4 <= 0x10000; a += 2) {   /* (the stack: up to the top of RAM) */
+        uint32_t v = be32(r->state + a);
+        if ((v > SYM_IntermissionStart && v < int_end) || (v > SYM_Pausemode && v < pause_end)) return 1;
+        if (v > SYM_DoGameFrame && v < dgf_end) return 0;
+    }
+    return 0;
 }
 
 /* the native state against the oracle's whole state at record r, but for the lag mask: the first
@@ -296,6 +332,7 @@ static NI uint32_t routine_of(void *fn)
 
 static void try_place(void);
 static void place_next(const char *how);
+static int in_game_logic(void);
 static int due(uint32_t n, int unmask);
 static int armed;                       /* the next lag frame's access count has come: waiting for its routine */
 
@@ -333,25 +370,34 @@ static NI void place_next(const char *how)
     const record *l = &recs[lag_next++];
     buttons = l->buttons;
     placed++;
+    if (in_game_logic()) logic_lags = 1;
     armed = 0;
-    if (getenv("LOCKSTEP_DEBUG")) printf("  lag frame %u (68k at %06x, %u accesses) placed %s\n", l->frame, l->at, l->writes, how);
+    if (getenv("LOCKSTEP_DEBUG")) printf("  lag frame %u (68k at %06x, %u accesses) placed %s%s\n", l->frame, l->at, l->writes, how,
+                                         in_game_logic() ? " (in the game's logic)" : "");
     native_vblank_now();
 }
 /* the native game is in a frame's game logic (DoGameFrame on its function stack, and not the
- * intermission or the game over a period's end runs from inside it): the oracle's lag frames there
- * fall in long stretches without port accesses, where a routine runs many times a frame, so they
- * are not placed: the player takes the oracle's state at the game loop instead */
+ * intermission or the game over a period's end runs from inside it, nor the pause menu and its
+ * screens): the oracle's lag frames there fall in long stretches without port accesses, where a
+ * routine runs many times a frame, so they are not placed unless their span ends with the oracle
+ * out of it (the pause menu's fade, which Gameloop runs after a frame of the game's logic): there
+ * is no point in the game loop to come for the player to take the oracle's state at, as it does
+ * for the others */
 static NI int in_game_logic(void)
 {
     for (int i = (depth < 512 ? depth : 512) - 1; i >= 0; i--) {
-        if (where[i] == SYM_IntermissionStart) return 0;
+        if (where[i] == SYM_IntermissionStart || where[i] == SYM_Pausemode) return 0;
         if (where[i] == SYM_DoGameFrame) return 1;
     }
     return 0;
 }
 static NI int due(uint32_t n, int unmask)
 {
-    if (!recs || lag_next + 1 >= span_hi || in_game_logic()) return 0;
+    if (!recs || lag_next + 1 >= span_hi) return 0;
+    if (in_game_logic()) {                                /* the span ends where the oracle is still in it: not placed */
+        if (span_end_logic < 0) span_end_logic = !oracle_out_of_game_logic(&recs[span_hi - 1]);
+        if (span_end_logic) return 0;
+    }
     const record *l = &recs[lag_next];
     return !!(l->flags & 4) == unmask && l->writes <= n;
 }
@@ -381,6 +427,9 @@ void NI lockstep_before_access(void)
 void NI lockstep_unmask(uint32_t n)
 {
     accesses_now = n;
+    if (getenv("LOCKSTEP_DEBUG") && recs && lag_next + 1 < span_hi && (recs[lag_next].flags & 4) && !due(n, 1))
+        printf("  an unmask at %u accesses: lag frame %u (68k at %06x, %u accesses) not due%s\n", n, recs[lag_next].frame,
+               recs[lag_next].at, recs[lag_next].writes, in_game_logic() ? " (in the game logic)" : "");
     while (due(n, 1)) place_next("at an unmask");
     if (!armed) armed = due(n, 0);
     try_place();
@@ -394,6 +443,12 @@ void lockstep_check(long frame)
         place_next("at the wait");
         armed = due(accesses_now, 0);
     }
+    /* the game at the wait the span ends at (in its routine), off the game loop, short of the port
+     * accesses the oracle's last lag frames had, after lag frames placed in the game's logic (the count
+     * drifts there): those, here */
+    if (logic_lags && span_lo < nrecs && lag_next + 1 < span_hi && !at_game_loop(&recs[span_hi - 1]) && depth > 0 && depth <= 512
+        && where[depth - 1] == recs[span_hi - 1].routine && recs[span_hi - 1].routine && !in_game_logic())
+        while (lag_next + 1 < span_hi) place_next("at the wait (the access count short)");
     const record *r = span_lo < nrecs ? &recs[span_hi - 1] : NULL;
     if (!r || !(r->flags & 1)) {                          /* the recording's end (perhaps in lag frames) */
         if (r) lagged += (long)(span_hi - span_lo);
@@ -402,6 +457,17 @@ void lockstep_check(long frame)
         native_quit();
     }
     if (restarted) { restarted = 0; return; }             /* the same wait, from the restart */
+    if (logic_lags && r->state && !at_game_loop(r) && depth > 0 && depth <= 512 && where[depth - 1] == r->routine
+        && r->routine && !in_game_logic()) {
+        /* the span's lag frames fell in the game's logic, where their places are not exact, and it
+         * ends off the game loop (the pause menu's fade): the oracle's state at this wait, as at the
+         * game loop, the native game at the same wait */
+        advance(r);
+        take_state(r, 0);
+        resynced++;
+        insync = 1;
+        return;
+    }
     int lag = span_hi - span_lo > 1 && lag_next + 1 < span_hi;   /* lag frames not placed */
     if (lag || !insync) {
         if (at_game_loop(r)) {                            /* take the oracle's state and go on from there */
