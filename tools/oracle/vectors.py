@@ -69,7 +69,7 @@ VECTORS = [
     ('faceoff', 'vdptrace', dict(frames=120, state='faceoff')),
     ('play', 'vdptrace', dict(frames=120, skip=1200, state='demo_faceoff')),
     ('pause', 'vdptrace', dict(frames=150, skip=300, state='faceoff', script='320:START,330:,400:DOWN,405:,420:DOWN,425:')),
-    ('vdptest', 'vdptrace', dict(frames=250, skip=30, rom=os.path.join(MDRT, 'build', 'vdptest.bin'),   # md-runtime's test ROM
+    ('vdptest', 'vdptrace', dict(frames=290, skip=30, rom=os.path.join(MDRT, 'build', 'vdptest.bin'),   # md-runtime's test ROM
                                       hint=' (in md-runtime: tests/rom/build.sh)')),
     # pad reads for md-runtime's pad_trace
     ('play', 'padtrace', dict(frames=900, state='faceoff', script=RANDOM,

@@ -464,14 +464,15 @@ void oracle_vdp_get(uint8_t *out_vram, uint8_t *out_cram, uint8_t *out_vsram, ui
 /* ---- VDP test vectors for md-runtime (.vdptrace) ------------------------------------------
  * (The three md-runtime formats are specified in ../md-runtime/docs/VECTORS.md; a change here
  * changes that file and its readers in the same commit.)
- * Every VDP port access of the 68k in order, the 68k bytes each DMA from the 68k bus will read,
- * and at the start of each vblank (v_counter reaching the active height) a FRAME marker with the
- * VDP state and the frame just drawn in 9-bit colours. Format (integers little-endian unless
- * noted):
- *   "MDVT", version u32 = 1, region u8 (0 NTSC), 3 reserved bytes, state
+ * Every VDP port access of the 68k in order with its time, the 68k bytes each DMA from the 68k bus
+ * will read, and at the start of each vblank (v_counter reaching the active height) a FRAME
+ * marker with the VDP state and the frame just drawn in 9-bit colours. Format (integers
+ * little-endian unless noted):
+ *   "MDVT", version u32 = 2, region u8 (0 NTSC), 3 reserved bytes, state
  *   state:  regs[24], VRAM[65536] (VDP order), CRAM[64] u16 BE, VSRAM[40] u16 BE
  *           (CRAM as bus words 0000BBB0GGG0RRR0, VSRAM 11 bits)
- *   events: tag u8, then
+ *   events: tag u8, then (tags 1-8, version 2) time s32: master clocks since the frame began
+ *           (GPGX's frame begins at the vertical blank: m68k.cycles), then
  *     1 CTRL16 u16 | 2 CTRL32 u32 | 3 DATA16 u16 | 4 DATA32 u32 | 5 READ16 u16 (data port)
  *     6 STATUS u16 | 7 HV8 addr u8, value u8 | 8 HV16 u16
  *     9 DMASRC n u32, n bytes (the 68k memory the DMA started by the next CTRL reads, in order)
@@ -486,6 +487,8 @@ static int vt_top;          /* a frame was begun under tracing: the next FRAME i
 static void vt_u8(uint8_t v) { fputc(v, vt); }
 static void vt_u16(uint16_t v) { fputc(v & 0xFF, vt); fputc(v >> 8, vt); }
 static void vt_u32(uint32_t v) { vt_u16((uint16_t)v); vt_u16((uint16_t)(v >> 16)); }
+/* an access event's tag and its time in the frame */
+static void vt_tag(uint8_t t) { vt_u8(t); vt_u32((uint32_t)m68k.cycles); }
 
 static void vt_state(void) {
   static uint8_t v[0x10000], c[128], s[80], r[32], z[0x2000];
@@ -526,31 +529,31 @@ static void vdptrace_access(int write, int width, uint32_t a, uint32_t value) {
   if (write) {
     if (port == 0 || port == 2) {                        /* data */
       vt_pending = 0;
-      if (width == 4) { vt_u8(4); vt_u32(value); }
-      else { uint16_t v = width == 1 ? (uint16_t)((value & 0xFF) << 8 | (value & 0xFF)) : (uint16_t)value; vt_u8(3); vt_u16(v); }
+      if (width == 4) { vt_tag(4); vt_u32(value); }
+      else { uint16_t v = width == 1 ? (uint16_t)((value & 0xFF) << 8 | (value & 0xFF)) : (uint16_t)value; vt_tag(3); vt_u16(v); }
     } else if (port == 4 || port == 6) {                 /* control */
       if (width == 4) {
         vt_command((uint16_t)(value >> 16)); vt_command((uint16_t)value);
-        vt_u8(2); vt_u32(value);
+        vt_tag(2); vt_u32(value);
       } else {
         uint16_t v = width == 1 ? (uint16_t)((value & 0xFF) << 8 | (value & 0xFF)) : (uint16_t)value;
         vt_command(v);
-        vt_u8(1); vt_u16(v);
+        vt_tag(1); vt_u16(v);
       }
     }
     return;
   }
   if (port == 0 || port == 2) {
     vt_pending = 0;
-    if (width == 4) { vt_u8(5); vt_u16((uint16_t)(value >> 16)); vt_u8(5); vt_u16((uint16_t)value); }
-    else { vt_u8(5); vt_u16((uint16_t)value); }
+    if (width == 4) { vt_tag(5); vt_u16((uint16_t)(value >> 16)); vt_tag(5); vt_u16((uint16_t)value); }
+    else { vt_tag(5); vt_u16((uint16_t)value); }
   } else if (port == 4 || port == 6) {
     vt_pending = 0;
-    vt_u8(6); vt_u16((uint16_t)value);
+    vt_tag(6); vt_u16((uint16_t)value);
   } else if (width == 1) {
-    vt_u8(7); vt_u8((uint8_t)a); vt_u8((uint8_t)value);
+    vt_tag(7); vt_u8((uint8_t)a); vt_u8((uint8_t)value);
   } else {
-    vt_u8(8); vt_u16((uint16_t)value);
+    vt_tag(8); vt_u16((uint16_t)value);
   }
 }
 
@@ -581,7 +584,7 @@ int oracle_vdptrace_open(const char *path) {
   if (vt) fclose(vt);
   vt = fopen(path, "wb");
   if (!vt) return 0;
-  fwrite("MDVT", 1, 4, vt); vt_u32(1); vt_u8(0); vt_u8(0); vt_u8(0); vt_u8(0);
+  fwrite("MDVT", 1, 4, vt); vt_u32(2); vt_u8(0); vt_u8(0); vt_u8(0); vt_u8(0);
   vt_state();
   vt_pending = 0; vt_last_vc = v_counter; vt_top = 0;
   return 1;
