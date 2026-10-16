@@ -8,7 +8,7 @@
  *              [--headless] [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE]
  *              [--input FILE] [--state FILE] [--load-state FILE] [--save-state FRAME:FILE]
  *              [--lockstep FILE | --golden FILE] [--record DIR] [--fm-core nuked|ymfm]
- *              [--fm-model ym2612|ym3438]
+ *              [--fm-model ym2612|ym3438] [--watch ADDR,...]
  *
  * --headless runs without a window or pacing (as fast as it goes): with --frames it stops, --shot
  * writes the last picture, --wav the sound, --input plays pad 1 from a script (tools/oracle/scripts)
@@ -20,7 +20,8 @@
  * the first game loop wait from that frame on. --record DIR has md-runtime write the run's
  * .vdptrace, .padtrace and .sndtrace into DIR (make runtime-selfcheck replays them). --fm-core and
  * --fm-model choose md-runtime's FM core (Nuked-OPN2 by default) and the chip (the YM2612 of the
- * first consoles by default, or the later YM3438). */
+ * first consoles by default, or the later YM3438). --watch prints work RAM words (hex addresses,
+ * e.g. FFC472) at frame 1 and whenever they change. */
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,6 +37,9 @@
 static const char *snap, *shot_path, *shots_dir, *wav_path, *lockstep_path, *golden_path, *input_path;
 static const char *state_file = "out/nhl94.state", *load_state_path, *save_state_path;
 static const char *record_dir, *fm_core;
+static uint32_t watch[16];              /* --watch: work RAM words printed when they change */
+static uint16_t watched[16];
+static int nwatch;
 static int fm_model;
 static FILE *traces[3];                 /* --record: md-runtime's .vdptrace, .padtrace, .sndtrace of the run */
 static long save_state_frame = -1;
@@ -351,6 +355,11 @@ void native_frame_done(long frame, int wait)
 {
     if (wait) lockstep_check(frame);
     if (golden) golden_wait();
+    for (int i = 0; i < nwatch; i++) {
+        uint16_t v = rd16(ram_ptr(watch[i]));
+        if (v != watched[i] || frame == 1) printf("nhl94: frame %ld: $%06X = $%04X\n", frame, (unsigned)watch[i], v);
+        watched[i] = v;
+    }
     if (shots_dir && frame % shots_every == 0) {
         char path[512];
         snprintf(path, sizeof path, "%s/f%06ld.ppm", shots_dir, frame);
@@ -412,6 +421,10 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--input") && i + 1 < argc) input_path = argv[++i];
         else if (!strcmp(argv[i], "--state") && i + 1 < argc) state_file = argv[++i];
         else if (!strcmp(argv[i], "--record") && i + 1 < argc) record_dir = argv[++i];
+        else if (!strcmp(argv[i], "--watch") && i + 1 < argc) {
+            for (char *w = strtok(argv[++i], ","); w && nwatch < 16; w = strtok(NULL, ","))
+                watch[nwatch++] = (uint32_t)(strtoul(w, NULL, 16) | 0xFF0000) & ~1u;
+        }
         else if (!strcmp(argv[i], "--fm-core") && i + 1 < argc) fm_core = argv[++i];
         else if (!strcmp(argv[i], "--fm-model") && i + 1 < argc) fm_model = !strcmp(argv[++i], "ym3438") ? MDRT_FM_YM3438 : MDRT_FM_YM2612;
         else if (!strcmp(argv[i], "--load-state") && i + 1 < argc) { load_state_path = argv[++i]; boot = 0; }
@@ -423,7 +436,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "usage: %s [--rom FILE] [--snap FILE | --boot] [--scale N] [--aspect] [--sram FILE] [--headless]\n"
                             "       [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE] [--input FILE]\n"
                             "       [--state FILE] [--load-state FILE] [--save-state FRAME:FILE] [--lockstep FILE | --golden FILE]\n"
-                            "       [--record DIR] [--fm-core nuked|ymfm] [--fm-model ym2612|ym3438]\n", argv[0]);
+                            "       [--record DIR] [--fm-core nuked|ymfm] [--fm-model ym2612|ym3438] [--watch ADDR,...]\n", argv[0]);
             return 2;
         }
     }
