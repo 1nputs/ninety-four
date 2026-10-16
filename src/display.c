@@ -469,11 +469,11 @@ void checksso(struct Vid *v)
     a3 = (struct SortObj *)((uint8_t *)a3 + 0x14);
     sso_arrow(a0, a3, SYM_SPFarrow + 3, v);
     if (g.cont3team == 0) return;
-    a0 = ram_ptr(RAM_BASE + RAM_OFF_Joy1Struct + 0x38);   /* Joy3Struct */
+    a0 = g.Joy3Struct;                                    /* (not after Joy1Struct's two: ReplayStarStruct is between) */
     a3 = (struct SortObj *)((uint8_t *)a3 + 0x14);
     sso_arrow(a0, a3, 0x346, v);
     if (g.cont4team == 0) return;
-    a0 += 0x1C;
+    a0 = g.Joy4Struct;
     a3 = (struct SortObj *)((uint8_t *)a3 + 0x14);
     sso_arrow(a0, a3, 0x349, v);
 }

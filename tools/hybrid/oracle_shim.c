@@ -598,10 +598,11 @@ void oracle_vdptrace_close(void) {
 }
 
 /* ---- pad port test vectors for pulseman (.padtrace) --------------------------------------
- * "MDPT", version u32 = 1, the 16 I/O registers at the start (io_reg: version, data 1-3, control
- * 1-3, serial ...); then records: tag u8
- *   1 FRAME  buttons u16 port 1, buttons u16 port 2 (bits: 0 up, 1 down, 2 left, 3 right, 4 B,
- *            5 C, 6 A, 7 start) held from here on
+ * "MDPT", version u32 = 2, device u8 (0 a pad in each port, 1 EA's 4 Way Play), 3 reserved, the 16
+ * I/O registers at the start (io_reg: version, data 1-3, control 1-3, serial ...); then records:
+ * tag u8
+ *   1 FRAME  buttons u16 for pads 1-4 (3 and 4 only through the adaptor; bits: 0 up, 1 down,
+ *            2 left, 3 right, 4 B, 5 C, 6 A, 7 start) held from here on
  *   2 WRITE  address u32, width u8, value u32 (a write to $A10000-$A1001F)
  *   3 READ   address u32, width u8, value u32 (the value the oracle returned)
  *   4 END
@@ -613,18 +614,23 @@ static void padtrace_access(int write, int width, uint32_t a, uint32_t value) {
   pt_u8(write ? 2 : 3); pt_u32(a); pt_u8((uint8_t)width); pt_u32(value);
 }
 
-int oracle_padtrace_open(const char *path) {
+/* version 2: what is in the ports (0 a pad in each, 1 EA's 4 Way Play), and four pads' buttons a
+ * frame (pads 3 and 4 only through the adaptor) */
+int oracle_padtrace_open(const char *path, int device) {
   oracle_install();
   if (pt) fclose(pt);
   pt = fopen(path, "wb");
   if (!pt) return 0;
-  fwrite("MDPT", 1, 4, pt); pt_u32(1);
+  fwrite("MDPT", 1, 4, pt); pt_u32(2);
+  pt_u8((uint8_t)device); pt_u8(0); pt_u8(0); pt_u8(0);
   fwrite(io_reg, 1, 16, pt);
   return 1;
 }
-void oracle_padtrace_frame(uint32_t b1, uint32_t b2) {
+void oracle_padtrace_frame(uint32_t b1, uint32_t b2, uint32_t b3, uint32_t b4) {
+  uint32_t b[4] = { b1, b2, b3, b4 };
   if (!pt) return;
-  pt_u8(1); fputc(b1 & 0xFF, pt); fputc((b1 >> 8) & 0xFF, pt); fputc(b2 & 0xFF, pt); fputc((b2 >> 8) & 0xFF, pt);
+  pt_u8(1);
+  for (int i = 0; i < 4; i++) { fputc(b[i] & 0xFF, pt); fputc((b[i] >> 8) & 0xFF, pt); }
 }
 void oracle_padtrace_close(void) { if (pt) { pt_u8(4); fclose(pt); pt = NULL; } }
 
@@ -709,14 +715,15 @@ void oracle_sndtrace_close(void) {
 }
 
 /* ---- lockstep vectors for the native game (.lockstep) ---------------------------------------
- * "MDLS", version u32 = 7, the vblank handler's address u32; then a record at each vblank
+ * "MDLS", version u32 = 8, the vblank handler's address u32, the device in the ports u8 (0 a pad in
+ * each, 1 EA's 4 Way Play), 3 reserved; then a record at each vblank
  * interrupt (before the handler's first instruction): tag u8 = 1, flags u8 (bit 0: the 68k was
  * in a vblank wait loop, as the native game would be; bit 1: the whole state follows the record,
  * at the first such interrupt after one that was not; bit 2: taken just after the interrupts
  * were unmasked by move #x,sr or move (sp)+,sr, so it came while they were masked; bit 3,
  * version 7: taken at the rte of the last one's vblank code, which ran longer than a frame (a
  * long DMA list), before any instruction of the game's), the frame
- * u32, the address the 68k was interrupted at u32, the pad buttons u16 (as
+ * u32, the address the 68k was interrupted at u32, the buttons of pads 1-4 u16 each (as
  * oracle_lockstep_buttons last set them: MDRT_PAD_* bits), the game's port accesses so far u32
  * (not the vblank code's; ls_counted: the native game places a lag frame after the same one),
  * the long above the exception frame u32 (the return address when the 68k was at an rts),
@@ -731,7 +738,8 @@ void oracle_sndtrace_close(void) {
  * bytes. End: tag u8 = 2.
  * A wait loop, as test/replay.c tells it: a conditional Bcc.s back (within 16 bytes, over code
  * reading vcount, palcount or disflags by absolute short address) at or just after the address. */
-static uint16_t ls_buttons, ls_nhv, ls_waitvars[3];
+static uint16_t ls_buttons[4], ls_nhv, ls_waitvars[3];
+static int ls_device;
 static uint8_t ls_m_ram[0x2000], ls_m_reg[4], ls_m_vram[0x2000], ls_m_cram[16], ls_m_vsram[16];
 static uint8_t ls_hv_addr[8192];
 static uint16_t ls_hv[8192];
@@ -761,7 +769,11 @@ static void ls_u16(uint16_t v) { fputc(v & 0xFF, ls); fputc(v >> 8, ls); }
 static void ls_u32(uint32_t v) { ls_u16((uint16_t)v); ls_u16((uint16_t)(v >> 16)); }
 static void ls_u64(uint64_t v) { ls_u32((uint32_t)v); ls_u32((uint32_t)(v >> 32)); }
 
-void oracle_lockstep_buttons(uint32_t b) { ls_buttons = (uint16_t)b; }
+void oracle_lockstep_buttons(uint32_t b1, uint32_t b2, uint32_t b3, uint32_t b4) {
+  ls_buttons[0] = (uint16_t)b1; ls_buttons[1] = (uint16_t)b2; ls_buttons[2] = (uint16_t)b3; ls_buttons[3] = (uint16_t)b4;
+}
+/* what is in the ports, for the header (before oracle_lockstep_open) */
+void oracle_lockstep_device(int device) { ls_device = device; }
 
 /* also write work RAM (64K, 68k order) to path at record n (counting from 0) */
 static uint32_t ls_records, ls_dump_at = 0xFFFFFFFFu;
@@ -777,7 +789,8 @@ int oracle_lockstep_open(const char *path, uint32_t vcount, uint32_t palcount, u
   ls = fopen(path, "wb");
   if (!ls) return 0;
   ls_vblank = (uint32_t)(READ_BYTE(cart.rom, 0x78) << 24 | READ_BYTE(cart.rom, 0x79) << 16 | READ_BYTE(cart.rom, 0x7A) << 8 | READ_BYTE(cart.rom, 0x7B));
-  fwrite("MDLS", 1, 4, ls); ls_u32(7); ls_u32(ls_vblank);
+  fwrite("MDLS", 1, 4, ls); ls_u32(8); ls_u32(ls_vblank);
+  ls_u8((uint8_t)ls_device); ls_u8(0); ls_u8(0); ls_u8(0);
   ls_writes = 0;
   ls_in_irq = 0;
   ls_nhv = 0;
@@ -820,7 +833,9 @@ static void lockstep_vblank(void) {
   int unmask = (READ_BYTE(cart.rom, pc - 4) == 0x46 && READ_BYTE(cart.rom, pc - 3) == 0xFC) ||
                (READ_BYTE(cart.rom, pc - 2) == 0x46 && READ_BYTE(cart.rom, pc - 1) == 0xDF);
   ls_last_wait = wait;
-  ls_u8(1); ls_u8((uint8_t)(wait | full << 1 | unmask << 2 | b2b << 3)); ls_u32(frame_no); ls_u32(pc); ls_u16(ls_buttons); ls_u32(ls_writes);
+  ls_u8(1); ls_u8((uint8_t)(wait | full << 1 | unmask << 2 | b2b << 3)); ls_u32(frame_no); ls_u32(pc);
+  for (int i = 0; i < 4; i++) ls_u16(ls_buttons[i]);
+  ls_u32(ls_writes);
   ls_u32((uint32_t)(bus_byte(sp + 6) << 24 | bus_byte(sp + 7) << 16 | bus_byte(sp + 8) << 8 | bus_byte(sp + 9)));
   ls_u16(ls_nhv);
   for (int i = 0; i < ls_nhv; i++) { ls_u8(ls_hv_addr[i]); ls_u16(ls_hv[i]); }

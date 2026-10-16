@@ -60,6 +60,9 @@ VECTORS = [
     ('pause_menus3', 'lockstep', dict(frames=10600, state='demo_faceoff', snap='demo_faceoff', script='pause_menus3.txt')),
     ('replay_menu', 'lockstep', dict(frames=4700, state='faceoff', snap='faceoff', script='replay_menu.txt')),
     ('demo1p', 'lockstep', dict(frames=18000, skip=23, state='demo1p_faceoff', snap='demo1p_faceoff', script=RANDOM)),   # skip: to the snapshot's frame
+    # EA's 4 Way Play from power on: four players, a period of four pads at random and the next
+    ('four_way_game', 'lockstep', dict(frames=6000, four_way=1, script='four_way_p1.txt', script2='four_way_p2.txt',
+                                       script3='four_way_p3.txt', script4='four_way_p4.txt')),
     # VDP traces for pulseman's vdp_trace (port accesses, DMA sources, the state and picture a frame)
     ('boot', 'vdptrace', dict(frames=90, skip=30, script=BOOT)),
     ('title', 'vdptrace', dict(frames=90, skip=800, script=BOOT)),
@@ -74,6 +77,12 @@ VECTORS = [
     # pad reads for pulseman's pad_trace
     ('play', 'padtrace', dict(frames=900, state='faceoff', script=RANDOM,
                               script2='100:A,110:,200:B+UP,230:,300:C+LEFT,320:START,330:,400:RIGHT+DOWN,420:')),
+    # EA's 4 Way Play from power on: found at the boot, then all four pads read every frame through
+    # the title and the setup screen, each pad pressing its own buttons
+    ('four_way', 'padtrace', dict(frames=2400, four_way=1, script='1200:START,1206:,1500:DOWN,1506:,1560:RIGHT,1566:,1620:RIGHT,1626:',
+                                  script2='300:A,310:,700:B+UP,730:,1300:C+LEFT,1320:,1700:RIGHT+DOWN,1720:',
+                                  script3='400:START,410:,800:A+DOWN,830:,1400:B,1420:,1800:LEFT+UP,1820:',
+                                  script4='500:C,510:,900:UP+B+C,930:,1450:START+A,1470:,1900:RIGHT,1920:')),
     # sound: every chip write with its master clock (pulseman's chip tests; the Z80 relay test)
     ('boot', 'sndtrace', dict(frames=3000, script=BOOT)),
     ('game', 'sndtrace', dict(frames=6000, script=BOOT)),
@@ -130,8 +139,11 @@ class Item:
             cmd = tool(self.kind + '.py') + [rom, '--out', self.path, '--frames', str(o['frames'])]
             if o.get('skip'):
                 cmd += ['--skip', str(o['skip'])]
-            if o.get('script2'):
-                cmd += ['--script2', o['script2']]
+            for k in ('script2', 'script3', 'script4'):
+                if o.get(k):
+                    cmd += ['--' + k, script_text(o[k])]
+            if o.get('four_way'):
+                cmd += ['--four-way']
             cmd += o.get('extra', [])
         if o.get('state'):
             cmd += ['--load' if self.kind == 'state' else '--state', os.path.join(self.root, 'states', o['state'] + '.state')]

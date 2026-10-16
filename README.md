@@ -50,7 +50,13 @@ Game controllers work too (the first two are players 1 and 2).
 ROM, a reset, states, the video (a pixel-art upscaler: Scale2x, Scale3x or MMPX, which smooth the
 staircases without blurring or adding colours; sharp, integer or fit scaling; square pixels or
 4:3; full screen), the sound (volume, and the FM sound core and chip: hear the difference as you play),
-options, and every key of both pads and the controls: pick one and press the new key.
+players (see below), options, and every key of the pads and the controls: pick one and press the
+new key.
+
+**Four players** (EA's 4 Way Play, as on the cartridge): in the menu, Players, set Controllers to
+EA 4 Way Play and Reset; then choose Players: Three or Four in the game's setup screen. The
+Players page also gives each player a controller, moves a controller's buttons (press the new
+one), adds turbo A / B / C, and sets the stick's dead zone.
 
 All of it is kept in `settings.ini`, in the folder you run the game from, beside its saves (you
 can also edit it while the game is closed). The game pauses when its window loses focus (an
@@ -161,7 +167,7 @@ From the least ambitious to the most.
 - [x] Screenshot key (PNG)
 - [x] Fast-forward, slow motion, frame step
 - [x] Pause when the window loses focus
-- [ ] Controller remapping: profiles (B/C swap, pads labelled A B C), player slots, turbo, dead zones
+- [x] Controller remapping, player slots, turbo, dead zones
 - [ ] Video and audio capture
 - [ ] Save slots with thumbnails; quick resume on quit and start
 - [ ] Skip the EA screen, boot straight into a game
@@ -173,7 +179,7 @@ From the least ambitious to the most.
 - [ ] Debug overlay: VRAM, palettes, sprites, a RAM watch and cheat search
 - [ ] Run-ahead for lower input latency
 - [ ] The cartridge's slowdown as an option, with an "overclock" slider
-- [ ] Four players with EA's 4 Way Play adaptor
+- [x] Four players with EA's 4 Way Play adaptor
 - [ ] Play in the browser (WebAssembly)
 - [ ] A per-game manifest: named RAM, roster and ratings tables to CSV and back, a hack diff tool
 - [ ] HD sprite, tile and sound packs

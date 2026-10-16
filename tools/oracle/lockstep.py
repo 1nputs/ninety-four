@@ -26,27 +26,39 @@ def main():
     ap.add_argument('--out', required=True)
     ap.add_argument('--frames', type=int, default=600)
     ap.add_argument('--script', default='')
+    ap.add_argument('--script2', default='')
+    ap.add_argument('--script3', default='')
+    ap.add_argument('--script4', default='')
+    ap.add_argument('--four-way', action='store_true', help="EA's 4 Way Play in the ports from power on")
     ap.add_argument('--skip', type=int, default=0)
     ap.add_argument('--dump', nargs=2, metavar=('N', 'FILE'), help="work RAM at vblank N (from 1, as nhl94 counts) to FILE")
     a = ap.parse_args()
     o = Oracle()
     o.load(a.rom)
+    if a.four_way:
+        o.four_way()
     if a.state:
         o.unserialize(open(a.state, 'rb').read())
     syms = o.symbols
-    script = parse_script(a.script); si = 0; held = []
+    scripts = [parse_script(s) for s in (a.script, a.script2, a.script3, a.script4)]
+    at = [0, 0, 0, 0]
+    held = [[], [], [], []]
+
+    def press(f):
+        for p in range(4):
+            while at[p] < len(scripts[p]) and scripts[p][at[p]][0] <= f:
+                held[p] = scripts[p][at[p]][1]; o.set_buttons(p, held[p]); at[p] += 1
     for f in range(a.skip):
-        while si < len(script) and script[si][0] <= f:
-            held = script[si][1]; o.set_buttons(0, held); si += 1
+        press(f)
         o.run()
+    o.lib.oracle_lockstep_device(1 if a.four_way else 0)
     if not o.lib.oracle_lockstep_open(a.out.encode(), *(o.addr(n) & 0xFFFF for n in ('vcount', 'palcount', 'disflags'))):
         sys.exit(f'cannot write {a.out}')
     if a.dump:
         o.lib.oracle_lockstep_dump(int(a.dump[0]) - 1, a.dump[1].encode())
     for f in range(a.skip, a.skip + a.frames):
-        while si < len(script) and script[si][0] <= f:
-            held = script[si][1]; o.set_buttons(0, held); si += 1
-        o.lib.oracle_lockstep_buttons(sum(BITS.get(b, 0) for b in held))
+        press(f)
+        o.lib.oracle_lockstep_buttons(*(sum(BITS.get(b, 0) for b in held[p]) for p in range(4)))
         o.lib.oracle_set_frame(f)
         o.run()
     o.lib.oracle_lockstep_close()

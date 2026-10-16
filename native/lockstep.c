@@ -37,7 +37,7 @@ typedef struct record {
     uint8_t past_dfng;          /* the routine sets dfng (bset #2,(disflags).w) between its entry and at */
     uint8_t at_rts;             /* at an rts (version 6): the return into ret_routine */
     uint32_t ret_routine;       /* the routine of the long above the exception frame */
-    uint16_t buttons, nhv;
+    uint16_t buttons[MDRT_PADS], nhv;
     const uint8_t *hv, *state, *mask;
     uint64_t ram, vdp;
 } record;
@@ -82,8 +82,8 @@ static uint32_t routine_at(uint32_t a)
     return best;
 }
 
-static uint16_t buttons;
-static void pad_source(void *user, uint16_t b[2]) { (void)user; b[0] = buttons; b[1] = 0; }
+static uint16_t buttons[MDRT_PADS];
+static void pad_source(void *user, uint16_t b[MDRT_PADS]) { (void)user; memcpy(b, buttons, sizeof buttons); }
 
 static size_t lag_next;                 /* the span's next lag interrupt to place */
 
@@ -109,18 +109,24 @@ int lockstep_load(const char *path, mdrt *m)
     long len = ftell(f);
     fseek(f, 0, SEEK_SET);
     uint8_t *d = malloc((size_t)len);
-    if (!d || fread(d, 1, (size_t)len, f) != (size_t)len || len < 12 || memcmp(d, "MDLS", 4) || le32(d + 4) < 3 || le32(d + 4) > 7) {
-        fclose(f); fprintf(stderr, "%s: not a version 3 to 7 lockstep file\n", path); return 0;
+    if (!d || fread(d, 1, (size_t)len, f) != (size_t)len || len < 16 || memcmp(d, "MDLS", 4) || le32(d + 4) < 3 || le32(d + 4) > 8) {
+        fclose(f); fprintf(stderr, "%s: not a version 3 to 8 lockstep file\n", path); return 0;
     }
     fclose(f);
     version = (int)le32(d + 4);
-    size_t o = 12, cap = 1024;
+    size_t o = version >= 8 ? 16 : 12, cap = 1024;
+    if (version >= 8 && d[12] == MDRT_ADAPTOR_EA4WAY) mdrt_pads_set_adaptor(mdrt_get_pads(m), MDRT_ADAPTOR_EA4WAY);
     recs = malloc(cap * sizeof *recs);
     while (o + 14 <= (size_t)len && d[o] == 1) {
         if (nrecs == cap) recs = realloc(recs, (cap *= 2) * sizeof *recs);
         record *r = &recs[nrecs++];
         r->flags = d[o + 1]; r->frame = le32(d + o + 2); r->at = le32(d + o + 6);
-        r->buttons = le16(d + o + 10);
+        memset(r->buttons, 0, sizeof r->buttons);
+        r->buttons[0] = le16(d + o + 10);
+        if (version >= 8) {                               /* (pads 2-4 follow pad 1's) */
+            for (int p = 1; p < MDRT_PADS; p++) r->buttons[p] = le16(d + o + 10 + 2 * p);
+            o += 6;
+        }
         r->writes = 0xFFFFFFFFu;
         r->ret_routine = 0;
         if (version >= 5) { r->writes = le32(d + o + 12); o += 4; }
@@ -321,7 +327,7 @@ static void advance(const record *r)
         accesses_now = r->writes;
     }
     lagged += (long)(span_hi - span_lo - 1);
-    buttons = r->buttons;
+    memcpy(buttons, r->buttons, sizeof buttons);
     next = span_hi;
     next_span();
     armed = due(accesses_now, 0);                         /* (a lag frame due with no access first: in its routine) */
@@ -387,7 +393,7 @@ void NI __cyg_profile_func_exit(void *fn, void *site)
 static NI void place_next(const char *how)
 {
     const record *l = &recs[lag_next++];
-    buttons = l->buttons;
+    memcpy(buttons, l->buttons, sizeof buttons);
     placed++;
     if (in_game_logic()) logic_lags = 1;
     armed = 0;

@@ -9,6 +9,7 @@
  *              [--input FILE] [--state FILE] [--load-state FILE] [--save-state FRAME:FILE]
  *              [--lockstep FILE | --golden FILE] [--record DIR] [--fm-core nuked|ymfm]
  *              [--fm-model ym2612|ym3438] [--watch ADDR,...] [--restart-at FRAME]
+ *              [--four-way] [--input2 FILE] [--input3 FILE] [--input4 FILE]
  *
  * --headless runs without a window or pacing (as fast as it goes): with --frames it stops, --shot
  * writes the last picture, --wav the sound, --input plays pad 1 from a script (tools/oracle/scripts)
@@ -28,7 +29,8 @@
  * the ROM is --rom's, else the one chosen last in pulseman's menu (Esc), else "NHL 94 (UE) [!].gen"
  * here; when none is the 1 MB US/Europe cartridge, the menu asks for one. --restart-at FRAME
  * (headless) starts the game again at that frame on a new console, as the menu's reset does
- * (tools/golden.py checks that it goes as a fresh run). --watch prints work RAM words (hex addresses,
+ * (tools/golden.py checks that it goes as a fresh run). --four-way puts EA's 4 Way Play in the
+ * ports (the game finds it at power on: four players); --input2 to --input4 script pads 2-4. --watch prints work RAM words (hex addresses,
  * e.g. FFC472) at frame 1 and whenever they change. */
 #include <setjmp.h>
 #include <stdio.h>
@@ -49,7 +51,8 @@
 #include "native.h"
 #include "mdrt/platform_sdl2.h"
 
-static const char *snap, *shot_path, *shots_dir, *wav_path, *lockstep_path, *golden_path, *input_path;
+static const char *snap, *shot_path, *shots_dir, *wav_path, *lockstep_path, *golden_path, *input_path[MDRT_PADS];
+static int four_way;                    /* --four-way: EA's 4 Way Play in the ports */
 static const char *state_file = "out/nhl94.state", *load_state_path, *save_state_path;
 static const char *record_dir, *fm_core;
 static uint32_t watch[16];              /* --watch: work RAM words printed when they change */
@@ -299,16 +302,16 @@ static void golden_present(void *user, const uint16_t *px, int w, int h, int pit
     for (int y = 0; y < h; y++) golden_pic = fnv(golden_pic, px + y * pitch, (size_t)w * 2);
 }
 
-/* --input FILE: pad 1's buttons from a script ("FRAME:BUTTON+BUTTON,..." as tools/oracle/run.py
- * takes, # lines are comments), held from that frame (the handshakes so far) on. SAVE, LOAD and
- * REWIND are the window's F9, F10 and F4, by the handshakes of this process (SAVE and LOAD
- * once, at the handshake they are given) */
+/* --input FILE (--input2 to --input4 for pads 2-4): a pad's buttons from a script
+ * ("FRAME:BUTTON+BUTTON,..." as tools/oracle/run.py takes, # lines are comments), held from that
+ * frame (the handshakes so far) on. In pad 1's, SAVE, LOAD and REWIND are the window's F9, F10 and
+ * F4, by the handshakes of this process (SAVE and LOAD once, at the handshake they are given) */
 #define REQ(r) ((uint32_t)(r) << 16)
-static struct { long frame; uint32_t buttons; } *script;
-static size_t script_len;
-static int script_requests;             /* the script has SAVE, LOAD or REWIND */
+typedef struct { long frame; uint32_t buttons; } script_entry;
+static struct { script_entry *e; size_t len; } scripts[MDRT_PADS];
+static int script_requests;             /* pad 1's script has SAVE, LOAD or REWIND */
 
-static int read_script(const char *path)
+static int read_script(const char *path, int pad)
 {
     FILE *f = fopen(path, "r");
     if (!f) { fprintf(stderr, "cannot open %s\n", path); return 0; }
@@ -320,6 +323,8 @@ static int read_script(const char *path)
     };
     char line[65536];
     size_t cap = 0;
+    script_entry *script = NULL;
+    size_t script_len = 0;
     while (fgets(line, sizeof line, f)) {
         if (line[0] == '#') continue;
         for (char *item = strtok(line, ",\r\n"); item; item = strtok(NULL, ",\r\n")) {
@@ -337,27 +342,33 @@ static int read_script(const char *path)
                 name += n + (name[n] == '+');
             }
             script[script_len++].buttons = b;
-            if (b >> 16) script_requests = 1;
+            if (b >> 16) {
+                if (pad) { fprintf(stderr, "%s: SAVE, LOAD and REWIND are pad 1's\n", path); fclose(f); return 0; }
+                script_requests = 1;
+            }
         }
     }
     fclose(f);
+    scripts[pad].e = script;
+    scripts[pad].len = script_len;
     return 1;
 }
 
-/* the script's entry now (the handshakes so far: in a state) */
-static size_t script_now(mdrt *m)
+/* a script's entry at a frame (the handshakes so far: in a state), its length when none */
+static size_t script_at(int pad, long frame)
 {
-    long frame = (long)mdrt_frame_count(m);
-    size_t now = script_len;
-    for (size_t i = 0; i < script_len; i++)
-        if (script[i].frame <= frame) now = i;
+    size_t now = scripts[pad].len;
+    for (size_t i = 0; i < scripts[pad].len; i++)
+        if (scripts[pad].e[i].frame <= frame) now = i;
     return now;
 }
-static void script_source(void *user, uint16_t b[2])
+static void script_source(void *user, uint16_t b[MDRT_PADS])
 {
-    size_t i = script_now(user);
-    b[0] = i < script_len ? (uint16_t)script[i].buttons : 0;
-    b[1] = 0;
+    long frame = (long)mdrt_frame_count(user);
+    for (int pad = 0; pad < MDRT_PADS; pad++) {
+        size_t i = script_at(pad, frame);
+        b[pad] = i < scripts[pad].len ? (uint16_t)scripts[pad].e[i].buttons : 0;
+    }
 }
 /* the requests by this process's handshakes, not the game's frames (a state loaded puts those
  * back) */
@@ -365,12 +376,10 @@ static unsigned script_request(void *user)
 {
     (void)user;
     long h = native_handshakes();
-    size_t now = script_len;
-    for (size_t i = 0; i < script_len; i++)
-        if (script[i].frame <= h) now = i;
-    if (now == script_len) return 0;
-    unsigned r = (unsigned)(script[now].buttons >> 16);
-    if (script[now].frame != h) r &= MDRT_REQUEST_REWIND;   /* (SAVE and LOAD once) */
+    size_t now = script_at(0, h);
+    if (now == scripts[0].len) return 0;
+    unsigned r = (unsigned)(scripts[0].e[now].buttons >> 16);
+    if (scripts[0].e[now].frame != h) r &= MDRT_REQUEST_REWIND;   /* (SAVE and LOAD once) */
     return r;
 }
 
@@ -476,7 +485,9 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--headless")) headless = 1;
         else if (!strcmp(argv[i], "--lockstep") && i + 1 < argc) { lockstep_path = argv[++i]; headless = 1; }
         else if (!strcmp(argv[i], "--golden") && i + 1 < argc) { golden_path = argv[++i]; headless = 1; }
-        else if (!strcmp(argv[i], "--input") && i + 1 < argc) input_path = argv[++i];
+        else if (!strcmp(argv[i], "--input") && i + 1 < argc) input_path[0] = argv[++i];
+        else if (!strncmp(argv[i], "--input", 7) && argv[i][7] >= '2' && argv[i][7] <= '4' && !argv[i][8] && i + 1 < argc) { int pad = argv[i][7] - '1'; input_path[pad] = argv[++i]; }
+        else if (!strcmp(argv[i], "--four-way")) four_way = 1;
         else if (!strcmp(argv[i], "--state") && i + 1 < argc) state_file = argv[++i];
         else if (!strcmp(argv[i], "--record") && i + 1 < argc) record_dir = argv[++i];
         else if (!strcmp(argv[i], "--watch") && i + 1 < argc) {
@@ -496,14 +507,20 @@ int main(int argc, char **argv)
                             "       [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE] [--input FILE]\n"
                             "       [--state FILE] [--load-state FILE] [--save-state FRAME:FILE] [--lockstep FILE | --golden FILE]\n"
                             "       [--record DIR] [--fm-core nuked|ymfm] [--fm-model ym2612|ym3438] [--watch ADDR,...]\n"
-                            "       [--restart-at FRAME]\n", argv[0]);
+                            "       [--restart-at FRAME] [--four-way] [--input2 FILE] [--input3 FILE] [--input4 FILE]\n", argv[0]);
             return 2;
         }
     }
     if (headless && !rom_load(rom)) { fprintf(stderr, "cannot load the ROM %s\n", rom); return 1; }   /* (the window: pulseman's menu) */
     if (sram) make_parent(sram);                          /* (a copy run outside the repository has no out/) */
     if (state_file) make_parent(state_file);
-    if (input_path && (lockstep_path || !read_script(input_path))) { if (lockstep_path) fprintf(stderr, "--input: not with --lockstep\n"); return 1; }
+    int inputs = 0;
+    for (int pad = 0; pad < MDRT_PADS; pad++) {
+        if (!input_path[pad]) continue;
+        if (lockstep_path) { fprintf(stderr, "--input: not with --lockstep\n"); return 1; }
+        if (!read_script(input_path[pad], pad)) return 1;
+        inputs = 1;
+    }
     if (snap && load_state_path) { fprintf(stderr, "--snap or --load-state, not both\n"); return 2; }
     if (snap) read_snapshot();
     states = !lockstep_path && (!headless || load_state_path || save_state_path || script_requests);
@@ -529,7 +546,8 @@ int main(int argc, char **argv)
     if (!m) { fprintf(stderr, "no FM core %s in this build of pulseman\n", fm_core ? fm_core : "(default)"); return 1; }
     if (lockstep_path && !lockstep_load(lockstep_path, m)) return 1;
     if (golden) mdrt_set_hv_source(m, golden_hv, m);
-    if (input_path) mdrt_set_pad_source(m, script_source, m);
+    if (inputs) mdrt_set_pad_source(m, script_source, m);
+    if (four_way) mdrt_pads_set_adaptor(mdrt_get_pads(m), MDRT_ADAPTOR_EA4WAY);
     if (lockstep_path || golden) sram = NULL;             /* lockstep, golden: save RAM blank, as the oracle's at power on */
     FILE *f = sram ? fopen(sram, "rb") : NULL;            /* save RAM: as the window's platform keeps it */
     if (f) { if (fread(mdrt_get_sram(m)->bytes, 1, 0x2000, f) != 0x2000) fprintf(stderr, "%s: short\n", sram); fclose(f); }
@@ -539,7 +557,8 @@ int main(int argc, char **argv)
         mdrt_free(m);
         if (!(m = mdrt_new(&c))) return 1;
         if (golden) mdrt_set_hv_source(m, golden_hv, m);
-        if (input_path) mdrt_set_pad_source(m, script_source, m);
+        if (inputs) mdrt_set_pad_source(m, script_source, m);
+        if (four_way) mdrt_pads_set_adaptor(mdrt_get_pads(m), MDRT_ADAPTOR_EA4WAY);
         native_game(m, NULL);
     }
     if (sram && mdrt_get_sram(m)->dirty && (f = fopen(sram, "wb"))) { fwrite(mdrt_get_sram(m)->bytes, 1, 0x2000, f); fclose(f); }

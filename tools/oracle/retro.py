@@ -15,6 +15,7 @@ import os
 # --- libretro ABI ------------------------------------------------------------------------
 RETRO_API_VERSION = 1
 RETRO_DEVICE_JOYPAD = 1
+RETRO_DEVICE_MDPAD_3B_WAYPLAY = (3 + 1) << 8 | RETRO_DEVICE_JOYPAD   # GPGX's subclass 3 of the joypad
 RETRO_MEMORY_SAVE_RAM = 0
 RETRO_MEMORY_SYSTEM_RAM = 2
 RETRO_PIXEL_FORMAT_0RGB1555, RETRO_PIXEL_FORMAT_XRGB8888, RETRO_PIXEL_FORMAT_RGB565 = 0, 1, 2
@@ -104,7 +105,7 @@ class Core:
         self.frame = None            # (bytes, width, height, pitch)
         self.frame_count = 0
         self.audio_samples = 0
-        self.buttons = [0, 0]        # bitmask of retropad ids per port
+        self.buttons = [0, 0, 0, 0]  # bitmask of retropad ids per player (3 and 4: through an adaptor)
         self._cstrings = [C.c_char_p(sysdir.encode())]
         self._value_strs = {}
         self.pending_frame_handlers = []
@@ -209,6 +210,11 @@ class Core:
         self.lib.retro_set_controller_port_device(0, RETRO_DEVICE_JOYPAD)
         self.lib.retro_set_controller_port_device(1, RETRO_DEVICE_JOYPAD)
         return av
+
+    def four_way(self):
+        """EA's 4 Way Play in both ports, four 3-button pads behind it (GPGX's "MD Joypad 3 Button
+        + 4-WayPlay"); input_state is then asked for players 0-3"""
+        self.lib.retro_set_controller_port_device(0, RETRO_DEVICE_MDPAD_3B_WAYPLAY)
 
     def set_buttons(self, port, names):
         """names: iterable of Genesis button names ('A','B','C','START','UP',...)."""
