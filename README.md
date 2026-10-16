@@ -8,9 +8,9 @@ by hand in C and checked against the original, frame by frame, until the two can
 apart. The same one-timers, the same diving saves, the same organ, the same Gretzky. Smooth 60
 frames a second, without the cartridge's slowdown.
 
-And things the cartridge never had: **save in the middle of a game (F5), load it back (F9), and
-hold Backspace to rewind** the goal you just gave up. Hold Space to fast-forward, slow the replay
-of that one-timer down, step through it a frame at a time, and press F12 to keep it.
+And things the cartridge never had: **save in the middle of a game (F7), load it back (F8), and
+hold F4 to rewind** the goal you just gave up. Hold F6 to fast-forward, slow the replay of that
+one-timer down, step through it a frame at a time, and press F12 to keep it.
 
 Bring your own cartridge dump and you're on the ice in a minute (what to install first is
 under [Build](#build)):
@@ -31,22 +31,22 @@ Game controllers work too (the first two are players 1 and 2).
 
 | Key | |
 |---|---|
-| F5 / F9 | save / load a state |
-| Backspace (held) | rewind |
-| Space (held) | fast-forward |
-| , | slow motion on / off |
-| P, then . | pause, then a frame at a time |
-| F12 | screenshot (a PNG in `screenshots/`) |
-| - / = and M | volume down / up, mute |
-| F6 / F7 | scaling (sharp, integer, fit) / aspect (square pixels, 4:3) |
+| F1 | mute |
+| F2 / F3 | volume down / up |
+| F4 (held) | rewind |
+| F5 | slow motion on / off |
+| F6 (held) | fast-forward |
+| F7 / F8 | save / load a state |
+| F9 | a frame at a time, while paused |
+| F10 | pause |
 | F11 or Alt+Enter | full screen |
+| F12 | screenshot (a PNG in `screenshots/`) |
 | Esc | quit |
 
-Every key (both pads' too), the window, the scaling, the sound and more are kept in a settings
-file you can edit while the game is closed: `~/.local/share/pulseman/ninety-four/settings.ini`
-on Linux, `%APPDATA%\pulseman\ninety-four\settings.ini` on Windows,
-`~/Library/Application Support/pulseman/ninety-four/settings.ini` on macOS. The game pauses when
-its window loses focus (`general.pause_on_focus_loss = 0` turns that off).
+Every key (both pads' too), the window, the scaling (sharp, integer or fit; square pixels or
+4:3), the sound and more are kept in `settings.ini`, in the folder you run the game from, beside
+its saves. Edit it while the game is closed. The game pauses when its window loses focus
+(`general.pause_on_focus_loss = 0` turns that off). On a Mac, hold Fn for the function keys.
 
 ## Build
 
@@ -142,7 +142,7 @@ From the least ambitious to the most.
 - [x] Window scaling, full screen, 4:3 aspect
 - [x] Battery save (save RAM) kept in a file
 - [x] Smooth 60 frames a second (no cartridge slowdown)
-- [x] Save states (F5 / F9) and rewind (Backspace)
+- [x] Save states (F7 / F8) and rewind (F4)
 - [x] FM core and chip model choice (`--fm-core nuked|ymfm`, `--fm-model ym2612|ym3438`)
 - [x] Headless runs: screenshots, WAV, scripted input, RAM watch (`--watch`), trace recording (`--record`)
 - [x] Mute, volume, audio device and latency options
