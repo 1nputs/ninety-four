@@ -212,6 +212,15 @@ void checkcheck(struct SortObj *a2, struct SortObj *a3, int16_t impact)
     CCStart(a3, a2, impact);
 }
 
+/* (native) CCStart's odds that a check fails: d0 less the checker's weight plus the checked
+ * player's, summed in a byte as the original does (sub.b / add.b: a heavy player checked by a
+ * light pad player wraps round to a small number, and falls easily), or in full by the rules */
+uint16_t CheckWeightOdds(uint16_t d0, const struct SortObj *a2, const struct SortObj *a3)
+{
+    if (rules[RULE_WEIGHT_FIX]) return (uint16_t)(d0 - a3->weight + a2->weight);
+    return (uint16_t)((d0 & 0xFF00) | (uint8_t)((uint8_t)d0 - a3->weight + a2->weight));
+}
+
 /* collide94.asm:CCStart. Player a3 is checking player a2 (d4 = impact). Holds go to holdcheck,
  * a sweep check to Bcheck; otherwise only a bursting a3 checks: he gets the check animation
  * for his direction, and a big enough hit on a skater makes a2 fall, with a charging or
@@ -238,7 +247,7 @@ void CCStart(struct SortObj *a2, struct SortObj *a3, int16_t impact)
     uint16_t d0 = 0x78;
     if (a3->pflags & (1 << pfjoycon))
         d0 <<= 1;
-    d0 = (uint16_t)((d0 & 0xFF00) | (uint8_t)((uint8_t)d0 - a3->weight + a2->weight));
+    d0 = CheckWeightOdds(d0, a2, a3);
     d0 >>= 1;
     wallcollduringcheck(a3, a2);
     d0 = (uint16_t)(d0 - a2->impact);

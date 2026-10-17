@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "ram.h"
 #include "rom.h"
+#include "rules.h"
 
 /* A byte access to a word flag (btst #n,(x).w) tests bit n of the HIGH byte: bit n+8 of the word. */
 #define HI(n) (1u << ((n) + 8))
@@ -465,6 +466,7 @@ void newcheck(void);
 void checkint(struct SortObj *a2, struct SortObj *a3);
 void checkcheck(struct SortObj *a2, struct SortObj *a3, int16_t impact); /* a2, a3, d4 */
 void CCStart(struct SortObj *a2, struct SortObj *a3, int16_t impact);
+uint16_t CheckWeightOdds(uint16_t d0, const struct SortObj *a2, const struct SortObj *a3);   /* (native: rules.h) */
 uint16_t checkagr(struct SortObj *a2, struct SortObj *a3);        /* -> d0 */
 void holdcheck(struct SortObj *a2, struct SortObj *a3);
 void Bcheck(struct SortObj *a2, struct SortObj *a3);

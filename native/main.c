@@ -50,6 +50,7 @@
 #include "symbols_gen.h"
 #include "z80.h"
 #include "native.h"
+#include "rules.h"
 #include "mdrt/platform_sdl2.h"
 
 static const char *snap, *shot_path, *shots_dir, *wav_path, *lockstep_path, *golden_path, *input_path[MDRT_PADS];
@@ -238,6 +239,7 @@ void native_game(mdrt *m, void *user)
     (void)user;
     native_m = m;
     native_tracking_reset();                              /* (the game may have run before: the window's reset) */
+    rules_power_on();                                     /* (this game's rules; a state loaded brings its own) */
     if (setjmp(out)) { lockstep_report(); record(m, -1); return; }
     if (!load_state_path) record(m, MDRT_TRACE_SOUND);    /* (from the first frame: the chips' every write) */
     if (boot) { record(m, MDRT_TRACE_VDP); record(m, MDRT_TRACE_PADS); }
@@ -489,6 +491,9 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--input") && i + 1 < argc) input_path[0] = argv[++i];
         else if (!strncmp(argv[i], "--input", 7) && argv[i][7] >= '2' && argv[i][7] <= '4' && !argv[i][8] && i + 1 < argc) { int pad = argv[i][7] - '1'; input_path[pad] = argv[++i]; }
         else if (!strcmp(argv[i], "--four-way")) four_way = 1;
+        else if (!strcmp(argv[i], "--rule") && i + 1 < argc) {
+            if (rules_arg(argv[++i])) { fprintf(stderr, "--rule %s: no such rule or value\n", argv[i]); return 2; }
+        }
         else if (!strcmp(argv[i], "--state") && i + 1 < argc) state_file = argv[++i];
         else if (!strcmp(argv[i], "--record") && i + 1 < argc) record_dir = argv[++i];
         else if (!strcmp(argv[i], "--watch") && i + 1 < argc) {
@@ -508,7 +513,8 @@ int main(int argc, char **argv)
                             "       [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE] [--input FILE]\n"
                             "       [--state FILE] [--load-state FILE] [--save-state FRAME:FILE] [--lockstep FILE | --golden FILE]\n"
                             "       [--record DIR] [--fm-core nuked|ymfm] [--fm-model ym2612|ym3438] [--watch ADDR,...]\n"
-                            "       [--restart-at FRAME] [--four-way] [--input2 FILE] [--input3 FILE] [--input4 FILE]\n", argv[0]);
+                            "       [--restart-at FRAME] [--four-way] [--input2 FILE] [--input3 FILE] [--input4 FILE]\n"
+                            "       [--rule NAME=VALUE ...] (the game rules: native/rules.c)\n", argv[0]);
             return 2;
         }
     }
@@ -523,6 +529,7 @@ int main(int argc, char **argv)
         inputs = 1;
     }
     if (snap && load_state_path) { fprintf(stderr, "--snap or --load-state, not both\n"); return 2; }
+    if (lockstep_path && !rules_classic()) { fprintf(stderr, "--lockstep: the original is played by the Classic rules only\n"); return 2; }
     if (snap) read_snapshot();
     states = !lockstep_path && (!headless || load_state_path || save_state_path || script_requests);
     rewind_states = !headless || script_requests;
@@ -535,7 +542,9 @@ int main(int argc, char **argv)
     if (!headless) {
         mdrt_sdl_options o = { .title = "NHL '94", .scale = scale, .aspect = aspect, .sram_path = sram, .app = "ninety-four",
                                .rom_path = rom_given, .rom_default = rom, .rom_hint = "NHL '94: the 1 MB cartridge (US/Europe)",
-                               .rom_check = rom_check, .rom_use = rom_use };
+                               .rom_check = rom_check, .rom_use = rom_use,
+                               .options_title = "Game rules", .options_note = "For every player, all game. Classic: the original",
+                               .options = rule_options, .noptions = RULE_COUNT, .options_use = rules_next };
         return mdrt_sdl_run(&c, &o, native_game, NULL);
     }
     if (wav_path && !(wav = fopen(wav_path, "wb"))) { fprintf(stderr, "cannot write %s\n", wav_path); return 1; }

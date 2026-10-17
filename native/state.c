@@ -110,6 +110,7 @@ void native_states_init(mdrt *console, const char *path, int rewind)
     mdrt_add_state_memory(m, "RAM ", ram_ptr(RAM_BASE), 0x10000);
     mdrt_add_state_part(m, "Z80 ", z80_save, z80_load, NULL);
     mdrt_add_state_part(m, "NHL ", nhl_save, nhl_load, NULL);
+    mdrt_add_state_part(m, "RULE", rules_state_save, rules_state_load, NULL);   /* (the game's rules: a state plays by its own) */
     native_track_routines();
 }
 

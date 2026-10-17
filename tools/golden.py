@@ -14,7 +14,7 @@ the save, and the rewind must step back three frames a frame through frames alre
 starts the game again in the same process (--restart-at, as the window menu's reset does): the
 frames after that must be a fresh power on's.
 
-    tools/golden.py record [--force]     (make golden)
+    tools/golden.py record [--force]     (make golden: the runs not yet recorded; --force: all of them)
     tools/golden.py check                (make golden-check)
 """
 import argparse
@@ -28,6 +28,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(ROOT, 'tools', 'oracle', 'scripts')
 NHL94 = os.path.join(ROOT, 'build', 'nhl94')
 
+RULES_ON = ['--rule', 'period_lengths=more', '--rule', 'overtime=5min', '--rule', 'weight_fix=on', '--rule', 'assist_fix=on']
 # (name, frames, options): power on unless --snap
 RUNS = [
     ('attract', 7200, []),
@@ -38,9 +39,12 @@ RUNS = [
     ('shootout_menus', 4800, ['--input', 'shootout_menus.txt']),
     ('name_entry', 3000, ['--input', 'name_entry.txt']),
     ('faceoff', 18000, ['--snap', 'out/states/faceoff.snap', '--input', 'random_seed94.txt']),
+    # the game rules (native extras: their own baselines, not the original's): every rule on
+    ('rules_game', 16000, ['--input', 'full_game_30s.txt'] + RULES_ON),
+    ('rules_faceoff', 18000, ['--snap', 'out/states/faceoff.snap', '--input', 'random_seed94.txt'] + RULES_ON),
 ]
 # the runs a state is saved in (from this frame on) and loaded from
-STATES = {'full_game': 3000, 'playoff_game': 9000, 'faceoff': 6000}
+STATES = {'full_game': 3000, 'playoff_game': 9000, 'faceoff': 6000, 'rules_faceoff': 6000}
 COLUMNS = ['work RAM', 'VDP state', 'Z80 RAM', 'picture', 'sound', 'samples']
 SAVED = re.compile(r'state saved at frame (\d+) \(golden line (\d+)\)')
 
@@ -51,8 +55,8 @@ def run(name, frames, opts, out, save=None, load=None):
     args = [NHL94, '--frames', str(frames), '--golden', out]
     if save:
         args += ['--save-state', '%d:%s' % save]
-    if load:
-        opts = [o for k, o in enumerate(opts) if o != '--snap' and (k == 0 or opts[k - 1] != '--snap')]
+    if load:                                              # (the state brings its own rules: none given)
+        opts = [o for k, o in enumerate(opts) if o not in ('--snap', '--rule') and (k == 0 or opts[k - 1] not in ('--snap', '--rule'))]
         args += ['--load-state', load]
     i = 0
     while i < len(opts):
@@ -78,16 +82,18 @@ def run(name, frames, opts, out, save=None, load=None):
     return name, None, int(m.group(2)) if m else None
 
 
-def record(dirname, jobs, states=False):
-    """the runs into dirname; states: also save a state in the runs of STATES. Returns the golden
-    lines the states were saved after (by name), or None on a failure."""
+def record(dirname, jobs, states=False, missing=False):
+    """the runs into dirname (missing: only those it has none of); states: also save a state in the
+    runs of STATES. Returns the golden lines the states were saved after (by name), or None on a
+    failure."""
     os.makedirs(dirname, exist_ok=True)
 
     def one(r):
         save = (STATES[r[0]], os.path.join(dirname, r[0] + '.mdrs')) if states and r[0] in STATES else None
         return run(r[0], r[1], r[2], os.path.join(dirname, r[0] + '.golden'), save)
+    runs = [r for r in RUNS if not (missing and os.path.exists(os.path.join(dirname, r[0] + '.golden')))]
     with ThreadPoolExecutor(jobs) as ex:
-        results = list(ex.map(one, RUNS))
+        results = list(ex.map(one, runs))
     bad = [(n, e) for n, e, _ in results if e]
     for n, e in bad:
         print('%s: %s' % (n, e))
@@ -119,11 +125,11 @@ def main():
     a = ap.parse_args()
     if not os.path.exists(NHL94):
         sys.exit('no build/nhl94 (make nhl94)')
-    if a.action == 'record':
-        if os.path.exists(os.path.join(a.dir, RUNS[0][0] + '.golden')) and not a.force:
-            sys.exit('%s has golden runs; --force to record over them' % a.dir)
-        ok = record(a.dir, a.jobs) is not None
-        print('golden: %d runs recorded in %s' % (len(RUNS), os.path.relpath(a.dir, ROOT)) if ok else 'golden: FAILED')
+    if a.action == 'record':                              # (without --force: only the runs it has none of)
+        missing = not a.force and os.path.exists(os.path.join(a.dir, RUNS[0][0] + '.golden'))
+        todo = [r for r in RUNS if not (missing and os.path.exists(os.path.join(a.dir, r[0] + '.golden')))]
+        ok = record(a.dir, a.jobs, missing=missing) is not None
+        print('golden: %d runs recorded in %s' % (len(todo), os.path.relpath(a.dir, ROOT)) if ok else 'golden: FAILED')
         sys.exit(0 if ok else 1)
     new = a.dir.rstrip('/') + '-new'
     saved = record(new, a.jobs, states=True)

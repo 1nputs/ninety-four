@@ -19,6 +19,14 @@
 #define CARD(n) HI(n)                                    /* setupcardflags bits (btst on the word's high byte) */
 static uint16_t option(uint16_t line) { return rd16(RAM_W(RAM_OFF_OptPlayMode) + line); }
 
+/* (rules: more period lengths) their names as the setup prints them, padded like PerLengthValues */
+#define LENGTH_TEXT(s) "\x00\x16" s                    /* (a String: its length, 22, then the text) */
+static const uint8_t more_lengths[7][22] = {
+    LENGTH_TEXT("5 Minutes           "), LENGTH_TEXT("7 Minutes           "), LENGTH_TEXT("10 Minutes          "),
+    LENGTH_TEXT("15 Minutes          "), LENGTH_TEXT("20 Minutes          "), LENGTH_TEXT("2 Minutes           "),
+    LENGTH_TEXT("3 Minutes           "),
+};
+
 /* optsetup94.asm:GameSetUp. The setup screen: the line data and the saved playoff state, the
  * modes' start changes undone (SetupStart), the screen (setoptions), random teams after a demo,
  * the playoff tree, then the menu until Start (SetupStart) or six minutes (SetupDemo). From
@@ -239,6 +247,7 @@ void ChangeOption(uint16_t line, int16_t d2)
     uint32_t limits = g.FourWayPlay ? SYM_OptionLimits4Way : SYM_OptionLimits;
     uint16_t lo = 0, hi = rd16(rom_ptr(limits + line)), v = rd16(opt);
     if ((int16_t)g.OptPlayMode >= 2 && g.OptPlayMode != 4 && line == 4) hi = SYM_NumPlayoffTeams;
+    if (line == 8 && rules[RULE_PERIOD_LENGTHS]) hi = 7;  /* (rules: more period lengths) */
     if (line == 2) {                                      /* Players */
         if (g.OptPlayMode == 4) {
             int16_t t = (int16_t)(d2 + g.OptNOP);
@@ -311,6 +320,7 @@ void PrintOptionValue(uint16_t line)
     uint16_t n = option(line);
     uint32_t a0 = SYM_OptionValueOffsets + (int16_t)rd16(rom_ptr(SYM_OptionValueOffsets + line)), a1;
     if (a0 == SYM_PerLengthValues && g.OptPlayMode == 4) { print(SYM_NATxt); return; }
+    if (a0 == SYM_PerLengthValues && rules[RULE_PERIOD_LENGTHS]) { printz(more_lengths[n % 7], 22); return; }
     if (g.FourWayPlay && line == 2) a0 += 0xB0;           /* the 4 Way Play Players list */
     do { a1 = a0; a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0)); } while (n-- != 0);
     print(a1);

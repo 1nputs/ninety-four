@@ -33,7 +33,8 @@ void restoreteams(void)
 void ResetClock(void)
 {
     uint16_t d0 = GetPeriodTime();
-    if ((int16_t)g.gsp >= 3 && g.OptPlayMode == 0) d0 = 0x258;   /* overtime is always 10:00 */
+    static const uint16_t overtimes[3] = { 0x258, 300, 180 };   /* (rules: 10:00 the original's, 5:00, 3:00) */
+    if ((int16_t)g.gsp >= 3 && g.OptPlayMode == 0) d0 = overtimes[rules[RULE_OVERTIME]];   /* overtime is always 10:00 */
     g.gameclock = d0;
     g.PerTimeTotal = d0;
     g.periodendtime = d0;
@@ -43,9 +44,12 @@ void ResetClock(void)
     g.gmode |= 1 << gmclock;
 }
 
-/* hockey94.asm:GetPeriodTime. The period length in seconds for the option. */
+/* hockey94.asm:GetPeriodTime. The period length in seconds for the option. (Rules: more lengths,
+ * in the order the setup menu steps through them from 5 minutes, the secret 30 seconds last.) */
+static const uint16_t more_periodtimes[8] = { 5*60, 7*60, 10*60, 15*60, 20*60, 2*60, 3*60, 30 };
 uint16_t GetPeriodTime(void)
 {
+    if (rules[RULE_PERIOD_LENGTHS]) return more_periodtimes[g.OptPerlen & 7];
     return periodtimes[g.OptPerlen];
 }
 
@@ -438,7 +442,7 @@ void StartGame(void)
     g.awaydirpresses = 0;
     uint16_t d0, d1, d2, d3;
     ReadJoy1(&d0, &d1, &d2, &d3);
-    if ((uint8_t)d3 == 0xE0) g.OptPerlen = 3;
+    if ((uint8_t)d3 == 0xE0) g.OptPerlen = rules[RULE_PERIOD_LENGTHS] ? 7 : 3;   /* (the secret 30 seconds) */
     g.gmode = 0;
     if (g.OptPen == 1) g.gmode |= 1 << gmoffs;
     if ((int16_t)g.OptPlayMode > 1) ClearShotData();

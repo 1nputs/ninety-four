@@ -2029,7 +2029,8 @@ void a2touchpuck(struct SortObj *pl, struct SortObj *puck)
         int was = a0[tmflags] & 8;
         a0[tmflags] &= (uint8_t)~8;
         if (!was) {
-            wr16(a0 + tmassist2, rd16(a0 + tmassist1));
+            if (!rules[RULE_ASSIST_FIX] || d0 != rd16(a0 + tmassist1))   /* (rules: a give-and-go keeps the second assist) */
+                wr16(a0 + tmassist2, rd16(a0 + tmassist1));
             wr16(a0 + tmassist1, rd16(a0 + tmlasttouch));
         }
         wr16(a0 + tmlasttouch, d0);

@@ -242,7 +242,8 @@ void onetimershot(struct SortObj *a2, struct SortObj *o)
     doshot(o);
     uint8_t *tm = team_struct(PFLAG(o, pfteam));
     uint16_t d0 = o->pnum;
-    wr16(tm + tmassist2, rd16(tm + tmassist1));
+    if (!rules[RULE_ASSIST_FIX] || d0 != rd16(tm + tmassist1))   /* (rules: a give-and-go keeps the second assist) */
+        wr16(tm + tmassist2, rd16(tm + tmassist1));
     wr16(tm + tmassist1, rd16(tm + tmlasttouch));
     wr16(tm + tmlasttouch, d0);
     g.sflags8 |= 0x80;

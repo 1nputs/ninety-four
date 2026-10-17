@@ -3,6 +3,7 @@
 #pragma once
 #include <stdint.h>
 #include "mdrt/mdrt.h"
+#include "mdrt/platform_sdl2.h"
 
 extern mdrt *native_m;                  /* the console */
 
@@ -39,6 +40,16 @@ long native_handshakes(void);                        /* the handshakes this proc
 size_t native_hal_save(uint8_t *out);                /* the HAL's part of a state */
 int native_hal_load(const uint8_t *in, size_t size);
 long native_golden_lines(void);                      /* the golden run's lines so far (main.c) */
+
+/* game rules (rules.c; src/rules.h): the menu's catalogue, the next game's rules (the platform's
+ * options_use, or the command line's --rule NAME=VALUE), set at power on, and the state part */
+extern const mdrt_sdl_option rule_options[];
+void rules_next(const int *values, void *user);
+int rules_arg(const char *arg);
+int rules_classic(void);                 /* the next game's are all the original's */
+void rules_power_on(void);
+size_t rules_state_save(void *user, uint8_t *out);
+int rules_state_load(void *user, const uint8_t *in, size_t size);
 
 /* lockstep against the oracle (lockstep.c) */
 int lockstep_load(const char *path, mdrt *m);

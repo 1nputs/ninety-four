@@ -7,6 +7,7 @@
 #   make golden         record the native game's golden runs (out/golden; make golden-check compares)
 #   make runtime-selfcheck  pulseman's tests on the native game's own traces (nhl94 --record)
 #   make relaytest      the Z80 relay port against the sound traces
+#   make rulestest      the game rules on the game's routines (test/rules_test.c)
 #   make oracle         the hooked oracle core (build/nhl_oracle.so)
 #   make gen            regenerate the committed headers from ref/ and the asm rebuild
 CC      ?= gcc
@@ -22,6 +23,13 @@ PY      := python3 -I
 build/captest: $(SRC) $(HDR) $(TESTSRC) test/replay.h test/ports.h
 	@mkdir -p build
 	$(CC) $(CFLAGS) -Isrc -Itest -o $@ $(SRC) $(TESTSRC)
+
+# the game rules on the game's routines, RAM set up by hand (test/rules_test.c)
+build/rulestest: $(SRC) $(HDR) test/rules_test.c test/hal_null.c
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc -Itest -o $@ $(SRC) test/rules_test.c test/hal_null.c
+rulestest: build/rulestest
+	./build/rulestest
 
 test: build/captest
 	@test -n "$(CAPS)" || { echo "no captures in out/captures: tools/hybrid/capture_all.sh records them"; exit 1; }
@@ -109,4 +117,4 @@ gen:
 
 clean:
 	rm -rf build/captest build/oracle_shim.o build/nhl94 build/relaytest
-.PHONY: test oracle clean nhl94 relaytest mdrt vectors lockstep runtime-check runtime-selfcheck golden golden-check gen
+.PHONY: rulestest test oracle clean nhl94 relaytest mdrt vectors lockstep runtime-check runtime-selfcheck golden golden-check gen
