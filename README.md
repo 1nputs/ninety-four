@@ -50,7 +50,7 @@ Game controllers work too (the first two are players 1 and 2).
 
 **The menu** (Esc, or a controller's Back button; arrows and Enter, or the d-pad, A and B) has the
 ROM, a reset, states, the video (a pixel-art upscaler: Scale2x, Scale3x or MMPX, which smooth the
-staircases without blurring or adding colours; sharp, integer or fit scaling; square pixels or
+staircases without blurring or adding colours, or xBR, which blends its edges smooth; sharp, integer or fit scaling; square pixels or
 4:3; the colours' levels, standard, full range or the console's own; dithering blended as a
 television blended it; a picture tube's scanlines and its aperture grille, slot mask or shadow
 mask; full screen), captures (below), the sound (volume, and the FM sound core and chip: hear the
@@ -176,7 +176,7 @@ From the least ambitious to the most.
 - [x] A settings file (window, scaling, volume, keys), every key rebindable
 - [x] A menu: the ROM in a file browser, reset, video, sound and the FM chip live, key rebinding
 - [x] Integer and sharp-bilinear scaling, hi-DPI
-- [x] Pixel-art upscalers: Scale2x, Scale3x, MMPX 2x and 4x
+- [x] Pixel-art upscalers: Scale2x, Scale3x, MMPX 2x and 4x, xBR 2x, 3x and 4x
 - [x] Screenshot key (PNG)
 - [x] Fast-forward, slow motion, frame step
 - [x] Pause when the window loses focus
@@ -228,8 +228,8 @@ Big, big greets to everyone whose work this stands on:
   that rebuilds the ROM byte for byte on Linux.
 - **[SDL](https://www.libsdl.org)**: the window, the sound and the controllers.
 - **MMPX** by Morgan McGuire and Mara Gagiu ("MMPX Style-Preserving Pixel Art Magnification",
-  JCGT 2021) and **Scale2x / Scale3x** by Andrea Mazzoleni after Eric Johnston's EPX: the
-  upscalers in the Video menu.
+  JCGT 2021), **xBR** by Hyllian, and **Scale2x / Scale3x** by Andrea Mazzoleni after Eric
+  Johnston's EPX: the upscalers in the Video menu.
 - **[libretro](https://www.libretro.com)**: the API the oracle is hosted through.
 - The documenters of the hardware: Charles MacDonald (`genvdp.txt`),
   [Plutiedev](https://plutiedev.com), [Sega Retro](https://segaretro.org),
@@ -243,4 +243,4 @@ Big, big greets to everyone whose work this stands on:
 MIT (`LICENSE`), for the code written for this project. It grants nothing over NHL '94 itself,
 its name or its data, which belong to Electronic Arts: bring your own copy of the game.
 pulseman is MIT too; its FM chip cores are Nuked-OPN2 (LGPL-2.1) and ymfm (BSD-3), and its MMPX
-upscaler follows the authors' MIT-licensed code.
+and xBR upscalers follow their authors' MIT-licensed code.
