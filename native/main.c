@@ -10,6 +10,7 @@
  *              [--lockstep FILE | --golden FILE] [--record DIR] [--fm-core nuked|ymfm]
  *              [--fm-model ym2612|ym3438] [--watch ADDR,...] [--restart-at FRAME]
  *              [--four-way] [--input2 FILE] [--input3 FILE] [--input4 FILE]
+ *              [--rule NAME=VALUE ...] [--league DIR] [--check-league DIR] [--export-league DIR]
  *
  * --headless runs without a window or pacing (as fast as it goes): with --frames it stops, --shot
  * writes the last picture, --wav the sound, --input plays pad 1 from a script (tools/oracle/scripts)
@@ -32,7 +33,11 @@
  * (headless) starts the game again at that frame on a new console, as the menu's reset does
  * (tools/golden.py checks that it goes as a fresh run). --four-way puts EA's 4 Way Play in the
  * ports (the game finds it at power on: four players); --input2 to --input4 script pads 2-4. --watch prints work RAM words (hex addresses,
- * e.g. FFC472) at frame 1 and whenever they change. */
+ * e.g. FFC472) at frame 1 and whenever they change. --rule and --league (headless; the window
+ * takes them from its menu's Game rules page) set the game's rules (rules.c) and its league, a
+ * folder of teams (league.c: DIR, or a folder of leagues/), whose save RAM is its own
+ * (out/nhl94-NAME.srm). --export-league DIR writes the cartridge's league into DIR, to change;
+ * --check-league DIR builds one and says what is wrong with it, or what it holds. */
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -181,7 +186,25 @@ static const char *rom_check(const uint8_t *b, size_t n, void *user)
     return crc32_of(b, n) == ROM_CRC32 ? NULL : "not the 1 MB US/Europe NHL '94 cartridge";
 }
 
-static void rom_use(const uint8_t *b, size_t n, void *user) { (void)n; (void)user; rom_image = b; }
+static void rom_use(const uint8_t *b, size_t n, void *user) { (void)n; (void)user; rom_cart = rom_image = b; rom_limit = ROM_SIZE; }
+
+/* the save RAM's file for the game about to start: the league's own (the window's sram_file) */
+static const char *sram_base;
+static const char *sram_for(void *user) { (void)user; return league_sram(sram_base); }
+
+/* --league DIR: the folder, or a folder of leagues/ */
+static const char *league_folder(const char *arg)
+{
+    static char dir[600];
+    char probe[700];
+    FILE *f;
+    snprintf(probe, sizeof probe, "%s/teams.csv", arg);
+    if ((f = fopen(probe, "rb"))) { fclose(f); return arg; }
+    snprintf(dir, sizeof dir, "leagues/%s", arg);
+    snprintf(probe, sizeof probe, "%s/teams.csv", dir);
+    if ((f = fopen(probe, "rb"))) { fclose(f); return dir; }
+    return arg;
+}
 
 void native_quit(void) { longjmp(out, 1); }
 
@@ -239,7 +262,8 @@ void native_game(mdrt *m, void *user)
     (void)user;
     native_m = m;
     native_tracking_reset();                              /* (the game may have run before: the window's reset) */
-    rules_power_on();                                     /* (this game's rules; a state loaded brings its own) */
+    rules_power_on();                                     /* (this game's rules and league; a state loaded brings its own) */
+    league_power_on();
     if (setjmp(out)) { lockstep_report(); record(m, -1); return; }
     if (!load_state_path) record(m, MDRT_TRACE_SOUND);    /* (from the first frame: the chips' every write) */
     if (boot) { record(m, MDRT_TRACE_VDP); record(m, MDRT_TRACE_PADS); }
@@ -471,7 +495,9 @@ static void make_parent(const char *path)
 
 int main(int argc, char **argv)
 {
-    const char *rom = "NHL 94 (UE) [!].gen", *rom_given = NULL, *sram = "out/nhl94.srm";
+    const char *rom = "NHL 94 (UE) [!].gen", *rom_given = NULL, *sram = "out/nhl94.srm", *league_arg = NULL;
+    const char *export_dir = NULL, *check_dir = NULL;
+    int sram_given = 0;
     int scale = 0, aspect = 0, headless = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--rom") && i + 1 < argc) rom = rom_given = argv[++i];
@@ -481,7 +507,10 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--aspect")) aspect = 1;
         else if (!strcmp(argv[i], "--frames") && i + 1 < argc) stop_after = atol(argv[++i]);
         else if (!strcmp(argv[i], "--shot") && i + 1 < argc) shot_path = argv[++i];
-        else if (!strcmp(argv[i], "--sram") && i + 1 < argc) sram = argv[++i];
+        else if (!strcmp(argv[i], "--sram") && i + 1 < argc) { sram = argv[++i]; sram_given = 1; }
+        else if (!strcmp(argv[i], "--league") && i + 1 < argc) league_arg = league_folder(argv[++i]);
+        else if (!strcmp(argv[i], "--export-league") && i + 1 < argc) export_dir = argv[++i];
+        else if (!strcmp(argv[i], "--check-league") && i + 1 < argc) check_dir = league_folder(argv[++i]);
         else if (!strcmp(argv[i], "--shots") && i + 1 < argc) shots_dir = argv[++i];
         else if (!strcmp(argv[i], "--every") && i + 1 < argc) shots_every = atol(argv[++i]);
         else if (!strcmp(argv[i], "--wav") && i + 1 < argc) wav_path = argv[++i];
@@ -514,11 +543,27 @@ int main(int argc, char **argv)
                             "       [--state FILE] [--load-state FILE] [--save-state FRAME:FILE] [--lockstep FILE | --golden FILE]\n"
                             "       [--record DIR] [--fm-core nuked|ymfm] [--fm-model ym2612|ym3438] [--watch ADDR,...]\n"
                             "       [--restart-at FRAME] [--four-way] [--input2 FILE] [--input3 FILE] [--input4 FILE]\n"
-                            "       [--rule NAME=VALUE ...] (the game rules: native/rules.c)\n", argv[0]);
+                            "       [--rule NAME=VALUE ...] (the game rules: native/rules.c) [--league DIR] (league.c)\n"
+                            "       [--check-league DIR] [--export-league DIR]\n", argv[0]);
             return 2;
         }
     }
-    if (headless && !rom_load(rom)) { fprintf(stderr, "cannot load the ROM %s\n", rom); return 1; }   /* (the window: pulseman's menu) */
+    if ((headless || export_dir || check_dir) && !rom_load(rom)) { fprintf(stderr, "cannot load the ROM %s\n", rom); return 1; }   /* (the window: pulseman's menu) */
+    if (export_dir || check_dir) {                        /* (and nothing else) */
+        if (export_dir && league_export(export_dir) < 0) { fprintf(stderr, "--export-league %s: %s\n", export_dir, league_error()); return 1; }
+        if (export_dir) printf("the cartridge's league is in %s: its files are yours to change (README.md, \"Leagues\")\n", export_dir);
+        if (check_dir && league_check(check_dir, 1) < 0) { fprintf(stderr, "%s: %s\n", check_dir, league_error()); return 1; }
+        return 0;
+    }
+    if (league_arg) {
+        if (!headless) fprintf(stderr, "--league: the window plays the league its menu's Game rules page names\n");
+        else if (league_check(league_arg, 0) < 0) {
+            fprintf(stderr, "--league %s: %s\n", league_arg, league_error());
+            return 1;
+        }
+        league_next(league_arg);
+        if (!sram_given) sram = league_sram(sram);
+    }
     if (sram) make_parent(sram);                          /* (a copy run outside the repository has no out/) */
     if (state_file) make_parent(state_file);
     int inputs = 0;
@@ -530,6 +575,7 @@ int main(int argc, char **argv)
     }
     if (snap && load_state_path) { fprintf(stderr, "--snap or --load-state, not both\n"); return 2; }
     if (lockstep_path && !rules_classic()) { fprintf(stderr, "--lockstep: the original is played by the Classic rules only\n"); return 2; }
+    if (lockstep_path && !league_next_is_cartridge()) { fprintf(stderr, "--lockstep: the original is played by the cartridge's teams only\n"); return 2; }
     if (snap) read_snapshot();
     states = !lockstep_path && (!headless || load_state_path || save_state_path || script_requests);
     rewind_states = !headless || script_requests;
@@ -544,7 +590,8 @@ int main(int argc, char **argv)
                                .rom_path = rom_given, .rom_default = rom, .rom_hint = "NHL '94: the 1 MB cartridge (US/Europe)",
                                .rom_check = rom_check, .rom_use = rom_use,
                                .options_title = "Game rules", .options_note = "For every player, all game. Classic: the original",
-                               .options_use = rules_page_use, .options_changed = rules_page_changed };
+                               .options_use = rules_page_use, .options_changed = rules_page_changed, .sram_file = sram_for };
+        sram_base = sram;
         o.options = rules_page(&o.noptions);
         return mdrt_sdl_run(&c, &o, native_game, NULL);
     }

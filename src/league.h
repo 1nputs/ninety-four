@@ -8,7 +8,7 @@
 #include <stdint.h>
 
 enum { LG_TeamList, LG_TeamPalettes, LG_TeamLogoBitmaps, LG_TeamGfxList, LG_TeamSongs, LG_TeamRatings,
-       LG_TeamLogoPalettes, LG_FeaturedPictures, LG_playoffseats, LG_TABLES };
+       LG_TeamLogoPalettes, LG_FeaturedPictures, LG_playoffseats, LG_PlayerRecordOffsets, LG_TABLES };
 #define LEAGUE_MAX 32                                   /* (a team is a byte in the playoff tree and 5 bits elsewhere) */
 
 struct league {
@@ -23,6 +23,11 @@ extern struct league league;
 
 void league_retail(void);       /* the cartridge's */
 static inline uint16_t league_art(uint16_t team) { return team < LEAGUE_MAX ? league.art[team] : team; }
-/* a team's crowd record (16 bytes) in save RAM: the cartridge's 28 at CrowdRecBase, more after
- * the cartridge's 8 KB */
+/* save RAM for the teams past the cartridge's 28 (at most 4), in space its layout leaves free
+ * below LineDataBase: their crowd records (16 bytes each), then their player records (26 roster
+ * slots of 4 bytes; PlayerRecordOffsets, in words of 4 bytes) */
+#define LEAGUE_SRAM_CROWD 0xE20u
+#define LEAGUE_SRAM_PLAYERS (LEAGUE_SRAM_CROWD + 4 * 16)
+/* a team's crowd record (16 bytes) in save RAM: the cartridge's 28 at CrowdRecBase, more at
+ * LEAGUE_SRAM_CROWD */
 uint32_t league_crowd_record(uint16_t team);

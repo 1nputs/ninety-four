@@ -4,13 +4,17 @@
 #pragma once
 #include <stdint.h>
 #define ROM_SIZE 0x100000u                                /* the retail cartridge: 1 MB */
+extern const uint8_t *rom_cart;          /* the cartridge */
+/* the ROM the game reads: the cartridge, or the cartridge with a league built past its end
+ * (native/league.c), rom_limit bytes */
 extern const uint8_t *rom_image;
+extern uint32_t rom_limit;
 int rom_load(const char *path);
 __attribute__((noreturn, cold)) void rom_bad_address(uint32_t addr);
-/* the ROM byte at 68k address addr (below ROM_SIZE: anything else is a stray pointer) */
+/* the ROM byte at 68k address addr (below rom_limit: anything else is a stray pointer) */
 static inline const uint8_t *rom_ptr(uint32_t addr)
 {
-    if (addr >= ROM_SIZE) rom_bad_address(addr);
+    if (addr >= rom_limit) rom_bad_address(addr);
     return rom_image + addr;
 }
 uint32_t rom_find(uint32_t from, uint32_t to, const void *bytes, unsigned n);

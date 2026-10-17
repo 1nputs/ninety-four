@@ -8,6 +8,7 @@
 #   make runtime-selfcheck  pulseman's tests on the native game's own traces (nhl94 --record)
 #   make relaytest      the Z80 relay port against the sound traces
 #   make rulestest      the game rules on the game's routines (test/rules_test.c)
+#   make leaguetest     leagues: the cartridge's exported and built again, a 32-team one, broken ones
 #   make oracle         the hooked oracle core (build/nhl_oracle.so)
 #   make gen            regenerate the committed headers from ref/ and the asm rebuild
 CC      ?= gcc
@@ -30,6 +31,14 @@ build/rulestest: $(SRC) $(HDR) test/rules_test.c test/hal_null.c
 	$(CC) $(CFLAGS) -Isrc -Itest -o $@ $(SRC) test/rules_test.c test/hal_null.c
 rulestest: build/rulestest
 	./build/rulestest
+
+# leagues: the cartridge's exported and built again (byte for byte), a 32-team one, broken ones
+# (tools/leaguetest.py; the ROM as for make nhl94)
+build/leaguetest: native/league.c src/league.c src/rom.c src/league.h src/rom.h native/native.h test/league_test.c
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc -Inative -I$(MDRT)/include -o $@ native/league.c src/league.c src/rom.c test/league_test.c
+leaguetest: build/leaguetest build/nhl94$(EXE)
+	$(PY) tools/leaguetest.py
 
 test: build/captest
 	@test -n "$(CAPS)" || { echo "no captures in out/captures: tools/hybrid/capture_all.sh records them"; exit 1; }
@@ -117,4 +126,4 @@ gen:
 
 clean:
 	rm -rf build/captest build/oracle_shim.o build/nhl94 build/relaytest
-.PHONY: rulestest test oracle clean nhl94 relaytest mdrt vectors lockstep runtime-check runtime-selfcheck golden golden-check gen
+.PHONY: rulestest leaguetest test oracle clean nhl94 relaytest mdrt vectors lockstep runtime-check runtime-selfcheck golden golden-check gen

@@ -1,5 +1,6 @@
 /* Game rules on the native side (src/rules.h): the catalogue the menu's Game rules page and the
- * command line work from, the rules of the next game, and the state part that keeps a game's. */
+ * command line work from, the rules of the next game, and the state part that keeps a game's
+ * session (its rules, and its league: league.c). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,20 +55,24 @@ static const uint8_t presets[3][RULE_COUNT] = {
     },
 };
 
-/* the page: the preset, then the rules */
-mdrt_sdl_option rule_page[1 + RULE_COUNT];
+/* the page: the league (who plays: the cartridge's, or a folder of leagues/), the preset, then the rules */
+enum { P_LEAGUE, P_PRESET, P_RULES };
+mdrt_sdl_option rule_page[P_RULES + RULE_COUNT];
 
 static void page_init(void)
 {
+    const char *const *names, *const *labels;
     if (rule_page[0].key) return;
-    rule_page[0] = (mdrt_sdl_option){ "rules.preset", "Preset", 4, preset_names, NULL, 0, 0, 0, 0 };
-    memcpy(rule_page + 1, rule_options, sizeof rule_options);
+    int n = league_list(&names, &labels);
+    rule_page[P_LEAGUE] = (mdrt_sdl_option){ "rules.league", "League", n, names, labels, 0, 0, 0, 0 };
+    rule_page[P_PRESET] = (mdrt_sdl_option){ "rules.preset", "Preset", 4, preset_names, NULL, 0, 0, 0, 0 };
+    memcpy(rule_page + P_RULES, rule_options, sizeof rule_options);
 }
 
 const mdrt_sdl_option *rules_page(int *count)
 {
     page_init();
-    *count = 1 + RULE_COUNT;
+    *count = P_RULES + RULE_COUNT;
     return rule_page;
 }
 
@@ -75,23 +80,31 @@ const mdrt_sdl_option *rules_page(int *count)
 int rules_page_changed(int which, int *values, void *user)
 {
     (void)user;
-    if (which == 0) {
-        if (values[0] == PRESET_CUSTOM) return 0;
-        for (int i = 0; i < RULE_COUNT; i++) values[1 + i] = presets[values[0]][i];
+    if (which == P_LEAGUE) return 0;
+    if (which == P_PRESET) {
+        if (values[P_PRESET] == PRESET_CUSTOM) return 0;
+        for (int i = 0; i < RULE_COUNT; i++) values[P_RULES + i] = presets[values[P_PRESET]][i];
         return 1;
     }
     int now = PRESET_CUSTOM;
     for (int p = 0; p < 3 && now == PRESET_CUSTOM; p++) {
         int same = 1;
-        for (int i = 0; i < RULE_COUNT; i++) same &= values[1 + i] == presets[p][i];
+        for (int i = 0; i < RULE_COUNT; i++) same &= values[P_RULES + i] == presets[p][i];
         if (same) now = p;
     }
-    if (values[0] == now) return 0;
-    values[0] = now;
+    if (values[P_PRESET] == now) return 0;
+    values[P_PRESET] = now;
     return 1;
 }
 
-void rules_page_use(const int *values, void *user) { rules_next(values + 1, user); }
+void rules_page_use(const int *values, void *user)
+{
+    char dir[600];
+    int l = values[P_LEAGUE];
+    snprintf(dir, sizeof dir, "leagues/%s", l > 0 && l < rule_page[P_LEAGUE].count ? rule_page[P_LEAGUE].names[l] : "");
+    league_next(l > 0 && l < rule_page[P_LEAGUE].count ? dir : NULL);
+    rules_next(values + P_RULES, user);
+}
 
 static uint8_t next[RULE_COUNT];        /* the rules of the next game */
 
@@ -135,25 +148,43 @@ int rules_arg(const char *arg)
     return -1;
 }
 
-/* the state's part: a version, the rules' count, each rule's value (a state from a build with fewer
- * rules leaves the rest Classic; one with more is not this build's), then the stats the rules
- * keep beside the RAM (rule_plusminus) */
+/* the state's part, the game's session: a version, the rules' count, each rule's value (a state
+ * from a build with fewer rules leaves the rest Classic; one with more is not this build's), the
+ * stats the rules keep beside the RAM (rule_plusminus), then (version 3) the league: its checksum
+ * (8 bytes, 0 the cartridge's) and folder (a length byte, the name). The league's tables are in
+ * the ROM the state's RAM points into, so a state loads with its own league or not at all. */
 size_t rules_state_save(void *user, uint8_t *out)
 {
     (void)user;
+    const char *dir = league_dir();
+    size_t n = strlen(dir) > 255 ? 255 : strlen(dir), at = 2 + RULE_COUNT + sizeof rule_plusminus;
     if (out) {
-        out[0] = 2;
+        uint64_t h = league_hash();
+        out[0] = 3;
         out[1] = RULE_COUNT;
         memcpy(out + 2, rules, RULE_COUNT);
         memcpy(out + 2 + RULE_COUNT, rule_plusminus, sizeof rule_plusminus);
+        for (int k = 0; k < 8; k++) out[at + k] = (uint8_t)(h >> (56 - 8 * k));
+        out[at + 8] = (uint8_t)n;
+        memcpy(out + at + 9, dir, n);
     }
-    return 2 + RULE_COUNT + sizeof rule_plusminus;
+    return at + 9 + n;
 }
 
 int rules_state_load(void *user, const uint8_t *in, size_t size)
 {
     (void)user;
-    if (size < 2 || in[0] != 2 || in[1] > RULE_COUNT || size != 2u + in[1] + sizeof rule_plusminus) return -1;
+    if (size < 2 || (in[0] != 2 && in[0] != 3) || in[1] > RULE_COUNT) return -1;
+    size_t at = 2u + in[1] + sizeof rule_plusminus;
+    uint64_t h = 0;
+    char dir[256] = "";
+    if (in[0] == 2 ? size != at : size < at + 9 || size != at + 9 + in[at + 8]) return -1;
+    if (in[0] == 3) {
+        for (int k = 0; k < 8; k++) h = h << 8 | in[at + k];
+        memcpy(dir, in + at + 9, in[at + 8]);
+        dir[in[at + 8]] = 0;
+    }
+    if (league_use(dir, h) < 0) { fprintf(stderr, "the state: %s\n", league_error()); return -1; }
     memset(rules, 0, sizeof rules);
     memcpy(rules, in + 2, in[1]);
     memcpy(rule_plusminus, in + 2 + in[1], sizeof rule_plusminus);

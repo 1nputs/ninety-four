@@ -6,6 +6,10 @@ again and compares, frame by frame, so a change to pulseman or the native client
 to change nothing it was not meant to. The runs use a fixed HV counter stand-in (main.c), so
 changes to the runtime's HV model do not show; everything else must match bit for bit.
 
+The league runs play the cartridge's league exported and built again (out/leagues/cartridge: its
+tables past the cartridge, so only work RAM, which points into them, may differ from the
+original's run: LIKE) and a 32-team one (tools/leaguetest.py makes both).
+
 `check` also saves a native state in three of the runs (at the first game loop wait from a given
 frame on), loads it in a new process and runs on: the frames after it must be the same as the
 run's own (a state holds everything the game goes on from). And it plays the player's requests
@@ -23,6 +27,9 @@ import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import leaguetest  # noqa: E402  (tools/leaguetest.py: the leagues the league runs play)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(ROOT, 'tools', 'oracle', 'scripts')
@@ -45,9 +52,18 @@ RUNS = [
     ('rules_faceoff', 18000, ['--snap', 'out/states/faceoff.snap', '--input', 'random_seed94.txt'] + RULES_ON),
     ('arcade_faceoff', 18000, ['--snap', 'out/states/faceoff.snap', '--input', 'random_seed94.txt', '--rule', 'preset=arcade']),
     ('simulation_faceoff', 18000, ['--snap', 'out/states/faceoff.snap', '--input', 'random_seed94.txt', '--rule', 'preset=simulation']),
+    # leagues (league.c): the cartridge's built from its files, and 32 teams
+    ('league_game', 16000, ['--input', 'full_game_30s.txt', '--league', 'out/leagues/cartridge']),
+    ('league_playoff', 15000, ['--input', 'playoff_game_30s.txt', '--league', 'out/leagues/cartridge']),
+    ('league32_attract', 7200, ['--league', 'out/leagues/thirty-two']),
+    ('league32_game', 16000, ['--input', 'full_game_30s.txt', '--league', 'out/leagues/thirty-two']),
+    ('league32_playoff', 15000, ['--input', 'playoff_game_30s.txt', '--league', 'out/leagues/thirty-two']),
 ]
+# runs that must be another's frame for frame but for work RAM (the league's tables elsewhere)
+LIKE = {'league_game': 'full_game', 'league_playoff': 'playoff_game'}
 # the runs a state is saved in (from this frame on) and loaded from
-STATES = {'full_game': 3000, 'playoff_game': 9000, 'faceoff': 6000, 'rules_faceoff': 6000, 'simulation_faceoff': 6000}
+STATES = {'full_game': 3000, 'playoff_game': 9000, 'faceoff': 6000, 'rules_faceoff': 6000, 'simulation_faceoff': 6000,
+          'league32_game': 3000}
 COLUMNS = ['work RAM', 'VDP state', 'Z80 RAM', 'picture', 'sound', 'samples']
 SAVED = re.compile(r'state saved at frame (\d+) \(golden line (\d+)\)')
 
@@ -58,8 +74,9 @@ def run(name, frames, opts, out, save=None, load=None):
     args = [NHL94, '--frames', str(frames), '--golden', out]
     if save:
         args += ['--save-state', '%d:%s' % save]
-    if load:                                              # (the state brings its own rules: none given)
-        opts = [o for k, o in enumerate(opts) if o not in ('--snap', '--rule') and (k == 0 or opts[k - 1] not in ('--snap', '--rule'))]
+    if load:                                              # (the state brings its own rules and league: none given)
+        drop = ('--snap', '--rule', '--league')
+        opts = [o for k, o in enumerate(opts) if o not in drop and (k == 0 or opts[k - 1] not in drop)]
         args += ['--load-state', load]
     i = 0
     while i < len(opts):
@@ -103,15 +120,20 @@ def record(dirname, jobs, states=False, missing=False):
     return None if bad else {n: line for n, _, line in results if line is not None}
 
 
-def compare(want, got, skip=0):
-    """the first difference of got from want (after want's first skip lines), or None"""
+def compare(want, got, skip=0, ram=True):
+    """the first difference of got from want (after want's first skip lines; ram False: work RAM
+    aside), or None"""
     with open(want) as f:
         a = f.read().split('\n')[skip:]
     with open(got) as f:
         b = f.read().split('\n')
+    if not ram:
+        a, b = [' '.join(x.split()[1:]) for x in a], [' '.join(x.split()[1:]) for x in b]
     for i, (x, y) in enumerate(zip(a, b)):
         if x != y:
             xs, ys = x.split(), y.split()
+            if not ram:
+                xs, ys = ['-'] + xs, ['-'] + ys
             cols = [COLUMNS[k] for k in range(min(len(xs), len(ys))) if xs[k] != ys[k]]
             return 'frame %d: %s differ' % (skip + i + 1, ', '.join(cols) or 'lines')
     if len(a) != len(b):
@@ -128,6 +150,8 @@ def main():
     a = ap.parse_args()
     if not os.path.exists(NHL94):
         sys.exit('no build/nhl94 (make nhl94)')
+    leaguetest.export()                                   # (the leagues the runs play, from the ROM)
+    leaguetest.thirty_two()
     if a.action == 'record':                              # (without --force: only the runs it has none of)
         missing = not a.force and os.path.exists(os.path.join(a.dir, RUNS[0][0] + '.golden'))
         todo = [r for r in RUNS if not (missing and os.path.exists(os.path.join(a.dir, r[0] + '.golden')))]
@@ -149,6 +173,13 @@ def main():
         print('%-15s %s' % (name, d or 'identical, %d frames' % frames))
         bad += d is not None
     print('golden: %d of %d runs identical' % (len(RUNS) - bad, len(RUNS)))
+    lbad = 0
+    for name, like in LIKE.items():
+        d = compare(os.path.join(a.dir, like + '.golden'), os.path.join(new, name + '.golden'), ram=False)
+        print('%-15s %s' % (name, d or 'as %s, frame for frame (work RAM aside)' % like))
+        lbad += d is not None
+    print('golden: %d of %d league runs as the original\'s' % (len(LIKE) - lbad, len(LIKE)))
+    bad += lbad
 
     # the states, each loaded in a new process: the frames after it as the run's own
     def loaded(r):

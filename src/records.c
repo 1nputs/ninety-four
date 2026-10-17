@@ -448,13 +448,16 @@ void StoreUserName(void)
 void WriteNameRecord(void)
 {
     uint8_t *r = g.ThreeStars, user = (uint8_t)g.namelogsel;
-    uint32_t at = 0;
-    for (int n = 0; n <= 0x2D7; n++, at += 4) {           /* the player records */
-        int changed = 0;
-        ReadSRAM(at, 4, RAM_BASE + RAM_OFF_ThreeStars);
-        if (r[1] == user) { r[1] = 0; changed = 1; }
-        if (r[3] == user) { r[3] = 0; changed = 1; }
-        if (changed) WriteSRAM(at, 4, RAM_BASE + RAM_OFF_ThreeStars);
+    uint32_t at;
+    for (int t = 0; t < (int)league.teams; t++) {         /* the player records (the cartridge's: $2D8 from 0) */
+        at = (uint32_t)rd16(rom_ptr(LG(PlayerRecordOffsets)) + 2 * t) << 2;
+        for (int n = 0; n < 0x1A; n++, at += 4) {
+            int changed = 0;
+            ReadSRAM(at, 4, RAM_BASE + RAM_OFF_ThreeStars);
+            if (r[1] == user) { r[1] = 0; changed = 1; }
+            if (r[3] == user) { r[3] = 0; changed = 1; }
+            if (changed) WriteSRAM(at, 4, RAM_BASE + RAM_OFF_ThreeStars);
+        }
     }
     for (int n = 0; n < (int)league.teams; n++) {         /* the crowd records */
         at = league_crowd_record((uint16_t)n);

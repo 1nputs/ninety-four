@@ -2,7 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "rom.h"
-const uint8_t *rom_image;
+const uint8_t *rom_cart, *rom_image;
+uint32_t rom_limit = ROM_SIZE;
 int rom_load(const char *path)
 {
     FILE *f = fopen(path, "rb");
@@ -11,7 +12,8 @@ int rom_load(const char *path)
     size_t n = fread(buf, 1, ROM_SIZE, f);
     fclose(f);
     if (n != ROM_SIZE) { free(buf); return 0; }
-    rom_image = buf;
+    rom_cart = rom_image = buf;
+    rom_limit = ROM_SIZE;
     return 1;
 }
 

@@ -55,6 +55,22 @@ void rules_power_on(void);
 size_t rules_state_save(void *user, uint8_t *out);
 int rules_state_load(void *user, const uint8_t *in, size_t size);
 
+/* leagues (league.c; src/league.h): a folder of text files (teams.csv, players.csv ...), built
+ * past the cartridge at power on; the cartridge's own when none */
+const char *league_error(void);         /* why the last call failed */
+void league_next(const char *dir);      /* the next game's (NULL or "": the cartridge's) */
+int league_next_is_cartridge(void);
+void league_power_on(void);             /* (a league that will not build: the cartridge's, and why on stderr) */
+uint64_t league_hash(void);             /* this game's league: its checksum (0 the cartridge's) */
+const char *league_dir(void);           /* its folder ("" the cartridge's) */
+const char *league_name(void);
+int league_use(const char *dir, uint64_t hash);   /* a state's league (dir's, when its checksum is hash): 0, -1 */
+int league_check(const char *dir, int describe);   /* it builds (described on stdout): 0, -1 */
+int league_export(const char *dir);     /* the cartridge's league as a folder: 0, -1 */
+/* the leagues/ folder's leagues for the menu (the cartridge's first): the count */
+int league_list(const char *const **names, const char *const **labels);
+const char *league_sram(const char *base);   /* the next game's save RAM file (base: the cartridge's) */
+
 /* lockstep against the oracle (lockstep.c) */
 int lockstep_load(const char *path, mdrt *m);
 void lockstep_check(long frame);

@@ -67,7 +67,19 @@ Player Stats (the sort scrolls on to two more columns; power play goals count fo
 How it plays: skating speed, the speed burst, shot power, how far the puck slides, tiring, bench
 rest, rest in the penalty box, how many penalties are called, and hot and cold streaks. Presets
 set them all: Classic, Simulation (the fixes and stats, a weaker burst, fewer penalties, milder
-streaks) and Arcade (faster, harder, livelier). Coming: 32 teams and leagues of your own.
+streaks) and Arcade (faster, harder, livelier).
+
+**Leagues:** who plays, on the same page: the cartridge's teams, or a league of your own, up to
+32 teams. A league is a folder in `leagues/` beside the game, of text files a spreadsheet opens:
+`teams.csv` (names, arenas, conferences, ratings, songs), `goalies.csv` and `players.csv` (every
+player's numbers and ratings), `lines.csv`, `colours.csv`, `pictures.csv`, and `league.ini` (its
+name, how many teams play for the cup). To start one, `nhl94 --export-league leagues/my-league`
+writes the cartridge's league out, to change as you like; `nhl94 --check-league leagues/my-league`
+says what holds, or what is wrong and on which line (the columns are described at the top of
+`native/league.c`). A new team shows a cartridge team's logo, banners and colours for now (its
+`art` column). Each league keeps its own records (`out/nhl94-my-league.srm`), and a saved state
+plays on with the league it was saved in. The cartridge's own league, exported and built again,
+plays the original frame for frame.
 
 **Captures:** the last 20 seconds are always kept; F10 (or the menu's Capture page) saves them,
 and F11 records until you press it again. They go to `videos/` as GIFs (exact colours, 30 frames
@@ -144,7 +156,9 @@ tell us what it said.
   records real play. `make test` replays 10,197 recorded routine calls. `make lockstep` runs 17
   whole sessions against the oracle, checking work RAM and VDP at every vblank. `make
   golden-check` compares the native build's own output with a recorded build, bit for bit
-  (88,000 frames), plus save-state round trips. pulseman is checked on the oracle's vectors
+  (about 227,000 frames, the rules' and leagues' own runs among them), plus save-state round
+  trips. `make rulestest` and `make leaguetest` check the game rules and the leagues (the
+  cartridge's league exported and built again, byte for byte). pulseman is checked on the oracle's vectors
   (`make runtime-check`) and on this game's own recordings (`make runtime-selfcheck`).
 - **Done.** The harness, the game-play core, video and sound, the frame drivers, native running,
   lockstep, the whole front end (it boots from power on), a cleanup, golden runs, native save
@@ -196,6 +210,7 @@ From the least ambitious to the most.
 - [x] Capture: the replay (the last 20 seconds) and recordings, as GIFs
 - [x] Save slots with thumbnails; quick resume on quit and start (states during play)
 - [x] Game rules, the host's for every player (Classic: the original): period lengths, overtime, the weight bug fix, the second assist fix, plus/minus and checks, skating, burst, shots, puck, energy, penalties, streaks, presets
+- [x] Leagues of your own, up to 32 teams: teams, players, lines, colours and pictures in files (logos and banners borrowed from the cartridge's teams for now)
 - [ ] Skip the EA screen, boot straight into a game
 - [x] Colour options; scanlines, CRT mask, composite dither blending
 - [ ] IPS and BPS patches, soft-patching, the ROM check as a toggle for data hacks

@@ -13,6 +13,8 @@
 /states/
 /videos/
 /settings.ini
+# leagues of your own (league folders, made from the ROM's: tools/leaguetest.py, --export-league)
+/leagues/
 __pycache__/
 *.o
 *.so

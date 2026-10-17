@@ -67,7 +67,7 @@ void CountPlayers(void)
 void PlayerRecordIO(uint32_t slot, uint16_t team, uint32_t buf)
 {
     uint32_t at = slot << 2;
-    at += (uint32_t)(int32_t)(int16_t)(rd16(rom_ptr(SYM_PlayerRecordOffsets) + (uint16_t)(team << 1)) << 2);
+    at += (uint32_t)(int32_t)(int16_t)(rd16(rom_ptr(LG(PlayerRecordOffsets)) + (uint16_t)(team << 1)) << 2);
     if (g.sflags6 & HI(6)) WriteSRAM(at, 4, buf);
     else ReadSRAM(at, 4, buf);
 }
