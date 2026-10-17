@@ -6,8 +6,8 @@
  * redo, which is how lockstep goes on after it takes the oracle's state. Loading one restarts the
  * game there (restart_at), from wherever it was.
  *
- * In the window: F9 saves a state into pulseman's slot, F10 loads one (the file the request names:
- * mdrt_request_path; states/slotN.state, or quick resume's), F4 held steps back (a state every
+ * In the window: the menu saves a state into pulseman's slot and loads one (the file the request
+ * names: mdrt_request_path; states/slotN.state, or quick resume's), F4 held steps back (a state every
  * third frame of play, ten seconds of them). Without a named file, --state FILE. A save asked for
  * outside play is not taken (the platform keeps the slot as it was). Headless: --save-state
  * FRAME:FILE, --load-state FILE
@@ -21,7 +21,7 @@
 #include "z80.h"
 
 static mdrt *m;
-static const char *file;                /* --state: F9 / F10's when the platform names none */
+static const char *file;                /* --state: a save's or load's when the platform names none */
 static long save_frame = -1;            /* --save-state */
 static const char *save_path;
 static long seen;                       /* the handshake whose requests were taken */

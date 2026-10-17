@@ -8,10 +8,10 @@ by hand in C and checked against the original, frame by frame, until the two can
 apart. The same one-timers, the same diving saves, the same organ, the same Gretzky. Smooth 60
 frames a second, without the cartridge's slowdown.
 
-And things the cartridge never had: **save in the middle of a game (F9), load it back (F10), and
-hold F4 to rewind** the goal you just gave up. Hold F6 to fast-forward, slow the replay of that
-one-timer down, step through it a frame at a time, and press F12 to keep it. Scored a beauty?
-**Shift+F12 saves the last 20 seconds** as a GIF or an MP4 to share.
+And things the cartridge never had: **save in the middle of a game and load it back (eight slots
+in the menu), and hold F4 to rewind** the goal you just gave up. Hold F6 to fast-forward, slow the
+replay of that one-timer down, step through it a frame at a time, and press F12 to keep it.
+Scored a beauty? **F10 saves the last 20 seconds** as a GIF to share.
 
 Bring your own cartridge dump and you're on the ice in a minute (what to install first is
 under [Build](#build)):
@@ -42,12 +42,11 @@ Game controllers work too (the first two are players 1 and 2).
 | F6 (held) | fast-forward |
 | F7 | slow motion on / off |
 | F8 | a frame at a time, while paused |
-| F9 / F10 | save / load a state (the slot chosen last) |
-| F11 or Alt+Enter | full screen |
+| F10 | save the replay: the last 20 seconds, as a GIF (in `videos/`) |
+| F11 | start / stop recording a GIF |
 | F12 | screenshot (a PNG in `screenshots/`) |
-| Shift+F12 | save the replay: the last 20 seconds (in `videos/`) |
-| Ctrl+F12 | start / stop recording a video |
-| Esc | the menu |
+| Esc | the menu: save and load states there |
+| Alt+Enter | full screen |
 
 **The menu** (Esc, or a controller's Back button; arrows and Enter, or the d-pad, A and B) has the
 ROM, a reset, states, the video (a pixel-art upscaler: Scale2x, Scale3x or MMPX, which smooth the
@@ -58,11 +57,9 @@ mask; full screen), captures (below), the sound (volume, and the FM sound core a
 difference as you play), players (see below), options, and every key of the pads and the
 controls: pick one and press the new key (with Shift, Ctrl or Alt if you like).
 
-**Captures:** the last 20 seconds are always kept; Shift+F12 (or the menu's Capture page) saves
-them, and Ctrl+F12 records until you press it again. They go to `videos/` as a GIF (exact
-colours, 30 frames a second, no sound) or an MP4 with the sound, made by
-[ffmpeg](https://ffmpeg.org) if it is installed (otherwise a GIF). The Capture page picks the
-format, how long the replay is, and a GIF's size.
+**Captures:** the last 20 seconds are always kept; F10 (or the menu's Capture page) saves them,
+and F11 records until you press it again. They go to `videos/` as GIFs (exact colours, 30 frames
+a second, no sound). The Capture page sets how long the replay is and a GIF's size.
 
 **Save slots and quick resume:** the menu's Save and Load pages have eight slots, each with a
 picture of the moment, in `states/` beside the game. States are taken during play (not in the menus
@@ -172,7 +169,7 @@ From the least ambitious to the most.
 - [x] Window scaling, full screen, 4:3 aspect
 - [x] Battery save (save RAM) kept in a file
 - [x] Smooth 60 frames a second (no cartridge slowdown)
-- [x] Save states (F9 / F10) and rewind (F4)
+- [x] Save states (the menu's slots) and rewind (F4)
 - [x] FM core and chip model choice (`--fm-core nuked|ymfm`, `--fm-model ym2612|ym3438`)
 - [x] Headless runs: screenshots, WAV, scripted input, RAM watch (`--watch`), trace recording (`--record`)
 - [x] Mute, volume, audio device and latency options
@@ -184,7 +181,7 @@ From the least ambitious to the most.
 - [x] Fast-forward, slow motion, frame step
 - [x] Pause when the window loses focus
 - [x] Controller remapping, player slots, turbo, dead zones
-- [x] Video and audio capture: the replay (the last 20 seconds) and recordings, GIF or MP4
+- [x] Capture: the replay (the last 20 seconds) and recordings, as GIFs
 - [x] Save slots with thumbnails; quick resume on quit and start (states during play)
 - [ ] Skip the EA screen, boot straight into a game
 - [x] Colour options; scanlines, CRT mask, composite dither blending
