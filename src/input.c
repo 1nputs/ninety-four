@@ -422,11 +422,12 @@ void burst(struct SortObj *o)
 {
     int16_t e = getpde(o);
     if (g.OptLine == 0) {
-        e = (int16_t)(e - 0xCC);
+        e = (int16_t)(e - rule_scale(RULE_TIRING, 0xCC));   /* (rules: tiring) */
         setpde(team_struct(PFLAG(o, pfteam)), (int16_t)((int8_t)o->pnum * 2), e);
         if (g.sflags7 & 0x10) e = 0x1000;
     }
     uint16_t d0 = (uint16_t)e >> 7;
+    d0 = (uint16_t)rule_scale(RULE_BURST, d0);            /* (rules: the burst) */
     uint16_t d1 = d0;
     unsigned idx = (unsigned)o->facedir * 2;
     o->Xvel = (int16_t)(o->Xvel + (int16_t)((int32_t)(int16_t)d0 * (int16_t)dirtab[idx]));
@@ -776,6 +777,7 @@ void doshot(struct SortObj *o)
     uint32_t prod = (uint32_t)d0 * g.passspeed;
     prod = (uint32_t)(uint16_t)prod * 0x5249u;
     d0 = (uint16_t)(prod >> 16);
+    d0 = (uint16_t)rule_scale(RULE_SHOT_POWER, d0);       /* (rules: shot power) */
     g.passspeed = d0;
     if (o->shotspd & 1) d0 = (uint16_t)(((int16_t)d0 >> 4) + g.passspeed);
     d0 = (uint16_t)(d0 >> 4);

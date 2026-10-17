@@ -173,6 +173,89 @@ static void stats_list(void)
     memset(rules, 0, sizeof rules);
 }
 
+/* the play rules through the game's own routines: Classic as the original, each rule its way */
+static struct SortObj *skater(void)
+{
+    memset(&g, 0, sizeof g);
+    struct SortObj *o = sortobj(1);
+    o->position = 1;
+    o->pnum = 3;
+    o->weight = 64;
+    o->legstr = 8;
+    o->legspd = 20;
+    o->endurance = 6;
+    o->facedir = 2;                                       /* (right) */
+    wr16(team_struct(0) + tmpde + 6, 0x1000);             /* full energy */
+    return o;
+}
+
+static void play_rules(void)
+{
+    memset(rules, 0, sizeof rules);
+    CHECK(rule_percent(RULE_SKATING) == 100 && rule_scale(RULE_SKATING, -7) == -7 && rule_scale(RULE_BURST, 12345) == 12345);
+    /* skating: from a standstill a step's acceleration, 110 % faster; the top speed, held */
+    int16_t v[2];
+    for (int r = 0; r < 2; r++) {
+        rules[RULE_SKATING] = (uint8_t)r;
+        struct SortObj *o = skater();
+        elapsed = 1;
+        playeracc(2, o);
+        v[r] = o->Xvel;
+    }
+    printf("  skating: a step's speed %d, faster %d\n", v[0], v[1]);
+    CHECK(v[0] > 0 && v[1] > v[0] && v[1] <= v[0] * 11 / 10 + 2);
+    int16_t top[2];
+    for (int r = 0; r < 2; r++) {                         /* push for 400 steps: the speed it stops at */
+        rules[RULE_SKATING] = (uint8_t)(r ? 2 : 0);
+        struct SortObj *o = skater();
+        elapsed = 1;
+        for (int k = 0; k < 400; k++) playeracc(2, o);
+        top[r] = o->Xvel;
+    }
+    printf("  skating: top speed %d, fastest %d\n", top[0], top[1]);
+    CHECK(top[1] > top[0] * 115 / 100 && top[1] < top[0] * 135 / 100);
+    rules[RULE_SKATING] = 0;
+    /* the burst: its push, and its cost with line changes on */
+    int16_t push[2], left[2];
+    for (int r = 0; r < 2; r++) {
+        rules[RULE_BURST] = (uint8_t)(r ? 3 : 0);         /* stronger */
+        rules[RULE_TIRING] = (uint8_t)(r ? 1 : 0);        /* less */
+        struct SortObj *o = skater();
+        burst(o);
+        push[r] = o->Xvel;
+        left[r] = getpde(o);
+    }
+    printf("  burst: push %d, stronger %d; energy left %d, less tiring %d\n", push[0], push[1], left[0], left[1]);
+    CHECK(left[0] == 0x1000 - 0xCC && left[1] == 0x1000 - 0x66);   /* (the push: the energy left / 128, of a step 200) */
+    CHECK(push[0] == ((0x1000 - 0xCC) >> 7) * 200 && push[1] == ((0x1000 - 0x66) >> 7) * 150 / 100 * 200);
+    memset(rules, 0, sizeof rules);
+    /* bench rest: +9 a tick, faster +13; the box rests only by the rule */
+    for (int r = 0; r < 2; r++) {
+        memset(&g, 0, sizeof g);
+        rules[RULE_BENCH_REST] = (uint8_t)r;
+        rules[RULE_BOX_REST] = (uint8_t)r;
+        uint8_t *tm = team_struct(0);
+        wr16(tm + tmpdst + 0, 0xFFFE);                    /* on the bench */
+        wr16(tm + tmpdst + 2, 120);                       /* in the box, two minutes */
+        wr16(tm + tmpdst + 4, 0xFFFF);                    /* on the ice */
+        for (int k = 0; k < 3; k++) wr16(tm + tmpde + 2 * k, 0x800);
+        RestoreBenchEnergy();
+        uint16_t bench = rd16(tm + tmpde), box = rd16(tm + tmpde + 2), ice = rd16(tm + tmpde + 4);
+        CHECK(bench == 0x800 + (r ? 13 : 9) && box == (r ? 0x800 + 13 : 0x800) && ice == 0x800);
+    }
+    memset(rules, 0, sizeof rules);
+    /* streaks: a third of the hot / cold value added to a rating (x 5, at most 30), half of it
+     * milder, none off */
+    static const int want[3] = { 4 * 5 + 4, 4 * 5 + 2, 4 * 5 };
+    for (int r = 0; r < 3; r++) {
+        rules[RULE_STREAKS] = (uint8_t)r;
+        struct SortObj *o = skater();
+        team_struct(0)[tmhotcold + o->pnum * 16] = 12;
+        CHECK(AttributeCalc(4, o) == want[r]);
+    }
+    memset(rules, 0, sizeof rules);
+}
+
 int main(void)
 {
     const char *rom = getenv("NHL94_ROM");
@@ -183,6 +266,7 @@ int main(void)
     assists();
     plusminus();
     stats_list();
+    play_rules();
     printf("rulestest: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }

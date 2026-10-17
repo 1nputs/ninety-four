@@ -407,15 +407,18 @@ void updateplayers(void)
                 if (o->Zpos == 0) {                               /* deceleration on the ice */
                     int d2 = (o->pflags & (1 << pfdoff)) ? 9 : 6;
                     assign_d2 = (uint32_t)d2;
+                    int puck = i == puckscnum && rules[RULE_PUCK_SLIDE];   /* (rules: the puck's slide) */
                     int16_t d0 = o->Xvel;
                     if (d0 != 0) {
                         d0 = (int16_t)(d0 >> d2);
+                        if (puck) d0 = (int16_t)rule_scale(RULE_PUCK_SLIDE, d0);
                         if (d0 == 0) d0 = 1;
                         o->Xvel = (int16_t)(o->Xvel - d0);
                     }
                     d0 = o->Yvel;
                     if (d0 != 0) {
                         d0 = (int16_t)(d0 >> d2);
+                        if (puck) d0 = (int16_t)rule_scale(RULE_PUCK_SLIDE, d0);
                         if (d0 == 0) d0 = 1;
                         o->Yvel = (int16_t)(o->Yvel - d0);
                     }

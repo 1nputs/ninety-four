@@ -43,9 +43,11 @@ RUNS = [
     # the game rules (native extras: their own baselines, not the original's): every rule on
     ('rules_game', 16000, ['--input', 'full_game_30s.txt'] + RULES_ON),
     ('rules_faceoff', 18000, ['--snap', 'out/states/faceoff.snap', '--input', 'random_seed94.txt'] + RULES_ON),
+    ('arcade_faceoff', 18000, ['--snap', 'out/states/faceoff.snap', '--input', 'random_seed94.txt', '--rule', 'preset=arcade']),
+    ('simulation_faceoff', 18000, ['--snap', 'out/states/faceoff.snap', '--input', 'random_seed94.txt', '--rule', 'preset=simulation']),
 ]
 # the runs a state is saved in (from this frame on) and loaded from
-STATES = {'full_game': 3000, 'playoff_game': 9000, 'faceoff': 6000, 'rules_faceoff': 6000}
+STATES = {'full_game': 3000, 'playoff_game': 9000, 'faceoff': 6000, 'rules_faceoff': 6000, 'simulation_faceoff': 6000}
 COLUMNS = ['work RAM', 'VDP state', 'Z80 RAM', 'picture', 'sound', 'samples']
 SAVED = re.compile(r'state saved at frame (\d+) \(golden line (\d+)\)')
 

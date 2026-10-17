@@ -144,6 +144,7 @@ uint8_t AttributeCalc(uint8_t v, struct SortObj *o)
     int16_t d1 = (int16_t)(o->pnum << 4);
     int32_t hc = (int8_t)tm[tmhotcold + d1];
     hc = (int16_t)m68k_divs(hc, 3);
+    hc = rule_scale(RULE_STREAKS, hc);                    /* (rules: the streaks' effect) */
     int16_t d3 = (int16_t)(v * 5 + hc);
     if (d3 < 0) d3 = 0;
     else if (d3 >= 0x1E) d3 = 0x1E;

@@ -92,8 +92,10 @@ void RestoreBenchEnergy(void)
     for (int t = 0; t < 2; t++) {
         uint8_t *tm = team_struct(t);
         for (int16_t d0 = 0x32; d0 >= 0; d0 -= 2) {
-            if (rd16(tm + tmpdst + d0) != 0xFFFE) continue;
-            uint16_t e = (uint16_t)(rd16(tm + tmpde + d0) + 9);
+            uint16_t at = rd16(tm + tmpdst + d0);         /* (rules: the box rests too: penalty time, not injured) */
+            int box = rules[RULE_BOX_REST] && (int16_t)at >= 0 && !(at & 0x1000);
+            if (at != 0xFFFE && !box) continue;
+            uint16_t e = (uint16_t)(rd16(tm + tmpde + d0) + rule_scale(RULE_BENCH_REST, 9));   /* (rules: bench rest) */
             if ((int16_t)e >= 0x1000) e = 0x1000;
             wr16(tm + tmpde + d0, e);
         }

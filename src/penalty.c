@@ -48,6 +48,8 @@ void AddPenalty(uint16_t pen, struct SortObj *o)
         if (o->pflags2 & 4) return;
         if (!(g.gmode & (1 << gmoffs)) && pen == 0x10) return;
     }
+    if (pen > 0x10 && rules[RULE_PENALTIES] && randomd0(rules[RULE_PENALTIES] == 1 ? 2 : 4) != 0)
+        return;                                           /* (rules: fewer called: one in two, or four) */
     AddPenalty2(pen, o);
 }
 

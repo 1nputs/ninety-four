@@ -2529,6 +2529,7 @@ void playeracc(int16_t dir, struct SortObj *o)
         d2 = (int16_t)(d2 + 0x10);
     }
     d2 = (int16_t)(d2 >> 1);
+    d2 = (int16_t)rule_scale(RULE_SKATING, d2);           /* (rules: skating) */
     int32_t ax = ((int32_t)d0 * d2) >> 5;
     int32_t ay = ((int32_t)d1 * d2) >> 5;
     ax = (int32_t)(int16_t)ax * elapsed;
@@ -2561,6 +2562,7 @@ void playeracc(int16_t dir, struct SortObj *o)
         int32_t nxt = (int32_t)MaxSpeed[(g.TempEnergySpd + 4) / 4];
         cap = (uint32_t)((((int32_t)nxt - (int32_t)g.TempMaxSpd) >> 1) + (int32_t)g.TempMaxSpd);
     }
+    if (rules[RULE_SKATING]) cap = (uint32_t)((uint64_t)cap * (uint32_t)(rule_percent(RULE_SKATING) * rule_percent(RULE_SKATING)) / 10000u);   /* (rules: a speed squared) */
     if (o->pflags2 & 0x40) cap >>= 3;                     /* injured in a fight */
     if (o->position == 0 && puckc() == o->SCnum) cap = (uint32_t)((int32_t)cap >> 1);
     if (!(d3 > cap)) {
@@ -2571,7 +2573,7 @@ void playeracc(int16_t dir, struct SortObj *o)
     if (vdp_hv16() & 0x7F) return;
     uint8_t *tm = own_team(o);
     int16_t pd1 = (int16_t)((int8_t)o->pnum * 2);
-    e = (int16_t)(getpde(o) - 0x21);
+    e = (int16_t)(getpde(o) - rule_scale(RULE_TIRING, 0x21));   /* (rules: tiring) */
     if (e < 0xC00) { setpde(tm, pd1, e); return; }
     e = (int16_t)(e + ((uint16_t)(int16_t)(int8_t)o->endurance >> 1));
     setpde(tm, pd1, e);

@@ -45,6 +45,10 @@ long native_golden_lines(void);                      /* the golden run's lines s
  * options_use, or the command line's --rule NAME=VALUE), set at power on, and the state part */
 extern const mdrt_sdl_option rule_options[];
 void rules_next(const int *values, void *user);
+/* the menu's page: a preset, then the rules (its options_use and options_changed) */
+const mdrt_sdl_option *rules_page(int *count);
+void rules_page_use(const int *values, void *user);
+int rules_page_changed(int which, int *values, void *user);
 int rules_arg(const char *arg);
 int rules_classic(void);                 /* the next game's are all the original's */
 void rules_power_on(void);

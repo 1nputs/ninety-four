@@ -544,7 +544,8 @@ int main(int argc, char **argv)
                                .rom_path = rom_given, .rom_default = rom, .rom_hint = "NHL '94: the 1 MB cartridge (US/Europe)",
                                .rom_check = rom_check, .rom_use = rom_use,
                                .options_title = "Game rules", .options_note = "For every player, all game. Classic: the original",
-                               .options = rule_options, .noptions = RULE_COUNT, .options_use = rules_next };
+                               .options_use = rules_page_use, .options_changed = rules_page_changed };
+        o.options = rules_page(&o.noptions);
         return mdrt_sdl_run(&c, &o, native_game, NULL);
     }
     if (wav_path && !(wav = fopen(wav_path, "wb"))) { fprintf(stderr, "cannot write %s\n", wav_path); return 1; }
