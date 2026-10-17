@@ -18,17 +18,21 @@
  *                 agility speed offense defense shot_power checking hand stickhandling accuracy
  *                 endurance shot_pass passing aggression).
  *   lines.csv     team, line (SC1 SC2 CHK PP1 PP2 PK1 PK2 L8), G LD RD LW C RW X: the players'
- *                 numbers (empty: nobody). A team with none: made from its roster's order.
+ *                 numbers, or names where two wear one number (empty: nobody). A team with none:
+ *                 made from its roster's order.
  *   colours.csv   team, palette (home away logo matchup matchup2), colours: 16 Genesis colour
  *                 words. A palette not given: the art team's.
- *   pictures.csv  team, number, picture: a cartridge picture (CardMarioLemieux, NoPicSkater1 ...).
+ *   pictures.csv  team, number (or name, as in lines.csv), picture: a cartridge picture
+ *                 (CardMarioLemieux, NoPicSkater1 ...).
  *   playoffs.csv  optional: rows of 16 teams, the draws a playoff starts from (a power of two of
  *                 them, at most 32); else made from the conferences.
  *
  * Columns go in any order, named by the first row; others are ignored, and so are empty rows and
  * rows starting with #. Text is plain ASCII, \xNN for another byte. A league has 18 to 32 teams
- * (18 or more for the cup); a team 2 to 4 goalies, 9 to 15 forwards, 6 to 15 defensemen and 25
- * players at most, each with his own number; names as long as the cartridge's longest. The game reads the league
+ * (18 or more for the cup); a team 2 to 4 goalies, 9 to 15 forwards, 6 to 15 defensemen and 26
+ * players at most; names as long as the screens take (LEN_ below). The
+ * folder is written from the cartridge (league_export) or from a hack made on the community's
+ * 32-team template (league_extract, romsrc.c: read as data, never run). The game reads the league
  * through the tables of src/league.h, so it plays as the cartridge does with whatever teams it
  * has; the cartridge's own league, exported and built again, is the cartridge's byte for byte
  * (make leaguetest). */
@@ -49,15 +53,15 @@
 #define make_dir(p) mkdir(p, 0777)
 #endif
 
-/* the screens' room: the cartridge's longest */
-#define LEN_CITY 14
+/* the screens' room: the longest of the cartridge's and of the hacks on the 32-team template */
+#define LEN_CITY 17
 #define LEN_ABBR 3
-#define LEN_NICK 12
-#define LEN_ARENA 23
-#define LEN_NAME 19
+#define LEN_NICK 14
+#define LEN_ARENA 26
+#define LEN_NAME 24
 #define LEN_CONF 15
 #define LEN_BANNER 16
-#define ROSTER 25               /* players a team: the cartridge's most */
+#define ROSTER 26               /* players a team: the game's roster's room (and its save RAM's) */
 #define CART_TEAMS 28
 #define PICTURES 32
 #define ROWS_MAX 32             /* playoff draws: the password keeps 5 bits */
@@ -208,6 +212,16 @@ static int same_word(const char *a, const char *b)
     return *a == *b;
 }
 
+/* a starts with the n characters of b, case aside */
+static int same_start(const char *a, const char *b, size_t n)
+{
+    for (size_t i = 0; i < n; i++) {
+        char x = a[i] >= 'A' && a[i] <= 'Z' ? (char)(a[i] + 32) : a[i], y = b[i] >= 'A' && b[i] <= 'Z' ? (char)(b[i] + 32) : b[i];
+        if (!x || x != y) return 0;
+    }
+    return 1;
+}
+
 /* the header row: where each of cols is (-1: not there); the first `need` must be */
 static int csv_open(struct csv *c, char *text, const char *file, const char *const *cols, int ncols, int need)
 {
@@ -284,11 +298,36 @@ static int find_team(const struct lg *L, const char *abbr, int *t)
     return 0;
 }
 
-static int slot_of(const struct team *T, int number)
+/* the player a cell names: his number (#27 or 27), or his name where his number is shared ->
+ * his roster slot: 0, -1 */
+static int find_player(const struct team *T, const char *cell, const char *what, int *slot)
 {
-    for (int i = 0; i < T->players; i++)
-        if (T->pl[i].number == number) return i;
-    return -1;
+    int n, found = -1, count = 0;
+    if (*cell == '#') cell++;
+    if (*cell >= '0' && *cell <= '9') {
+        if (num(cell, 0, 99, what, &n) < 0) return -1;
+        for (int i = 0; i < T->players; i++)
+            if (T->pl[i].number == n) { found = i; count++; }
+        if (!count) return fail("%s %s: no number %d on the team", T->abbr, what, n);
+        if (count > 1) return fail("%s %s: %d players wear %d: name him instead", T->abbr, what, count, n);
+    } else {
+        for (int i = 0; i < T->players; i++)
+            if (same_word(T->pl[i].name, cell)) { found = i; count++; }
+        if (!count) return fail("%s %s: no number or player \"%s\" on the team", T->abbr, what, cell);
+        if (count > 1) return fail("%s %s: %d players named %s", T->abbr, what, count, cell);
+    }
+    *slot = found;
+    return 0;
+}
+
+/* how a folder names the player in slot i: his number, or his name when it is shared */
+static const char *player_cell(const struct team *T, int i, char *out, size_t size)
+{
+    int shared = 0;
+    for (int k = 0; k < T->players; k++) shared += T->pl[k].number == T->pl[i].number;
+    if (shared > 1) snprintf(out, size, "%s", T->pl[i].name);
+    else snprintf(out, size, "%d", T->pl[i].number);
+    return out;
 }
 
 /* a cartridge picture by its label (CardMarioLemieux, NoPicSkater1 ...), 0 when none */
@@ -404,7 +443,6 @@ static int read_players(char *t, struct lg *L, int skaters)
         if (T->players == ROSTER) return fail("%s: more than %d players", T->abbr, ROSTER);
         struct player *P = &T->pl[T->players];
         if (num(get(&c, 1), 0, 99, "number", &v) < 0) return -1;
-        if (slot_of(T, v) >= 0) return fail("%s: number %d twice (lines and pictures name players by number)", T->abbr, v);
         P->number = (uint8_t)v;
         if ((v = text(get(&c, 2), P->name, LEN_NAME, "name")) <= 0) return v < 0 ? -1 : fail("no name");
         if (skaters) {
@@ -442,13 +480,10 @@ static int read_lines(char *t, struct lg *L)
         if (T->has_lines & 1 << line) return fail("%s: line %s twice", T->abbr, line_names[line]);
         T->has_lines |= 1 << line;
         for (int k = 0; k < 7; k++) {
-            int n;
+            int i;
             const char *s = get(&c, 2 + k);
-            if (*s == '#') s++;
-            if (!*s) { T->line[line][k] = 0; continue; }
-            if (num(s, 0, 99, slot_names[k], &n) < 0) return -1;
-            int i = slot_of(T, n);
-            if (i < 0) return fail("%s %s: no number %d on the team", T->abbr, slot_names[k], n);
+            if (!*s || !strcmp(s, "#")) { T->line[line][k] = 0; continue; }
+            if (find_player(T, s, slot_names[k], &i) < 0) return -1;
             T->line[line][k] = (uint8_t)(i + 1);
         }
     }
@@ -490,12 +525,11 @@ static int read_pictures(char *t, struct lg *L)
     if (csv_open(&c, t, "pictures.csv", cols, 3, 3) < 0) return -1;
     int r;
     while ((r = csv_row(&c)) > 0) {
-        int tm, n;
-        if (find_team(L, get(&c, 0), &tm) < 0 || num(get(&c, 1), 0, 99, "number", &n) < 0) return -1;
+        int tm, i;
+        if (find_team(L, get(&c, 0), &tm) < 0) return -1;
         struct team *T = &L->t[tm];
-        int i = slot_of(T, n);
+        if (find_player(T, get(&c, 1), "number", &i) < 0) return -1;
         uint32_t pic = picture_named(get(&c, 2));
-        if (i < 0) return fail("%s: no number %d on the team", T->abbr, n);
         if (!pic) return fail("picture: \"%s\" is not one of the cartridge's (CardMarioLemieux, NoPicSkater1 ...)", get(&c, 2));
         if (T->pics == PICTURES) return fail("%s: more than %d pictures", T->abbr, PICTURES);
         T->pic[T->pics].pic = pic;
@@ -664,74 +698,131 @@ done:
     return r;
 }
 
-/* ---- the cartridge's league ---------------------------------------------------------------------- */
+/* ---- a ROM's league: the cartridge's, or a hack's (romsrc.c) ------------------------------------ */
 
-static uint16_t c16(const uint8_t *c, uint32_t a) { return (uint16_t)(c[a] << 8 | c[a + 1]); }
-static uint32_t c32(const uint8_t *c, uint32_t a) { return (uint32_t)c16(c, a) << 16 | c16(c, a + 2); }
-
-static void cart_string(const uint8_t *c, uint32_t *a, char *out, int max)
+static void src_string(const struct romsrc *s, uint32_t *a, char *out, int max)
 {
-    uint16_t n = c16(c, *a);
+    uint16_t n = rs16(s, *a);
     int k = 0;
     for (uint32_t i = 2; i < n && k < max; i++)
-        if (c[*a + i]) out[k++] = (char)c[*a + i];
+        if (rs8(s, *a + i)) out[k++] = (char)rs8(s, *a + i);
     out[k] = 0;
     *a += n;
 }
 
-/* team t of the cartridge, as a league folder has it */
-static void cart_team(const uint8_t *c, int t, struct team *T)
+/* team t of the ROM s, as a league folder has it (its art: the cartridge's team t; a hack's
+ * pictures are its own, so none) */
+static void src_team(const struct romsrc *s, int t, struct team *T)
 {
-    uint32_t b = c32(c, SYM_TeamList + 4u * (uint32_t)t), sr = b + c16(c, b + 8), so = c16(c, b + c16(c, b + 10));
+    uint32_t b = rs32(s, s->table[LG_TeamList] + 4u * (uint32_t)t), sr = b + rs16(s, b + 8), so = rs16(s, b + rs16(s, b + 10));
     memset(T, 0, sizeof *T);
     T->art = t;
     for (int k = 0; k < 16; k++) {
-        T->pal[PAL_HOME][k] = c16(c, b + c16(c, b + 2) + 2u * (uint32_t)k);
-        T->pal[PAL_AWAY][k] = c16(c, b + c16(c, b + 2) + 32 + 2u * (uint32_t)k);
-        T->pal[PAL_LOGO][k] = c16(c, SYM_TeamLogoPalettes + 32u * (uint32_t)t + 2u * (uint32_t)k);
-        T->pal[PAL_MATCHUP][k] = c16(c, SYM_TeamPalettes + 64u * (uint32_t)t + 2u * (uint32_t)k);
-        T->pal[PAL_MATCHUP2][k] = c16(c, SYM_TeamPalettes + 64u * (uint32_t)t + 32 + 2u * (uint32_t)k);
+        T->pal[PAL_HOME][k] = rs16(s, b + rs16(s, b + 2) + 2u * (uint32_t)k);
+        T->pal[PAL_AWAY][k] = rs16(s, b + rs16(s, b + 2) + 32 + 2u * (uint32_t)k);
+        T->pal[PAL_LOGO][k] = rs16(s, s->table[LG_TeamLogoPalettes] + 32u * (uint32_t)t + 2u * (uint32_t)k);
+        T->pal[PAL_MATCHUP][k] = rs16(s, s->table[LG_TeamPalettes] + 64u * (uint32_t)t + 2u * (uint32_t)k);
+        T->pal[PAL_MATCHUP2][k] = rs16(s, s->table[LG_TeamPalettes] + 64u * (uint32_t)t + 32 + 2u * (uint32_t)k);
     }
     for (int p = 0; p < PALS; p++) T->has_pal[p] = 1;
-    T->offense = c[sr] >> 4 & 7;
-    T->defense = c[sr] & 7;
-    T->pk = c[sr + 1] >> 4;
-    T->pp = c[sr + 1] & 15;
-    T->home = c[sr + 2] >> 4;
-    T->away = c[sr + 2] & 15;
-    T->forwards = c[sr + 3] >> 4;
-    T->rating = c[SYM_TeamRatings + t];
-    for (int k = 0; k < 6; k++) T->songs[k] = c[SYM_TeamSongs + 6u * (uint32_t)t + (uint32_t)k];
-    for (int l = 0; l < 8; l++) memcpy(T->line[l], c + b + c16(c, b + 6) + 8u * (uint32_t)l, 7);
+    T->offense = rs8(s, sr) >> 4 & 7;
+    T->defense = rs8(s, sr) & 7;
+    T->pk = rs8(s, sr + 1) >> 4;
+    T->pp = rs8(s, sr + 1) & 15;
+    T->home = rs8(s, sr + 2) >> 4;
+    T->away = rs8(s, sr + 2) & 15;
+    T->forwards = rs8(s, sr + 3) >> 4;
+    T->rating = rs8(s, s->table[LG_TeamRatings] + (uint32_t)t);
+    for (int k = 0; k < 6; k++) T->songs[k] = rs8(s, s->table[LG_TeamSongs] + 6u * (uint32_t)t + (uint32_t)k);
+    for (int l = 0; l < 8; l++)
+        for (int k = 0; k < 7; k++) T->line[l][k] = rs8(s, b + rs16(s, b + 6) + 8u * (uint32_t)l + (uint32_t)k);
     T->has_lines = 0xFF;
-    uint32_t p = b + c16(c, b);
-    while (c16(c, p) != 2 && T->players < ROSTER) {
+    uint32_t p = b + rs16(s, b);
+    while (rs16(s, p) != 2 && T->players < ROSTER) {
         struct player *P = &T->pl[T->players];
-        cart_string(c, &p, P->name, LEN_NAME);
-        P->number = (uint8_t)((c[p] >> 4) * 10 + (c[p] & 15));
-        for (int k = 0; k < 14; k++) P->nib[k] = (uint8_t)(c[p + 1 + k / 2] >> (k & 1 ? 0 : 4) & 15);
+        src_string(s, &p, P->name, LEN_NAME);
+        P->number = (uint8_t)((rs8(s, p) >> 4) * 10 + (rs8(s, p) & 15));
+        for (int k = 0; k < 14; k++) P->nib[k] = (uint8_t)(rs8(s, p + 1 + (uint32_t)k / 2) >> (k & 1 ? 0 : 4) & 15);
         p += 8;
         T->players++;
     }
-    for (uint16_t w = so; w; w = (uint16_t)(w << 4)) T->pl[T->goalies++].start = (uint8_t)(w >> 12);
+    /* goalies: as the game counts them (GetGoalieCount: the .sodds word's nibbles to its last
+     * one not 0) */
+    uint16_t w = so;
+    do T->pl[T->goalies++].start = (uint8_t)(w >> 12); while ((w = (uint16_t)(w << 4)) != 0);
     for (int i = 0; i < T->players; i++) T->pl[i].pos = i < T->goalies ? 'G' : i < T->goalies + T->forwards ? 'F' : 'D';
     p += 2;
-    cart_string(c, &p, T->city, LEN_CITY);
-    cart_string(c, &p, T->abbr, LEN_ABBR);
-    cart_string(c, &p, T->nickname, LEN_NICK);
-    cart_string(c, &p, T->arena, LEN_ARENA);
-    for (uint32_t a = c32(c, SYM_FeaturedPictures + 4u * (uint32_t)t); c32(c, a) && T->pics < PICTURES; a += 6) {
-        T->pic[T->pics].pic = c32(c, a);
-        T->pic[T->pics++].slot = (uint8_t)c16(c, a + 4);
+    src_string(s, &p, T->city, LEN_CITY);
+    src_string(s, &p, T->abbr, LEN_ABBR);
+    src_string(s, &p, T->nickname, LEN_NICK);
+    src_string(s, &p, T->arena, LEN_ARENA);
+    for (uint32_t a = rs32(s, s->table[LG_FeaturedPictures] + 4u * (uint32_t)t); !s->hack && rs32(s, a) && T->pics < PICTURES; a += 6) {
+        T->pic[T->pics].pic = rs32(s, a);
+        T->pic[T->pics++].slot = (uint8_t)rs16(s, a + 4);
     }
-    for (int r = 0; r < 32 && !T->conference[0]; r++)    /* the side of the cartridge's draws it plays on */
+    for (int r = 0; r < s->rows && !T->conference[0]; r++)   /* the side of the draws it plays on */
         for (int k = 0; k < 16; k++)
-            if (c[SYM_playoffseats + 16u * (uint32_t)r + (uint32_t)k] == t) { strcpy(T->conference, k < 8 ? "east" : "west"); break; }
+            if (rs8(s, s->table[LG_playoffseats] + 16u * (uint32_t)r + (uint32_t)k) == t) { strcpy(T->conference, k < 8 ? "east" : "west"); break; }
+}
+
+/* the cartridge's team c */
+static void cart_team(const uint8_t *c, int t, struct team *T)
+{
+    struct romsrc s;
+    romsrc_cartridge(&s, c);
+    src_team(&s, t, T);
+}
+
+/* a word of a (letters only, case aside) is all of b */
+static int has_word(const char *a, const char *b)
+{
+    size_t n = strlen(b);
+    for (const char *p = a; *p; p++)
+        if ((p == a || p[-1] == ' ') && same_start(p, b, n) && (!p[n] || p[n] == ' ')) return 1;
+    return 0;
+}
+
+/* the cartridge's team whose art a hack's team T shows until it has its own: the same club (its
+ * nickname, or its city where only one club plays), the club it was before it moved, else the
+ * one whose home jersey is the nearest */
+static int art_of(const struct team *T, const struct team cart[CART_TEAMS])
+{
+    static const struct { const char *city, *was; } moved_from[] = {
+        { "Carolina", "HFD" }, { "Colorado", "QUE" }, { "Arizona", "WPG" }, { "Phoenix", "WPG" }, { "Utah", "WPG" },
+        { "Minnesota", "DAL" }, { "Atlanta", "WPG" },
+    };
+    const char *nick_last = strrchr(T->nickname, ' ');
+    nick_last = nick_last ? nick_last + 1 : T->nickname;
+    for (int k = 0; k < CART_TEAMS - 2; k++)
+        if (*nick_last && has_word(cart[k].nickname, nick_last)) return k;
+    int only = -1, count = 0;
+    for (int k = 0; k < CART_TEAMS - 2; k++)
+        if (same_start(T->city, cart[k].city, strlen(cart[k].city)) && (!T->city[strlen(cart[k].city)] || T->city[strlen(cart[k].city)] == ' ')) { only = k; count++; }
+    if (count == 1) return only;
+    for (size_t i = 0; i < sizeof moved_from / sizeof moved_from[0]; i++)
+        if (same_start(T->city, moved_from[i].city, strlen(moved_from[i].city)))
+            for (int k = 0; k < CART_TEAMS; k++)
+                if (!strcmp(cart_abbr[k], moved_from[i].was)) return k;
+    int best = 0;
+    long best_d = -1;
+    for (int k = 0; k < CART_TEAMS - 2; k++) {
+        long d = 0;
+        for (int i = 1; i < 16; i++)
+            for (int sh = 1; sh < 12; sh += 4) {
+                long x = (long)(T->pal[PAL_HOME][i] >> sh & 7) - (long)(cart[k].pal[PAL_HOME][i] >> sh & 7);
+                d += x * x;
+            }
+        if (best_d < 0 || d < best_d) { best = k; best_d = d; }
+    }
+    return best;
 }
 
 /* ---- building: the cartridge with the league past its end ---------------------------------------- */
 
 struct buf { uint8_t *b; size_t n, cap; int bad; };
+
+static uint16_t c16(const uint8_t *c, uint32_t a) { return (uint16_t)(c[a] << 8 | c[a + 1]); }
+static uint32_t c32(const uint8_t *c, uint32_t a) { return (uint32_t)c16(c, a) << 16 | c16(c, a + 2); }
 
 static void need(struct buf *b, size_t n)
 {
@@ -873,11 +964,13 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
     for (int t = 0; t < L->teams; t++) {                  /* (what a team leaves to its art team's) */
         struct team *T = &L->t[t], A;
         cart_team(c, T->art, &A);
-        if (!T->banner[0] && !same_word(T->city, A.city))   /* (a city of its own: its name on its banners) */
-            for (size_t k = 0; k <= strlen(T->city) && k <= LEN_BANNER; k++)
+        char why[200];
+        if (!T->banner[0] && !same_word(T->city, A.city) && strlen(T->city) <= LEN_BANNER) {   /* (a city of its own: its name on its banners, */
+            for (size_t k = 0; k <= strlen(T->city); k++)                                   /* when they have room for it) */
                 T->banner[k] = T->city[k] >= 'a' && T->city[k] <= 'z' ? (char)(T->city[k] - 32) : T->city[k];
+            if (banner_check(T->banner, why, sizeof why) < 0) T->banner[0] = 0;
+        }
         if (T->banner[0]) {
-            char why[200];
             if (banner_check(T->banner, why, sizeof why) < 0) { err_file = "teams.csv"; err_line = 0; return fail("%s: %s", T->abbr, why); }
             text[t] = T->banner;
             own++;
@@ -1092,7 +1185,8 @@ const char *league_sram(const char *base)
 
 /* ---- the cartridge's league, written out --------------------------------------------------------- */
 
-/* a CSV field: quoted when it must be, a byte outside plain ASCII as \xNN */
+/* a CSV field and a comma after it (last: a new line): quoted when it must be, a byte outside
+ * plain ASCII as \xNN */
 static void field(FILE *f, const char *s, int last)
 {
     int quote = !*s ? 0 : s[0] == ' ' || s[strlen(s) - 1] == ' ' || s[0] == '#' || strpbrk(s, ",\"") != NULL;
@@ -1104,7 +1198,7 @@ static void field(FILE *f, const char *s, int last)
         else fputc(*p, f);
     }
     if (quote) fputc('"', f);
-    fputc(last ? '\n' : ',', f);
+    if (last != 2) fputc(last ? '\n' : ',', f);   /* (2: nothing after) */
 }
 
 static FILE *create(const char *dir, const char *name)
@@ -1127,28 +1221,83 @@ static int make_dirs(const char *dir)
     return stat(p, &st) == 0 && S_ISDIR(st.st_mode) ? 0 : fail("cannot make the folder %s", dir);
 }
 
+/* s's playoff draws as a folder has them (seats), each playoff team in one at least: the game
+ * looks for the player's team in them (NewPO) and would look forever; a team in none takes the
+ * place of the one in the most draws (said on stdout). 0, or -1 when they are not draws of
+ * playoff teams (then made from the conferences) */
+static int src_draws(const struct romsrc *s, const struct team *T, uint8_t seats[ROWS_MAX][16])
+{
+    int count[LEAGUE_MAX] = { 0 };
+    for (int r = 0; r < s->rows; r++) {
+        uint32_t in = 0;
+        for (int k = 0; k < 16; k++) {
+            int t = seats[r][k] = rs8(s, s->table[LG_playoffseats] + 16u * (uint32_t)r + (uint32_t)k);
+            if (t >= s->playoff_teams || (in >> t & 1)) return -1;
+            in |= 1u << t;
+            count[t]++;
+        }
+    }
+    for (int m = 0; m < s->playoff_teams; m++) {
+        if (count[m]) continue;
+        int br = 0, bk = 0;
+        for (int r = 0; r < s->rows; r++)
+            for (int k = 0; k < 16; k++)
+                if (count[seats[r][k]] > count[seats[br][bk]]) { br = r; bk = k; }
+        if (count[seats[br][bk]] < 2) return -1;
+        printf("  playoffs.csv: %s was in no draw (the game would look for it forever): in draw %d in place of %s\n",
+               T[m].abbr, br + 1, T[seats[br][bk]].abbr);
+        count[seats[br][bk]]--;
+        seats[br][bk] = (uint8_t)m;
+        count[m]++;
+    }
+    return 0;
+}
+
 int league_export(const char *dir)
 {
-    const uint8_t *c = rom_cart;
+    struct romsrc s;
     err_file = NULL;
     err_line = 0;
-    if (!c) return fail("no cartridge");
+    if (!rom_cart) return fail("no cartridge");
+    romsrc_cartridge(&s, rom_cart);
+    return league_extract(&s, dir, "NHL '94 (from the cartridge)");
+}
+
+int league_extract(const struct romsrc *s, const char *dir, const char *name)
+{
+    static struct team T[LEAGUE_MAX], cart[CART_TEAMS];
+    static uint8_t seats[ROWS_MAX][16];
+    err_file = NULL;
+    err_line = 0;
+    if (!rom_cart) return fail("no cartridge");
+    for (int t = 0; t < CART_TEAMS; t++) cart_team(rom_cart, t, &cart[t]);
+    for (int t = 0; t < s->teams; t++) {
+        src_team(s, t, &T[t]);
+        if (s->hack) T[t].art = art_of(&T[t], cart);
+        for (int k = 0; k < t; k++)
+            if (same_word(T[k].abbr, T[t].abbr)) return fail("two teams are %s (the files name teams by their abbreviations)", T[t].abbr);
+    }
+    int draws = src_draws(s, T, seats) == 0;
+    if (!draws) printf("  playoffs.csv: its draws are not draws of its playoff teams: left to be made from the conferences\n");
     if (make_dirs(dir) < 0) return -1;
-    static struct team T[CART_TEAMS];
-    for (int t = 0; t < CART_TEAMS; t++) cart_team(c, t, &T[t]);
     FILE *f;
-    char s[64];
+    char cell[64];
     if (!(f = create(dir, "league.ini"))) return -1;
-    fprintf(f, "# NHL '94's league, from the cartridge: the files beside this one are its teams, players,\n"
-               "# lines, colours and pictures, to change as you like (README.md, \"Leagues\")\n"
-               "name = NHL '94 (from the cartridge)\nplayoff_teams = %d\n", SYM_NumPlayoffTeams);
+    if (s->hack)
+        fprintf(f, "# %s's league, from the hack: the files beside this one are its teams, players and\n"
+                   "# lines, to change as you like (README.md, \"Leagues\"). Its colours, logos, banners and pictures\n"
+                   "# go with its art (its colours are for its own player sprites): the art team's (teams.csv) for now\n", name);
+    else
+        fprintf(f, "# NHL '94's league, from the cartridge: the files beside this one are its teams, players,\n"
+                   "# lines, colours and pictures, to change as you like (README.md, \"Leagues\")\n");
+    fprintf(f, "name = %s\nplayoff_teams = %d\n", name, s->playoff_teams);
     fclose(f);
     if (!(f = create(dir, "teams.csv"))) return -1;
     fputs("team,city,nickname,arena,conference,art,rating,offense,defense,pp,pk,home,away,songs,banner\n", f);
-    for (int t = 0; t < CART_TEAMS; t++) {
+    for (int t = 0; t < s->teams; t++) {
         const struct team *X = &T[t];
         field(f, X->abbr, 0); field(f, X->city, 0); field(f, X->nickname, 0); field(f, X->arena, 0); field(f, X->conference, 0);
-        field(f, cart_abbr[t], 0);
+        field(f, cart_abbr[X->art], 0);
         fprintf(f, "%d,%d,%d,%d,%d,%d,%d,%d %d %d %d %d %d,\n", X->rating, X->offense, X->defense, X->pp, X->pk, X->home, X->away,
                 X->songs[0], X->songs[1], X->songs[2], X->songs[3], X->songs[4], X->songs[5]);
     }
@@ -1158,7 +1307,7 @@ int league_export(const char *dir)
         fputs(sk ? "team,pos,number,name" : "team,number,name", f);
         for (int k = 0; k < 14; k++) fprintf(f, ",%s", sk ? skater_cols[k] : goalie_cols[k]);
         fputs(sk ? "\n" : ",start\n", f);
-        for (int t = 0; t < CART_TEAMS; t++)
+        for (int t = 0; t < s->teams; t++)
             for (int i = sk ? T[t].goalies : 0; i < (sk ? T[t].players : T[t].goalies); i++) {
                 const struct player *P = &T[t].pl[i];
                 field(f, T[t].abbr, 0);
@@ -1172,22 +1321,23 @@ int league_export(const char *dir)
     }
     if (!(f = create(dir, "lines.csv"))) return -1;
     fputs("team,line,G,LD,RD,LW,C,RW,X\n", f);
-    for (int t = 0; t < CART_TEAMS; t++)
+    for (int t = 0; t < s->teams; t++)
         for (int l = 0; l < 8; l++) {
             field(f, T[t].abbr, 0);
             fputs(line_names[l], f);
             for (int k = 0; k < 7; k++) {
                 int slot = T[t].line[l][k];
-                if (slot) fprintf(f, ",%d", T[t].pl[slot - 1].number);
-                else fputc(',', f);
+                fputc(',', f);
+                if (slot && slot <= T[t].players) field(f, player_cell(&T[t], slot - 1, cell, sizeof cell), 2);
             }
             fputc('\n', f);
         }
     fclose(f);
     if (!(f = create(dir, "colours.csv"))) return -1;
     fputs("team,palette,colours\n", f);
-    for (int t = 0; t < CART_TEAMS; t++)
+    for (int t = 0; t < s->teams; t++)
         for (int p = 0; p < PALS; p++) {
+            if (s->hack) break;                               /* (a hack's go with its art: its sprites, logos, banners) */
             field(f, T[t].abbr, 0);
             fprintf(f, "%s,", pal_names[p]);
             for (int k = 0; k < 16; k++) fprintf(f, "%04X%c", T[t].pal[p][k], k < 15 ? ' ' : '\n');
@@ -1195,22 +1345,24 @@ int league_export(const char *dir)
     fclose(f);
     if (!(f = create(dir, "pictures.csv"))) return -1;
     fputs("team,number,picture\n", f);
-    for (int t = 0; t < CART_TEAMS; t++)
+    for (int t = 0; t < s->teams; t++)
         for (int i = 0; i < T[t].pics; i++) {
-            const char *name = picture_name(T[t].pic[i].pic);
-            if (!name || T[t].pic[i].slot >= T[t].players) continue;
+            const char *pic = picture_name(T[t].pic[i].pic);
+            if (!pic || T[t].pic[i].slot >= T[t].players) continue;
             field(f, T[t].abbr, 0);
-            fprintf(f, "%d,%s\n", T[t].pl[T[t].pic[i].slot].number, name);
+            field(f, player_cell(&T[t], T[t].pic[i].slot, cell, sizeof cell), 0);
+            fprintf(f, "%s\n", pic);
         }
     fclose(f);
-    if (!(f = create(dir, "playoffs.csv"))) return -1;
-    for (int k = 1; k <= 16; k++) fprintf(f, "%d%c", k, k < 16 ? ',' : '\n');
-    for (int r = 0; r < (int)SYM_PlayoffRows; r++)
-        for (int k = 0; k < 16; k++) {
-            int tm = c[SYM_playoffseats + 16u * (uint32_t)r + (uint32_t)k];
-            snprintf(s, sizeof s, "%s", tm < CART_TEAMS ? T[tm].abbr : "?");
-            field(f, s, k == 15);
-        }
-    fclose(f);
+    char path[1100];
+    snprintf(path, sizeof path, "%s/playoffs.csv", dir);
+    remove(path);
+    if (draws) {
+        if (!(f = create(dir, "playoffs.csv"))) return -1;
+        for (int k = 1; k <= 16; k++) fprintf(f, "%d%c", k, k < 16 ? ',' : '\n');
+        for (int r = 0; r < s->rows; r++)
+            for (int k = 0; k < 16; k++) field(f, T[seats[r][k]].abbr, k == 15);
+        fclose(f);
+    }
     return 0;
 }

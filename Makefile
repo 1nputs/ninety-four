@@ -8,7 +8,8 @@
 #   make runtime-selfcheck  pulseman's tests on the native game's own traces (nhl94 --record)
 #   make relaytest      the Z80 relay port against the sound traces
 #   make rulestest      the game rules on the game's routines (test/rules_test.c)
-#   make leaguetest     leagues: the cartridge's exported and built again, a 32-team one, broken ones
+#   make leaguetest     leagues: the cartridge's exported and built again, a 32-team one, broken ones,
+#                       hacks on the 32-team template (../roms or HACKS=) extracted
 #   make oracle         the hooked oracle core (build/nhl_oracle.so)
 #   make gen            regenerate the committed headers from ref/ and the asm rebuild
 CC      ?= gcc
@@ -34,9 +35,9 @@ rulestest: build/rulestest
 
 # leagues: the cartridge's exported and built again (byte for byte), a 32-team one, broken ones
 # (tools/leaguetest.py; the ROM as for make nhl94)
-build/leaguetest: native/league.c native/banner.c src/league.c src/rom.c src/league.h src/rom.h native/native.h test/league_test.c
+build/leaguetest: native/league.c native/banner.c native/romsrc.c src/league.c src/rom.c src/league.h src/rom.h native/native.h test/league_test.c
 	@mkdir -p build
-	$(CC) $(CFLAGS) -Isrc -Inative -I$(MDRT)/include -o $@ native/league.c native/banner.c src/league.c src/rom.c test/league_test.c
+	$(CC) $(CFLAGS) -Isrc -Inative -I$(MDRT)/include -o $@ native/league.c native/banner.c native/romsrc.c src/league.c src/rom.c test/league_test.c
 leaguetest: build/leaguetest build/nhl94$(EXE)
 	$(PY) tools/leaguetest.py
 

@@ -1,14 +1,15 @@
 /* Leagues (native/league.c), built on the cartridge:
  *
- *   league_test ROM CARTRIDGE_DIR [OTHER_DIR]
+ *   league_test ROM CARTRIDGE_DIR [OTHER_DIR] [--hack HACK DIR ...]
  *
  * CARTRIDGE_DIR is the cartridge's league as nhl94 --export-league writes it: built again it must
  * be the cartridge's, byte for byte (every team block and every entry of every table, the counts,
  * the playoff draws), on an untouched cartridge. OTHER_DIR (tools/leaguetest.py: 32 teams) must
  * build with its save RAM records apart from each other and from the cartridge's, with every
  * playoff team in a draw of 16 different ones, and with banners of their own for the teams whose
- * cities the cartridge has none for. The banners' letters (banner.c) must all be read off the
- * cartridge, and its banners drawn again from them as they are. */
+ * cities the cartridge has none for. A hack on the 32-team template (HACK), extracted to DIR, must
+ * build to its teams. The banners' letters (banner.c) must all be read off the cartridge, and its
+ * banners drawn again from them as they are. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -129,9 +130,61 @@ static void other(const char *dir)
     league_power_on();
 }
 
+/* a hack's league (romsrc.c), extracted to dir and built: its teams as the hack has them (what the
+ * game reads of each block, byte for byte, but for its palettes, the art team's until its art
+ * comes too, and the count of defensemen, which the game counts itself), its ratings and songs,
+ * its playoff draws but for the places a team in none was given */
+static void hack(const char *path, const char *dir)
+{
+    static uint8_t h[0x400001];
+    FILE *f = fopen(path, "rb");
+    if (!f) { CHECK(0, "cannot read %s", path); return; }
+    uint32_t n = (uint32_t)fread(h, 1, sizeof h, f);
+    fclose(f);
+    struct romsrc s;
+    char why[300];
+    CHECK(romsrc_hack(&s, h, n, rom_cart, why, sizeof why) == 0, "%s: %s", path, why);
+    league_next(dir);
+    league_power_on();
+    const uint8_t *m = rom_image;
+    CHECK(league_hash() != 0, "%s did not build: %s", dir, league_error());
+    if (!league_hash()) return;
+    CHECK(league.teams == s.teams && league.playoff_teams == s.playoff_teams && league.playoff_rows == s.rows,
+          "the counts: %d %d %d, the hack's %d %d %d", league.teams, league.playoff_teams, league.playoff_rows, s.teams, s.playoff_teams, s.rows);
+    int blocks = 0, moved = 0;
+    for (int t = 0; t < league.teams && t < s.teams; t++) {
+        /* (what the game reads of a block, through its offsets: some of the hack's have bytes of
+         * their own between the lines and the players) */
+        uint32_t hb = rs32(&s, s.table[LG_TeamList] + 4u * (uint32_t)t), mb = r32(m, LG(TeamList) + 4u * (uint32_t)t);
+        uint32_t hp = hb + r16(h, hb), mp = mb + r16(m, mb), players = hb + r16(h, hb + 4) - hp;
+        uint32_t hn = hb + r16(h, hb + 4), mn = mb + r16(m, mb + 4), names = block_size(h, hb) - r16(h, hb + 4);
+        int same = memcmp(m + mb + r16(m, mb + 6), h + hb + r16(h, hb + 6), 64) == 0                       /* lines */
+                   && memcmp(m + mb + r16(m, mb + 8), h + hb + r16(h, hb + 8), 3) == 0                    /* .sr */
+                   && (m[mb + r16(m, mb + 8) + 3] & 0xF0) == (h[hb + r16(h, hb + 8) + 3] & 0xF0)
+                   && r16(m, mb + r16(m, mb + 10)) == r16(h, hb + r16(h, hb + 10))                        /* .sodds */
+                   && mb + r16(m, mb + 4) - mp == players && memcmp(m + mp, h + hp, players) == 0
+                   && block_size(m, mb) - r16(m, mb + 4) == names && memcmp(m + mn, h + hn, names) == 0;
+        CHECK(same, "team %d's block", t);
+        blocks += same;
+        CHECK(m[LG(TeamRatings) + (uint32_t)t] == rs8(&s, s.table[LG_TeamRatings] + (uint32_t)t), "team %d's rating", t);
+        CHECK(memcmp(m + LG(TeamSongs) + 6u * (uint32_t)t, h + s.table[LG_TeamSongs] + 6u * (uint32_t)t, 6) == 0, "team %d's songs", t);
+    }
+    for (int i = 0; i < 16 * s.rows; i++) moved += m[LG(playoffseats) + (uint32_t)i] != h[s.table[LG_playoffseats] + (uint32_t)i];
+    int missing = 0;
+    for (int t = 0; t < s.playoff_teams; t++) {
+        int seen = 0;
+        for (int i = 0; i < 16 * s.rows; i++) seen += h[s.table[LG_playoffseats] + (uint32_t)i] == t;
+        missing += !seen;
+    }
+    CHECK(moved == missing, "the draws: %d places changed, for %d teams in none", moved, missing);
+    printf("  %s: %d of %d team blocks the hack's (their palettes aside), %d draw places given to teams in none\n", dir, blocks, s.teams, moved);
+    league_next(NULL);
+    league_power_on();
+}
+
 int main(int argc, char **argv)
 {
-    if (argc < 3) { fprintf(stderr, "usage: %s ROM CARTRIDGE_DIR [OTHER_DIR]\n", argv[0]); return 2; }
+    if (argc < 3) { fprintf(stderr, "usage: %s ROM CARTRIDGE_DIR [OTHER_DIR] [--hack HACK DIR ...]\n", argv[0]); return 2; }
     if (!rom_load(argv[1])) { fprintf(stderr, "cannot load %s\n", argv[1]); return 1; }
     int letters = 0, same = 0, banners = 0;
     CHECK(banner_prepare(rom_cart) == 0, "the cartridge's banners");
@@ -139,7 +192,10 @@ int main(int argc, char **argv)
     printf("  banners: %d letters; %d of %d cartridge banners drawn again from their letters as they are\n", letters, same, banners);
     CHECK(letters == 25 + 14 && same == banners, "the banners' letters");
     round_trip(argv[2]);
-    if (argc > 3) other(argv[3]);
+    for (int i = 3; i < argc; i++) {
+        if (!strcmp(argv[i], "--hack") && i + 2 < argc) { hack(argv[i + 1], argv[i + 2]); i += 2; }
+        else other(argv[i]);
+    }
     printf("league_test: %d checks, %d failed\n", checks, failed);
     return failed != 0;
 }

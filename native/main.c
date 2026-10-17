@@ -11,6 +11,7 @@
  *              [--fm-model ym2612|ym3438] [--watch ADDR,...] [--restart-at FRAME]
  *              [--four-way] [--input2 FILE] [--input3 FILE] [--input4 FILE]
  *              [--rule NAME=VALUE ...] [--league DIR] [--check-league DIR] [--export-league DIR]
+ *              [--extract-rom HACK DIR]
  *
  * --headless runs without a window or pacing (as fast as it goes): with --frames it stops, --shot
  * writes the last picture, --wav the sound, --input plays pad 1 from a script (tools/oracle/scripts)
@@ -37,7 +38,8 @@
  * takes them from its menu's Game rules page) set the game's rules (rules.c) and its league, a
  * folder of teams (league.c: DIR, or a folder of leagues/), whose save RAM is its own
  * (out/nhl94-NAME.srm). --export-league DIR writes the cartridge's league into DIR, to change;
- * --check-league DIR builds one and says what is wrong with it, or what it holds. */
+ * --extract-rom HACK DIR a hack's, one made on the community's 32-team template (read as data,
+ * never run); --check-league DIR builds one and says what is wrong with it, or what it holds. */
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -192,6 +194,28 @@ static void rom_use(const uint8_t *b, size_t n, void *user) { (void)n; (void)use
 /* the save RAM's file for the game about to start: the league's own (the window's sram_file) */
 static const char *sram_base;
 static const char *sram_for(void *user) { (void)user; return league_sram(sram_base); }
+
+/* --extract-rom HACK DIR: a hack's league (one made on the 32-team template) written as a folder,
+ * read from it as data (romsrc.c): 0, -1 */
+static int extract_league(const char *path, const char *dir)
+{
+    FILE *f = fopen(path, "rb");
+    static uint8_t buf[0x400001];
+    char why[300], name[64];
+    if (!f) { fprintf(stderr, "--extract-rom: cannot read %s\n", path); return -1; }
+    size_t n = fread(buf, 1, sizeof buf, f);
+    fclose(f);
+    struct romsrc s;
+    if (romsrc_hack(&s, buf, (uint32_t)n, rom_cart, why, sizeof why) < 0) { fprintf(stderr, "--extract-rom %s: %s\n", path, why); return -1; }
+    const char *base = strrchr(path, '/'), *dot;
+    base = base ? base + 1 : path;
+    dot = strrchr(base, '.');
+    snprintf(name, sizeof name, "%.*s", dot && dot > base ? (int)(dot - base) : (int)strlen(base), base);
+    printf("%s: %d teams, %d for the cup, %d playoff draws\n", name, s.teams, s.playoff_teams, s.rows);
+    if (league_extract(&s, dir, name) < 0) { fprintf(stderr, "--extract-rom %s: %s\n", path, league_error()); return -1; }
+    printf("its league is in %s: its files are yours to change (README.md, \"Leagues\")\n", dir);
+    return 0;
+}
 
 /* --league DIR: the folder, or a folder of leagues/ */
 static const char *league_folder(const char *arg)
@@ -498,7 +522,7 @@ static void make_parent(const char *path)
 int main(int argc, char **argv)
 {
     const char *rom = "NHL 94 (UE) [!].gen", *rom_given = NULL, *sram = "out/nhl94.srm", *league_arg = NULL;
-    const char *export_dir = NULL, *check_dir = NULL;
+    const char *export_dir = NULL, *check_dir = NULL, *extract_rom = NULL, *extract_dir = NULL;
     int sram_given = 0;
     int scale = 0, aspect = 0, headless = 0;
     for (int i = 1; i < argc; i++) {
@@ -513,6 +537,7 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--league") && i + 1 < argc) league_arg = league_folder(argv[++i]);
         else if (!strcmp(argv[i], "--export-league") && i + 1 < argc) export_dir = argv[++i];
         else if (!strcmp(argv[i], "--check-league") && i + 1 < argc) check_dir = league_folder(argv[++i]);
+        else if (!strcmp(argv[i], "--extract-rom") && i + 2 < argc) { extract_rom = argv[++i]; extract_dir = argv[++i]; }
         else if (!strcmp(argv[i], "--shots") && i + 1 < argc) shots_dir = argv[++i];
         else if (!strcmp(argv[i], "--every") && i + 1 < argc) shots_every = atol(argv[++i]);
         else if (!strcmp(argv[i], "--wav") && i + 1 < argc) wav_path = argv[++i];
@@ -546,12 +571,13 @@ int main(int argc, char **argv)
                             "       [--record DIR] [--fm-core nuked|ymfm] [--fm-model ym2612|ym3438] [--watch ADDR,...]\n"
                             "       [--restart-at FRAME] [--four-way] [--input2 FILE] [--input3 FILE] [--input4 FILE]\n"
                             "       [--rule NAME=VALUE ...] (the game rules: native/rules.c) [--league DIR] (league.c)\n"
-                            "       [--check-league DIR] [--export-league DIR]\n", argv[0]);
+                            "       [--check-league DIR] [--export-league DIR] [--extract-rom HACK DIR]\n", argv[0]);
             return 2;
         }
     }
-    if ((headless || export_dir || check_dir) && !rom_load(rom)) { fprintf(stderr, "cannot load the ROM %s\n", rom); return 1; }   /* (the window: pulseman's menu) */
-    if (export_dir || check_dir) {                        /* (and nothing else) */
+    if ((headless || export_dir || check_dir || extract_rom) && !rom_load(rom)) { fprintf(stderr, "cannot load the ROM %s\n", rom); return 1; }   /* (the window: pulseman's menu) */
+    if (export_dir || check_dir || extract_rom) {         /* (and nothing else) */
+        if (extract_rom && extract_league(extract_rom, extract_dir) < 0) return 1;
         if (export_dir && league_export(export_dir) < 0) { fprintf(stderr, "--export-league %s: %s\n", export_dir, league_error()); return 1; }
         if (export_dir) printf("the cartridge's league is in %s: its files are yours to change (README.md, \"Leagues\")\n", export_dir);
         if (check_dir && league_check(check_dir, 1) < 0) { fprintf(stderr, "%s: %s\n", check_dir, league_error()); return 1; }

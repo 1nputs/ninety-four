@@ -84,6 +84,15 @@ drawn in the cartridge's own lettering on its art team's colours. Each league ke
 plays on with the league it was saved in. The cartridge's own league, exported and built again,
 plays the original frame for frame.
 
+A league can also come from a community hack made on the 32-team template (NHL 94 2025, NHL 2026
+94 Edition, the 30th Anniversary Championship Teams and the like): `nhl94 --extract-rom
+"HACK.bin" leagues/2026` writes its teams, players, ratings, lines and playoff draws out the same
+way. The hack is only read, never run, and stays yours: nothing from it goes anywhere but that
+folder. Its colours, logos, banners and photos are still to come (its colours belong to its own
+player sprites), so until then its teams wear their art team's. Two players may share a number
+(the lines then name them); names up to 24 letters are taken, though the roster screen has room
+for about 19.
+
 **Captures:** the last 20 seconds are always kept; F10 (or the menu's Capture page) saves them,
 and F11 records until you press it again. They go to `videos/` as GIFs (exact colours, 30 frames
 a second, no sound). The Capture page sets how long the replay is and a GIF's size.
@@ -161,7 +170,8 @@ tell us what it said.
   golden-check` compares the native build's own output with a recorded build, bit for bit
   (about 227,000 frames, the rules' and leagues' own runs among them), plus save-state round
   trips. `make rulestest` and `make leaguetest` check the game rules and the leagues (the
-  cartridge's league exported and built again, byte for byte). pulseman is checked on the oracle's vectors
+  cartridge's league exported and built again, byte for byte; with hack ROMs in `../roms` or
+  `HACKS=`, each extracted, built to its teams and played). pulseman is checked on the oracle's vectors
   (`make runtime-check`) and on this game's own recordings (`make runtime-selfcheck`).
 - **Done.** The harness, the game-play core, video and sound, the frame drivers, native running,
   lockstep, the whole front end (it boots from power on), a cleanup, golden runs, native save
@@ -214,6 +224,7 @@ From the least ambitious to the most.
 - [x] Save slots with thumbnails; quick resume on quit and start (states during play)
 - [x] Game rules, the host's for every player (Classic: the original): period lengths, overtime, the weight bug fix, the second assist fix, plus/minus and checks, skating, burst, shots, puck, energy, penalties, streaks, presets, the rink view
 - [x] Leagues of your own, up to 32 teams: teams, players, lines, colours and pictures in files, name banners drawn for new teams (logos borrowed from the cartridge's teams for now)
+- [x] Leagues extracted from hacks on the 32-team template (teams, players, ratings, lines, draws; their art still to come)
 - [ ] Skip the EA screen, boot straight into a game
 - [x] Colour options; scanlines, CRT mask, composite dither blending
 - [ ] IPS and BPS patches, soft-patching, the ROM check as a toggle for data hacks

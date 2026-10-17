@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include "mdrt/mdrt.h"
 #include "mdrt/platform_sdl2.h"
+#include "league.h"
 
 extern mdrt *native_m;                  /* the console */
 
@@ -68,6 +69,24 @@ const char *league_name(void);
 int league_use(const char *dir, uint64_t hash);   /* a state's league (dir's, when its checksum is hash): 0, -1 */
 int league_check(const char *dir, int describe);   /* it builds (described on stdout): 0, -1 */
 int league_export(const char *dir);     /* the cartridge's league as a folder: 0, -1 */
+/* where a ROM keeps its league (romsrc.c): the cartridge, or a hack on the community's 32-team
+ * template, whose tables its code points at where the cartridge's points at its own */
+struct romsrc {
+    const uint8_t *b;
+    uint32_t size;
+    int hack;                           /* 0: the cartridge */
+    uint32_t table[LG_TABLES];          /* (league.h's tables; BannerSlotMap none) */
+    int teams, playoff_teams, rows;
+};
+void romsrc_cartridge(struct romsrc *s, const uint8_t *cart);
+/* rom (size bytes), a hack read against the cartridge cart: 0, else -1 and why */
+int romsrc_hack(struct romsrc *s, const uint8_t *rom, uint32_t size, const uint8_t *cart, char *why, size_t why_size);
+int romsrc_block_ok(const struct romsrc *s, int t);    /* team t's block reads as the game reads it */
+uint8_t rs8(const struct romsrc *s, uint32_t a);        /* (0 past its end) */
+uint16_t rs16(const struct romsrc *s, uint32_t a);
+uint32_t rs32(const struct romsrc *s, uint32_t a);
+/* s's league written as a folder named name (league_export: the cartridge's): 0, -1 */
+int league_extract(const struct romsrc *s, const char *dir, const char *name);
 /* the leagues/ folder's leagues for the menu (the cartridge's first): the count */
 int league_list(const char *const **names, const char *const **labels);
 const char *league_sram(const char *base);   /* the next game's save RAM file (base: the cartridge's) */
