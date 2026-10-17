@@ -8,6 +8,7 @@
 #include "hal.h"
 #include "rom.h"
 #include "symbols_gen.h"
+#include "view.h"
 #include "checks_tables_gen.h"
 #include "checks_strings_gen.h"
 
@@ -207,7 +208,7 @@ void assgoaliectrl(uint8_t *tm, struct SortObj *o)
         d0 = (int16_t)(d0 - (int16_t)g.Hpos);
         d1 = (int16_t)(d1 - (int16_t)g.Vpos);
         o->pflags3 &= (uint8_t)~(1 << pf3gctrl);
-        if (d0 >= 0x74 || d0 <= -0x74 || d1 >= 0x64 || d1 <= -0x64)
+        if (d0 >= 0x74 + view_more() || d0 <= -0x74 - view_more() || d1 >= 0x64 || d1 <= -0x64)   /* (off screen) */
             o->pflags3 |= 1 << pf3gctrl;
         if (o->pflags3 & (1 << pf3gctrl)) { checkanim(tm, o); return; }
     }

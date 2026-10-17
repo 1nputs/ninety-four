@@ -6,6 +6,7 @@
 #include "hal.h"
 #include "rom.h"
 #include "symbols_gen.h"
+#include "view.h"
 #include "period_strings_gen.h"
 
 #define PFLAG(o, b) ((o)->pflags & (1 << (b)))
@@ -89,12 +90,12 @@ void AddArenaAnimSprite(uint8_t **sat, uint16_t *link)
     uint16_t d6 = *link;
     for (; n >= 0; n--, a0 += 8) {
         int16_t sx = (int16_t)rd16(a0), sy = (int16_t)rd16(a0 + 2);
-        if (y0 > sy || y1 < sy || x0 > sx || x1 < sx) continue;
+        if (y0 > sy || y1 < sy || x0 - view_more() > sx || x1 + view_more() < sx) continue;
         wr16(a6, (uint16_t)(sy + 0x70 - y0));
         a6[2] = a0[7];
         a6[3] = (uint8_t)d6;
         wr16(a6 + 4, (uint16_t)((rd16(a0 + 6) & 0xF800) + rd16(a0 + 4) + g.arenaanimchars));
-        wr16(a6 + 6, (uint16_t)(sx + 0x70 - x0));
+        wr16(a6 + 6, (uint16_t)(sx + 0x70 - x0 + view_shift()));   /* (the wide view: to the middle) */
         a6 += 8;
         d6++;
         if (d6 == 0x40) break;

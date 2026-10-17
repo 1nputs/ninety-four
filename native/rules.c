@@ -22,6 +22,8 @@ static const char *const rest_names[3] = { "classic", "faster", "slower" };
 static const char *const penalty_names[3] = { "classic", "fewer", "rare" };
 static const char *const penalty_labels[3] = { "classic", "about half", "a quarter" };
 static const char *const streak_names[3] = { "classic", "milder", "off" };
+static const char *const view_names[2] = { "classic", "wide" };
+static const char *const view_labels[2] = { "256 wide", "320 wide" };
 
 const mdrt_sdl_option rule_options[RULE_COUNT] = {
     [RULE_PERIOD_LENGTHS] = { "rules.period_lengths", "Period lengths", 2, period_names, period_labels, 0, 0, 0, 0 },
@@ -38,6 +40,7 @@ const mdrt_sdl_option rule_options[RULE_COUNT] = {
     [RULE_BOX_REST] = { "rules.box_rest", "Rest in the penalty box", 2, off_on, NULL, 0, 0, 0, 0 },
     [RULE_PENALTIES] = { "rules.penalties", "Penalties called", 3, penalty_names, penalty_labels, 0, 0, 0, 0 },
     [RULE_STREAKS] = { "rules.streaks", "Hot and cold streaks", 3, streak_names, NULL, 0, 0, 0, 0 },
+    [RULE_VIEW] = { "rules.view", "Rink view", 2, view_names, view_labels, 0, 0, 0, 0 },
 };
 
 /* the presets, the page's first line: each sets every rule (custom: as they are) */
@@ -76,20 +79,21 @@ const mdrt_sdl_option *rules_page(int *count)
     return rule_page;
 }
 
-/* a preset chosen sets every rule; a rule changed makes the preset custom (or the preset it now is) */
+/* a preset chosen sets every rule but the view (a matter of taste); a rule changed makes the
+ * preset custom (or the preset it now is) */
 int rules_page_changed(int which, int *values, void *user)
 {
     (void)user;
     if (which == P_LEAGUE) return 0;
     if (which == P_PRESET) {
         if (values[P_PRESET] == PRESET_CUSTOM) return 0;
-        for (int i = 0; i < RULE_COUNT; i++) values[P_RULES + i] = presets[values[P_PRESET]][i];
+        for (int i = 0; i < RULE_COUNT; i++) if (i != RULE_VIEW) values[P_RULES + i] = presets[values[P_PRESET]][i];
         return 1;
     }
     int now = PRESET_CUSTOM;
     for (int p = 0; p < 3 && now == PRESET_CUSTOM; p++) {
         int same = 1;
-        for (int i = 0; i < RULE_COUNT; i++) same &= values[P_RULES + i] == presets[p][i];
+        for (int i = 0; i < RULE_COUNT; i++) same &= i == RULE_VIEW || values[P_RULES + i] == presets[p][i];
         if (same) now = p;
     }
     if (values[P_PRESET] == now) return 0;
@@ -131,7 +135,10 @@ int rules_arg(const char *arg)
     size_t n = (size_t)(eq - arg);
     if ((n == 6 && !strncmp(arg, "preset", 6)) || (n == 12 && !strncmp(arg, "rules.preset", 12))) {
         for (int p = 0; p < 3; p++)
-            if (!strcmp(eq + 1, preset_names[p])) { memcpy(next, presets[p], RULE_COUNT); return 0; }
+            if (!strcmp(eq + 1, preset_names[p])) {
+                for (int i = 0; i < RULE_COUNT; i++) if (i != RULE_VIEW) next[i] = presets[p][i];
+                return 0;
+            }
         return -1;
     }
     for (int i = 0; i < RULE_COUNT; i++) {

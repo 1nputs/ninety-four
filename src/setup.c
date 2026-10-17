@@ -5,6 +5,7 @@
 #include "hal.h"
 #include "rom.h"
 #include "symbols_gen.h"
+#include "view.h"
 #include "anim_gen.h"
 #include "setup_tables_gen.h"
 #include "setup_strings_gen.h"
@@ -242,6 +243,31 @@ uint16_t setupTeamBlocksMap(uint16_t chars)
     return (uint16_t)(g.basetileoffset + 0x2C);
 }
 
+/* the wide view (view.h): the rink in 40 columns, plane A's overlays VIEW_SHIFT to the right */
+void view_rink_mode(void)
+{
+    if (!view_wide()) return;
+    uint16_t saved = g.disflags;
+    g.disflags |= HI(dfng);
+    vdp_ctrl16(SYM_VDPR_MODE4 + 0x81);
+    Vmaddr(g.VSCRLPM);
+    vdp_data(VIEW_SHIFT);
+    g.disflags = saved;
+}
+
+/* the wide view on a rink set up in 32 columns (a snapshot's): 40 columns, the camera within the
+ * wide rink's reach, and plane A's first two rows' right halves, which setupTeamBlocksMap's
+ * unpacking ran over, cleared */
+void view_rink_resume(void)
+{
+    if (!view_wide()) return;
+    view_rink_mode();
+    if ((int16_t)g.Hpos > VIEW_HPOS) g.Hpos = VIEW_HPOS;  /* (and the camera within the wide rink) */
+    if ((int16_t)g.Hpos < -VIEW_HPOS) g.Hpos = (uint16_t)-VIEW_HPOS;
+    DoFill(0x20, (uint16_t)(g.VmMap1 + 0x40), 0x7FF);
+    DoFill(0x20, (uint16_t)(g.VmMap1 + 0xC0), 0x7FF);
+}
+
 /* setup94.asm:setupice. Set up the rink: the VDP layout (32 columns, maps at $C000 / $E000 /
  * $F000, sprites at $DC00, scroll at $FC00), clear VRAM, then load the rink, team, EASN, energy
  * bar, crowd, sprite, framer, font and team block tiles, the default objects and palettes, flip
@@ -257,6 +283,7 @@ void setupice(void)
     g.VmMap3 = 0xF000; g.Map3col1 = 5;
     g.VSCRLPM = 0xFC00;
     setVram(0);
+    view_rink_mode();                                     /* (the wide view's 40 columns) */
     g.sflags &= (uint16_t)~HI(sfpz);
     uint16_t saved = g.disflags;
     g.disflags |= HI(dfng);
@@ -285,6 +312,7 @@ void setupice(void)
     g.BigFontChars = c;
     c = DecompressGraphicsWithCallback(SYM_BigFontMap + 8, c, inline_table(SYM_setupice + 1, SYM_setupice + 0x200, big));
     c = setupTeamBlocksMap(c);
+    if (view_wide()) DoFill(0x80, g.VmMap1, 0x7FF);       /* (its unpacking ran over plane A's first two rows: the wide view shows their other half) */
     g.ExtraChars = c;
     if (g.gmode & (1 << gmdir))
         for (int i = 0; i < 12; i++) sortobj(i)->pflags ^= 1 << pfgoal;

@@ -24,6 +24,8 @@ enum {
     RULE_BOX_REST,              /* 1: players in the penalty box rest as on the bench */
     RULE_PENALTIES,             /* penalties called (not icing or offside): all, about half, a quarter */
     RULE_STREAKS,               /* hot and cold streaks' effect on ratings: 100, 50, 0 % */
+    RULE_VIEW,                  /* 1: the rink 320 wide (src/view.h): the camera moves less, players
+                                 * count as off screen further out (a pad takes its goalie later) */
     RULE_COUNT
 };
 extern uint8_t rules[RULE_COUNT];   /* each rule's value (0: the original's) */

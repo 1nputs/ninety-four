@@ -58,12 +58,16 @@ RUNS = [
     ('league32_attract', 7200, ['--league', 'out/leagues/thirty-two']),
     ('league32_game', 16000, ['--input', 'full_game_30s.txt', '--league', 'out/leagues/thirty-two']),
     ('league32_playoff', 15000, ['--input', 'playoff_game_30s.txt', '--league', 'out/leagues/thirty-two']),
+    # the wide view (the rink 320 wide: src/view.h)
+    ('wide_game', 16000, ['--input', 'full_game_30s.txt', '--rule', 'view=wide']),
+    ('wide_faceoff', 18000, ['--snap', 'out/states/faceoff.snap', '--input', 'random_seed94.txt', '--rule', 'view=wide']),
+    ('wide_pause_menus', 8600, ['--input', 'pause_menus.txt', '--rule', 'view=wide']),
 ]
 # runs that must be another's frame for frame but for work RAM (the league's tables elsewhere)
 LIKE = {'league_game': 'full_game', 'league_playoff': 'playoff_game'}
 # the runs a state is saved in (from this frame on) and loaded from
 STATES = {'full_game': 3000, 'playoff_game': 9000, 'faceoff': 6000, 'rules_faceoff': 6000, 'simulation_faceoff': 6000,
-          'league32_game': 3000}
+          'league32_game': 3000, 'wide_faceoff': 6000}
 COLUMNS = ['work RAM', 'VDP state', 'Z80 RAM', 'picture', 'sound', 'samples']
 SAVED = re.compile(r'state saved at frame (\d+) \(golden line (\d+)\)')
 

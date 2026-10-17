@@ -5,6 +5,7 @@
 #include "hal.h"
 #include "rom.h"
 #include "symbols_gen.h"
+#include "view.h"
 
 /* display94.asm:updatesound. Move the crowd noise volume (psg noise channel, asv) toward
  * crowdlevel. */
@@ -59,7 +60,7 @@ static inline void sat_entry(struct Vid *v, uint16_t y, uint8_t size, uint16_t t
     v->sat[2] = size;
     v->sat[3] = (uint8_t)v->link;
     wr16(v->sat + 4, tile);
-    wr16(v->sat + 6, x);
+    wr16(v->sat + 6, (uint16_t)(x + view_shift()));      /* (the wide view: to the middle) */
     v->sat += 8;
     v->link++;
 }
@@ -182,7 +183,7 @@ void setvideo(void)
 void updatescroll(struct Vid *v)
 {
     if (g.sflags & HI(sfhor)) return;
-    g.Hscroll = (uint16_t)(-0x40 - (int16_t)g.Hpos);
+    g.Hscroll = (uint16_t)(-0x40 - (int16_t)g.Hpos + view_shift());
     int16_t d1 = (int16_t)g.Vpos;
     g.Vscroll = (uint16_t)-d1;
     int16_t d4 = (int16_t)g.Oldrow;
@@ -310,7 +311,7 @@ static void crowd_frame(int16_t d0, const uint8_t *a1, int16_t d4, int16_t d5, s
     int16_t y0 = (int16_t)(0x170 - d5 - 0x80), y1 = (int16_t)(0x170 - d5 + 0x70);
     for (; n >= 0; n--, a0 += 8) {
         int16_t sx = (int16_t)rd16(a0), sy = (int16_t)rd16(a0 + 2);
-        if (y0 > sy || y1 < sy || x0 > sx || x1 < sx) continue;
+        if (y0 > sy || y1 < sy || x0 - view_more() > sx || x1 + view_more() < sx) continue;
         uint16_t tile = (uint16_t)((rd16(a0 + 6) & 0xF800) + rd16(a0 + 4) + g.animchars);
         sat_entry(v, (uint16_t)(sy + 0x70 - y0), a0[7], tile, (uint16_t)(sx + 0x70 - x0));
         if (v->link == SAT_MAX) return;
@@ -439,14 +440,14 @@ static void sso_arrow(const uint8_t *a0, struct SortObj *a3, uint16_t d3, struct
         d1 = (int16_t)(d1 - (int16_t)g.Vpos);
     }
     unsigned d2 = 0;
-    if (!(d0 < 0x74)) d2 |= 8;
-    if (!(d0 > -0x74)) d2 |= 4;
+    if (!(d0 < 0x74 + view_more())) d2 |= 8;
+    if (!(d0 > -0x74 - view_more())) d2 |= 4;
     if (!(d1 < 0x64)) d2 |= 1;
     if (!(d1 > -0x64)) d2 |= 2;
     if (d2 == 0) return;
     d2 = rom_ptr(SYM_jdtab)[d2];
     const uint16_t *t = sso_tab + d2 * 4;
-    if (t[0] != 0) d0 = (int16_t)t[0];
+    if (t[0] != 0) d0 = (int16_t)((int16_t)t[0] + ((int16_t)t[0] < 0 ? -view_more() : view_more()));
     d0 = (int16_t)(d0 + 0x100);
     a3->Xpos = d0;
     if (t[1] != 0) d1 = (int16_t)t[1];
@@ -644,7 +645,7 @@ void find3d(int16_t *x, int16_t *y, int16_t z)
         d0 = (int16_t)(d0 - (int16_t)g.Hpos);
         d1 = (int16_t)(d1 - (int16_t)g.Vpos);
     }
-    if (d0 > 0x90 || d0 < -0x90) { *x = d0; *y = 0x4E20; return; }
+    if (d0 > 0x90 + view_more() || d0 < -0x90 - view_more()) { *x = d0; *y = 0x4E20; return; }
     d0 = (int16_t)(d0 + 0x100);
     d1 = (int16_t)(d1 + z + (z >> 1));
     if (d1 > 0x90 || d1 < -0x90) { *x = d0; *y = 0x4E20; return; }

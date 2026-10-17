@@ -56,6 +56,7 @@
 #include "z80.h"
 #include "native.h"
 #include "rules.h"
+#include "view.h"
 #include "mdrt/platform_sdl2.h"
 
 static const char *snap, *shot_path, *shots_dir, *wav_path, *lockstep_path, *golden_path, *input_path[MDRT_PADS];
@@ -233,6 +234,7 @@ static void resume(void)
     uint32_t pc = snapshot_full ? (uint32_t)(p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24) : 0;
     if (pc >= SYM_setvideo && pc < SYM_setvideo + 12) {   /* in setvideo's wait for dfok, at a game frame's end */
         native_set_sr(0x2300);                            /* the game plays unmasked, as setupice left it */
+        view_rink_resume();                               /* (the wide view: the snapshot's rink is 32 columns) */
         run68k(resume_game_loop);
     } else if (pc) {
         fprintf(stderr, "%s: the 68k was at %06x, not a place the native game resumes from: it starts the game loop\n", snap, pc);

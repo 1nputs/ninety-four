@@ -5,6 +5,7 @@
 #include "hal.h"
 #include "rom.h"
 #include "symbols_gen.h"
+#include "view.h"
 #include "stats_strings_gen.h"
 
 #define RAM_W(off) ram_ptr(RAM_BASE + (off))
@@ -64,6 +65,7 @@ void ReloadRinkGraphics(void)
     g.Map3col1 = 5;
     g.disflags = saved;
     g.disflags |= HI(df32c);
+    view_rink_mode();                                     /* (the wide view's 40 columns) */
     uint16_t c = DecompressGraphicsPlain(g.sflags4 & HI(4) ? SYM_RevRinkTiles : SYM_Rinktiles, g.rinkvrcset);
     LoadHomeTeamGfx(c);
     DecompressGraphicsWithCallback(SYM_SmallFontMap + 8, g.smallfontchars,

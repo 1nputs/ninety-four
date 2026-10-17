@@ -4,6 +4,7 @@
 #include <string.h>
 #include "game.h"
 #include "symbols_gen.h"
+#include "view.h"
 #include "hal.h"
 #include "rom.h"
 #include "replay_strings_gen.h"
@@ -238,8 +239,8 @@ uint16_t RestoreReplayFrame(uint32_t frame, uint8_t *cam)
 /* replay94.asm:ClampReplayView. Clamp Hpos to -$3C..$3C and Vpos to -$C8..$100. */
 void ClampReplayView(void)
 {
-    if (0x3C < (int16_t)g.Hpos) g.Hpos = 0x3C;
-    else if (!(-0x3C <= (int16_t)g.Hpos)) g.Hpos = (uint16_t)-0x3C;
+    if (view_hpos() < (int16_t)g.Hpos) g.Hpos = (uint16_t)view_hpos();   /* (the wide view's rink: less far) */
+    else if (!(-view_hpos() <= (int16_t)g.Hpos)) g.Hpos = (uint16_t)-view_hpos();
     if (0x100 < (int16_t)g.Vpos) g.Vpos = 0x100;
     else if (!(-0xC8 <= (int16_t)g.Vpos)) g.Vpos = (uint16_t)-0xC8;
 }
@@ -603,11 +604,11 @@ void checkwindow(void)
         if (d0 <= 0x28) move = 0;
         else {
             d1 = (int16_t)(d3 - 0x28);
-            if (!(d1 <= 0x3C)) d1 = 0x3C;
+            if (!(d1 <= view_hpos())) d1 = view_hpos();   /* (the wide view's rink: less far) */
         }
     } else {
         d1 = (int16_t)(d3 + 0x28);
-        if (!(d1 >= -0x3C)) d1 = -0x3C;
+        if (!(d1 >= -view_hpos())) d1 = (int16_t)-view_hpos();
     }
     if (move) {
         d1 = (int16_t)(d1 - (int16_t)g.Hpos);

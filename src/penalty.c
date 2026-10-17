@@ -9,6 +9,7 @@
 #include "hal.h"
 #include "rom.h"
 #include "symbols_gen.h"
+#include "view.h"
 #include "penalty_tables_gen.h"
 #include "penalty_strings_gen.h"
 
@@ -730,9 +731,10 @@ void SetHor(void)
 {
     g.sflags |= HI(sfhor);
     while (g.disflags & HI(dfok)) hal_wait_vblank();      /* wait for dfok clear */
-    g.Hscroll = 0;
+    g.Hscroll = (uint16_t)view_shift();                   /* (the wide view: the 256-wide rink in the middle) */
     g.Vscroll = 0;
     SprSort();
+    if (view_shift()) DoFill(0x800, g.VmMap2, 0x7FF);     /* (and nothing beside it) */
     printz(str_SetHor_1, sizeof str_SetHor_1);
     uint32_t a1 = SYM_HorRinkMap + rd32(rom_ptr(SYM_HorRinkMap) + 4);
     dobitmap(0, a1, SYM_HorRinkTiles, 0, 0, 0x20, 0x1C, g.rinkvrcset, 0);   /* a0 (the palette) is not set */

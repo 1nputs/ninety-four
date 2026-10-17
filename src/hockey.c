@@ -7,6 +7,7 @@
 #include "hal.h"
 #include "rom.h"
 #include "symbols_gen.h"
+#include "view.h"
 #include "hockey_tables_gen.h"
 #include "hockey_strings_gen.h"
 
@@ -263,6 +264,7 @@ void startpause4(void) { g.pausepad = 4; g.sflags |= HI(sfpj); startpause(); }
  * the horizontal rink, the crowd silenced, plane 3 erased. */
 void SetupPauseScreen(void)
 {
+    if (view_wide()) vdp_ctrl16(SYM_VDPR_MODE4);         /* (the wide view: the window plane is 32 columns) */
     vdp_ctrl16(SYM_VDPR_WINX);
     vdp_ctrl16(SYM_VDPR_WINY + 0x1C);
     SetHor();
@@ -394,6 +396,7 @@ void Pausemode(void)
     }
     vdp_ctrl16(SYM_VDPR_WINX);
     vdp_ctrl16(SYM_VDPR_WINY);
+    view_rink_mode();                                     /* (the wide view's 40 columns again) */
     g.disflags |= HI(dfclock);
     g.sflags &= (uint16_t)~HI(sfpz);
     printscores1();
