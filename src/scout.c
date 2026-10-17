@@ -222,7 +222,7 @@ void DrawMatchupPicture(uint32_t pic, uint16_t chars, uint16_t palbits)
 void DrawMatchupLogo(uint32_t logo, uint16_t d3, uint16_t chars, uint16_t palbits)
 {
     uint16_t off = (uint16_t)((uint16_t)(d3 << 3) - (palbits == 4 ? 0x40 : 0x20));
-    DrawMatchupBitmap(SYM_TeamLogoPalettes + (uint32_t)(int16_t)off, logo + rd32(rom_ptr(logo + 4)), logo + 8, chars, palbits);
+    DrawMatchupBitmap(LG(TeamLogoPalettes) + (uint32_t)(int16_t)off, logo + rd32(rom_ptr(logo + 4)), logo + 8, chars, palbits);
 }
 
 /* scout94.asm:DrawMatchupBitmap. A 6 x 6 dobitmap, then the 8 x 3 name area below it erased (at
@@ -239,7 +239,7 @@ void DrawMatchupBitmap(uint32_t pal, uint32_t map, uint32_t tiles, uint16_t char
 uint32_t GetTeamLogo(uint16_t *d3)
 {
     *d3 = (uint16_t)(*d3 << 2);
-    return rd32(rom_ptr(SYM_TeamLogoBitmaps + (uint32_t)(int16_t)*d3));
+    return rd32(rom_ptr(LG(TeamLogoBitmaps) + (uint32_t)(int16_t)*d3));
 }
 
 /* the rating of player d0 of team a2 (CalcAttrib with the overall weights of a skater or, in the

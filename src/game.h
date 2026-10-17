@@ -5,6 +5,7 @@
 #include "ram.h"
 #include "rom.h"
 #include "rules.h"
+#include "league.h"
 
 /* A byte access to a word flag (btst #n,(x).w) tests bit n of the HIGH byte: bit n+8 of the word. */
 #define HI(n) (1u << ((n) + 8))

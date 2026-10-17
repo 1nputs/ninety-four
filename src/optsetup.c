@@ -45,8 +45,8 @@ void GameSetUp(void)
     g.setupprevline = 0;
     PrintOptionNames();
     if (g.demoflag == 0) {                                /* after a demo: random teams */
-        g.Opt1Team = randomd0(SYM_NumTeams);
-        g.Opt2Team = randomd0(SYM_NumTeams);
+        g.Opt1Team = randomd0(league.teams);
+        g.Opt2Team = randomd0(league.teams);
     }
     ST_W(g.demoflag);
     if (g.OptPlayMode != 4) {
@@ -246,7 +246,8 @@ void ChangeOption(uint16_t line, int16_t d2)
     uint8_t *opt = RAM_W(RAM_OFF_OptPlayMode) + line;
     uint32_t limits = g.FourWayPlay ? SYM_OptionLimits4Way : SYM_OptionLimits;
     uint16_t lo = 0, hi = rd16(rom_ptr(limits + line)), v = rd16(opt);
-    if ((int16_t)g.OptPlayMode >= 2 && g.OptPlayMode != 4 && line == 4) hi = SYM_NumPlayoffTeams;
+    if (line == 4 || line == 6) hi = league.teams;        /* (the league's; the cartridge's table says 28) */
+    if ((int16_t)g.OptPlayMode >= 2 && g.OptPlayMode != 4 && line == 4) hi = league.playoff_teams;
     if (line == 8 && rules[RULE_PERIOD_LENGTHS]) hi = 7;  /* (rules: more period lengths) */
     if (line == 2) {                                      /* Players */
         if (g.OptPlayMode == 4) {
@@ -350,7 +351,7 @@ void PrintOptTeamName(uint16_t line)
     print(SYM_BlankValueTxt);
     g.printx = x;
     uint16_t team = option(line);
-    uint32_t a1 = rd32(rom_ptr(SYM_TeamList + (uint16_t)(team << 2)));
+    uint32_t a1 = rd32(rom_ptr(LG(TeamList) + (uint16_t)(team << 2)));
     a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1 + 4));
     if (team == 0xE) a1 = SYM_RangersTxt;
     else if (team == 0xD) a1 = SYM_IslandersTxt;
@@ -610,8 +611,8 @@ void DrawTeamLogo(void)
     g.printy = 6;
     int home = (g.setupcardflags & CARD(2)) != 0;
     uint16_t chars = home ? g.homepicchars : g.vispicchars, team = g.logoteam;
-    uint32_t bmp = rd32(rom_ptr(SYM_TeamLogoBitmaps + (uint16_t)(team << 2)));
-    uint32_t pal = SYM_TeamLogoPalettes + (uint32_t)(int16_t)(uint16_t)((uint16_t)(team << 5) - (home ? 0x20 : 0x40));
+    uint32_t bmp = rd32(rom_ptr(LG(TeamLogoBitmaps) + (uint16_t)(team << 2)));
+    uint32_t pal = LG(TeamLogoPalettes) + (uint32_t)(int16_t)(uint16_t)((uint16_t)(team << 5) - (home ? 0x20 : 0x40));
     uint8_t keep[8];
     memcpy(keep, RAM_W(RAM_OFF_palfadenew + 0x22), 8);
     dobitmap(pal, pic_map(bmp), bmp + 8, 0, 0, 6, 6, chars, home ? 2 : 4);

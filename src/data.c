@@ -438,7 +438,7 @@ void ReadPassBits(uint8_t *bits)
 uint16_t GetRandomUnusedTeam(uint32_t *used)
 {
     for (;;) {
-        uint16_t t = randomd0(SYM_NumPlayoffTeams);
+        uint16_t t = randomd0(league.playoff_teams);
         uint32_t bit = 1u << (t & 31);
         int was = (*used & bit) != 0;
         *used |= bit;
@@ -530,7 +530,7 @@ void FigureJoy(void)
 void maketree(void)
 {
     uint8_t *tree = g.potree;
-    const uint8_t *seats = rom_ptr(SYM_playoffseats) + (uint16_t)(g.postarts << 4);
+    const uint8_t *seats = rom_ptr(LG(playoffseats)) + (uint16_t)(g.postarts << 4);
     memcpy(tree, seats, 16);
     uint8_t *a0 = tree, *a1 = tree + 16;
     uint16_t bits = g.WinBits;
@@ -562,11 +562,11 @@ void maketree(void)
  * best-of-one; falls into maketree. */
 void NewPO(void)
 {
-    uint16_t row = randomd0(SYM_PlayoffRows), d1;
-    uint16_t team = g.Opt1Team > SYM_NumPlayoffTeams - 1 ? SYM_NumPlayoffTeams - 1 : g.Opt1Team;
+    uint16_t row = randomd0(league.playoff_rows), d1;
+    uint16_t team = g.Opt1Team > league.playoff_teams - 1 ? league.playoff_teams - 1 : g.Opt1Team;
     for (;;) {
-        row = (row + 1) & (SYM_PlayoffRows - 1);
-        const uint8_t *a0 = rom_ptr(SYM_playoffseats) + (row << 4);
+        row = (row + 1) & (league.playoff_rows - 1);
+        const uint8_t *a0 = rom_ptr(LG(playoffseats)) + (row << 4);
         for (d1 = SYM_PlayoffRowTeams - 1; *a0++ != (uint8_t)team; )   /* dbeq */
             if (d1-- == 0) break;
         if (d1 != 0xFFFF) break;

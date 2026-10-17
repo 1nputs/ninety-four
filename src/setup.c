@@ -226,8 +226,8 @@ uint16_t setupTeamBlocksMap(uint16_t chars)
     uint8_t *buf = RAM_W(RAM_OFF_TeamBlockMap);
     DecompressGraphicsPlain(SYM_Teamblocksmap + 8, (uint16_t)(chars + 0x2C));
     uint32_t map = SYM_Teamblocksmap + rd32(rom_ptr(SYM_Teamblocksmap + 4));
-    buf = CopyTeamBlockMapData(map, g.HomeTeam, (uint16_t)(g.basetileoffset << 5), buf);
-    CopyTeamBlockMapData(map, g.VisTeam, (uint16_t)((g.basetileoffset + 0x16) << 5), buf);
+    buf = CopyTeamBlockMapData(map, league_art(g.HomeTeam), (uint16_t)(g.basetileoffset << 5), buf);   /* (the league's: its art) */
+    CopyTeamBlockMapData(map, league_art(g.VisTeam), (uint16_t)((g.basetileoffset + 0x16) << 5), buf);
     return (uint16_t)(g.basetileoffset + 0x2C);
 }
 
@@ -299,7 +299,7 @@ void setupice(void)
 void InitTeamStructure(uint16_t team, uint8_t *tm)
 {
     wr16(tm + tmteam, team);
-    wr32(tm + tmdata, rd32(rom_ptr(SYM_TeamList + (uint16_t)(team << 2))));
+    wr32(tm + tmdata, rd32(rom_ptr(LG(TeamList) + (uint16_t)(team << 2))));
     InitTeamLines(tm);
 }
 
@@ -596,7 +596,7 @@ void DrawTeamBlocks(uint16_t row)
     uint8_t user = (uint8_t)(g.potree[g.potreeteam] << 1);
     if (user == (uint8_t)row) g.printa = 0x6000;
     uint32_t map = SYM_Teamblocksmap + rd32(rom_ptr(SYM_Teamblocksmap + 4));
-    dobitmap(0, map, SYM_NoTiles, 0, row, rd16(rom_ptr(map)), 2, 2, 0);
+    dobitmap(0, map, SYM_NoTiles, 0, (uint16_t)(league_art((uint16_t)(row >> 1)) << 1), rd16(rom_ptr(map)), 2, 2, 0);   /* (its art) */
 }
 
 /* setup94.asm:VBlank_Playoff. The playoff screen's vblank: unless dfng, the sprites (and the tree's

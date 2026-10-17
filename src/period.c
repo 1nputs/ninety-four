@@ -237,7 +237,7 @@ void updatePPTeamTime(void)
 /* period94.asm:GetTeamRating. The TeamRatings byte of team $28(a2). */
 uint16_t GetTeamRating(const uint8_t *tm)
 {
-    return rom_ptr(SYM_TeamRatings)[rd16(tm + tmteam)];
+    return rom_ptr(LG(TeamRatings))[rd16(tm + tmteam)];
 }
 
 /* period94.asm:ShortenMsgTimer. Cap msgtimer at 2, unless a second pad is on and a3 is not the
@@ -252,8 +252,8 @@ void ShortenMsgTimer(struct SortObj *o)
  * team * 32, loaded as palette 2) at printx / printy -> the next char */
 static uint16_t team_logo(uint16_t team, uint16_t chars)
 {
-    uint32_t bmp = rd32(rom_ptr(SYM_TeamLogoBitmaps + (uint16_t)(team << 2)));
-    uint32_t pal = SYM_TeamLogoPalettes + (int16_t)((uint16_t)(team << 5) - 0x40);
+    uint32_t bmp = rd32(rom_ptr(LG(TeamLogoBitmaps) + (uint16_t)(team << 2)));
+    uint32_t pal = LG(TeamLogoPalettes) + (int16_t)((uint16_t)(team << 5) - 0x40);
     uint32_t map = bmp + rd32(rom_ptr(bmp + 4));
     return dobitmap(pal, map, bmp + 8, 0, 0, 6, 6, chars, 4);
 }

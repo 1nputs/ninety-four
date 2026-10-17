@@ -87,15 +87,15 @@ void NameEntryScreen(void)
     DecompressGraphicsWithCallback(SYM_BigFontMap + 8, d4, rom_find(SYM_NameEntryScreen, SYM_NameLetterGrid, bigfont, 8));
     PRINTZ(str_NameEntryScreen_3);                        /* the team's city, centred on x $1F */
     uint16_t team = g.nameentryvis ? g.VisTeam : g.HomeTeam;
-    uint32_t blk = rd32(rom_ptr(SYM_TeamList + (uint32_t)(int16_t)(uint16_t)(team << 2)));
+    uint32_t blk = rd32(rom_ptr(LG(TeamList) + (uint32_t)(int16_t)(uint16_t)(team << 2)));
     uint32_t city = blk + (uint32_t)(int16_t)rd16(rom_ptr(blk + 4));
     g.printx -= (uint16_t)((uint16_t)(rd16(rom_ptr(city)) - 2) >> 1);
     print(city);
     PRINTZ(str_NameEntryScreen_4);
     Framer(8, 8);
     PRINTZ(str_NameEntryScreen_5);                        /* its logo */
-    uint32_t bmp = rd32(rom_ptr(SYM_TeamLogoBitmaps + (uint32_t)(int16_t)(uint16_t)(team << 2)));
-    uint32_t pal = SYM_TeamLogoPalettes + (uint32_t)(int16_t)(uint16_t)((uint16_t)(team << 5) - 0x40);
+    uint32_t bmp = rd32(rom_ptr(LG(TeamLogoBitmaps) + (uint32_t)(int16_t)(uint16_t)(team << 2)));
+    uint32_t pal = LG(TeamLogoPalettes) + (uint32_t)(int16_t)(uint16_t)((uint16_t)(team << 5) - 0x40);
     dobitmap(pal, bmp + rd32(rom_ptr(bmp + 4)), bmp + 8, 0, 0, 6, 6, g.homepicchars, 4);
     PRINTZ(str_NameEntryScreen_6);
     Framer(0x24, 6);
@@ -456,8 +456,8 @@ void WriteNameRecord(void)
         if (r[3] == user) { r[3] = 0; changed = 1; }
         if (changed) WriteSRAM(at, 4, RAM_BASE + RAM_OFF_ThreeStars);
     }
-    at = SYM_CrowdRecBase;
-    for (int n = 0; n < (int)SYM_NumTeams; n++, at += SYM_CrowdRecBytes) {   /* the crowd records */
+    for (int n = 0; n < (int)league.teams; n++) {         /* the crowd records */
+        at = league_crowd_record((uint16_t)n);
         int changed = 0;
         ReadSRAM(at, 0x10, RAM_BASE + RAM_OFF_ThreeStars);
         for (int b = 1; b <= 0xB; b += 2) if (r[b] == user) { r[b] = 0; changed = 1; }

@@ -22,7 +22,7 @@ void ChooseSong(void)
         n = 0xFFFF;
     } else {
         g.sflags8 &= (uint8_t)~0x40;
-        n = rom_ptr(SYM_TeamSongs)[(int16_t)(g.HmTeam * 6 + g.SongIndex)];
+        n = rom_ptr(LG(TeamSongs))[(int16_t)(g.HmTeam * 6 + g.SongIndex)];
         if (n == 0) n = rom_ptr(SYM_RandomSongs)[randomd0(8) & 7];
     }
     g.SongNum = n;
@@ -243,7 +243,7 @@ void PSandSOpassdir(struct SortObj *o)
  * d4 - $18 -> d4 = the char after them. */
 uint16_t LoadHomeTeamGfx(uint16_t start)
 {
-    uint32_t gfx = rd32(rom_ptr(SYM_TeamGfxList + (int16_t)(g.HomeTeam << 2))) + 8;
+    uint32_t gfx = rd32(rom_ptr(LG(TeamGfxList) + (int16_t)(g.HomeTeam << 2))) + 8;
     return DecompressGraphicsPlain(gfx, (uint16_t)(start - 0x18));
 }
 
@@ -658,7 +658,7 @@ void WriteLineData(void)
 uint16_t GetLeagueCrowdRecord(void)
 {
     uint16_t best = 0, team = 0;
-    for (int16_t t = (int16_t)(SYM_NumTeams - 1); t >= 0; t--) {
+    for (int16_t t = (int16_t)(league.teams - 1); t >= 0; t--) {
         ReadCrowdRecord((uint32_t)t, RAM_BASE + RAM_OFF_ThreeStars);
         uint16_t db = g.ThreeStars[8];
         if (db == 0) db = 0x50;

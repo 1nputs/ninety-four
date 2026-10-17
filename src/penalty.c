@@ -1008,7 +1008,7 @@ void reenergizeteam(uint8_t *tm)
  * scoring team's (bits 4-6) and the other team's (bits 0-2) sctab rows as weights */
 static uint16_t getscore(uint16_t d0, uint16_t d1)
 {
-    const uint8_t *tl = rom_ptr(SYM_TeamList);
+    const uint8_t *tl = rom_ptr(LG(TeamList));
     const uint8_t *a1 = rom_ptr(rd32(tl + d0 * 4));
     a1 += rd16(a1 + 8);
     unsigned row = (a1[0] & 0x70) >> 1;                   /* row * 8 */
@@ -1105,7 +1105,7 @@ static void ticker_team(uint16_t team, uint16_t score, uint16_t x)
 {
     g.printx = x;
     g.printy += 1;
-    uint32_t a1 = rd32(rom_ptr(SYM_TeamList) + team * 4);
+    uint32_t a1 = rd32(rom_ptr(LG(TeamList)) + team * 4);
     a1 += rd16(rom_ptr(a1) + 4);                          /* the team name */
     print(a1);
     g.printx = (uint16_t)(x + 0x15);

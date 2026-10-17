@@ -73,7 +73,7 @@ void ShootoutWonBy(void)
     printbigz(str_ShootoutWonBy_2, sizeof str_ShootoutWonBy_2);
     g.printy += 2;
     uint16_t team = (int16_t)g.homeshootgoals > (int16_t)g.awayshootgoals ? g.HomeTeam : g.VisTeam;
-    uint32_t data = rd32(rom_ptr(SYM_TeamList + (int16_t)(team << 2)));
+    uint32_t data = rd32(rom_ptr(LG(TeamList) + (int16_t)(team << 2)));
     g.printx = 2;
     printbig(data + (int16_t)rd16(rom_ptr(data + 4)));
 }
@@ -84,7 +84,7 @@ void InitShooters(void)
 {
     uint16_t team = g.HomeTeam, at = RAM_OFF_homeshootnum;
     if (g.shootoutteam) { team = g.VisTeam; at = RAM_OFF_shootoutteam; }
-    uint32_t data = rd32(rom_ptr(SYM_TeamList + (uint16_t)(team << 2)));
+    uint32_t data = rd32(rom_ptr(LG(TeamList) + (uint16_t)(team << 2)));
     const uint8_t *a1 = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 6)));
     for (int i = 0; i < 6; i++) {
         at -= 2;

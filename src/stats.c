@@ -498,7 +498,7 @@ void DisplayGameInfo(uint16_t n)
 /* stats94.asm:PrintGameInfo. Team d0's city at x 6 and score d1 (2 digits) at x $18. */
 void PrintGameInfo(uint16_t team, uint16_t score)
 {
-    uint32_t a1 = rd32(rom_ptr(SYM_TeamList + (uint32_t)(int16_t)(uint16_t)(team << 2)));
+    uint32_t a1 = rd32(rom_ptr(LG(TeamList) + (uint32_t)(int16_t)(uint16_t)(team << 2)));
     a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1 + 4));
     g.printx = 6;
     print(a1);

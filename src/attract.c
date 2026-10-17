@@ -63,11 +63,11 @@ void DrawMatchupBitmaps(void)
     }
     printz(str_DrawMatchupBitmaps_1, sizeof str_DrawMatchupBitmaps_1);
     uint16_t t = g.VisTeam;
-    memcpy(RAM_W(RAM_OFF_palfadenew + 0x26), rom_ptr(SYM_TeamPalettes + (uint32_t)(int16_t)(uint16_t)(t << 6) + 0x26), 4);
+    memcpy(RAM_W(RAM_OFF_palfadenew + 0x26), rom_ptr(LG(TeamPalettes) + (uint32_t)(int16_t)(uint16_t)(t << 6) + 0x26), 4);
     DrawTeamBitmap(t, g.teambitmapchars);
     printz(str_DrawMatchupBitmaps_2, sizeof str_DrawMatchupBitmaps_2);
     t = g.HomeTeam;
-    memcpy(RAM_W(RAM_OFF_palfadenew + 0x22), rom_ptr(SYM_TeamPalettes + (uint32_t)(int16_t)(uint16_t)(t << 6) + 2), 4);
+    memcpy(RAM_W(RAM_OFF_palfadenew + 0x22), rom_ptr(LG(TeamPalettes) + (uint32_t)(int16_t)(uint16_t)(t << 6) + 2), 4);
     g.palfadenew[0x15] = 0xEEE;
     DrawTeamBitmap(t, 2);
     setteams();
@@ -79,7 +79,7 @@ void DrawMatchupBitmaps(void)
 uint16_t DrawTeamBitmap(uint16_t team, uint16_t chars)
 {
     uint32_t img = SYM_TeamBitmaps, map = img + rd32(rom_ptr(img + 4));
-    return dobitmap(img + rd32(rom_ptr(img)), map, SYM_NoTiles, 0, (uint16_t)(team << 1), rd16(rom_ptr(map)), 2, chars, 0);
+    return dobitmap(img + rd32(rom_ptr(img)), map, SYM_NoTiles, 0, (uint16_t)(league_art(team) << 1), rd16(rom_ptr(map)), 2, chars, 0);   /* (its art) */
 }
 
 /* attract94.asm:VBlank_SetOptions. The setup screen's vblank: unless dfng, the sprites (when
