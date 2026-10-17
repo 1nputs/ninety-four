@@ -126,6 +126,26 @@ static void other(const char *dir)
         while (r16(m, p) != 2 && n < 30) { p += r16(m, p) + 8; n++; }
         CHECK(n >= 17 && n <= 25 && p == b + r16(m, b + 4) - 2, "team %d's players (%d)", t, n);
     }
+    /* its own art (tools/leaguetest.py): HOU's logo in plain RGB (a corner transparent, then red,
+     * then white: colours 0, 1, 2 in the order they come), BOS's with its first pixel changed,
+     * KC's photo in colours (a ramp: black to white by brightness) */
+    struct romsrc bs, cs;
+    romsrc_cartridge(&cs, rom_cart);
+    romsrc_cartridge(&bs, rom_image);
+    bs.size = rom_limit;
+    memcpy(bs.table, league.table, sizeof bs.table);
+    uint8_t px[ART_LOGO * ART_LOGO], cart[ART_LOGO * ART_LOGO];
+    uint16_t pal[16], cpal[16];
+    int hou = 29, bos = 1, kc = 27, drawn = 0;
+    CHECK(art_logo(&bs, hou, px, pal) == 0 && r32(m, LG(TeamLogoBitmaps) + 4u * (uint32_t)hou) >= ROM_SIZE, "HOU's logo its own");
+    for (int i = 0; i < ART_LOGO * ART_LOGO; i++) drawn += px[i] == (i % 48 < 8 && i / 48 < 8 ? 0 : i % 48 < 24 ? 1 : 2);
+    CHECK(drawn == ART_LOGO * ART_LOGO && pal[1] == art_word(0xFF0000) && pal[2] == art_word(0xFFFFFF), "HOU's logo as drawn (%d pixels)", drawn);
+    CHECK(art_logo(&bs, bos, px, pal) == 0 && art_logo(&cs, bos, cart, cpal) == 0 && r32(m, LG(TeamLogoBitmaps) + 4u * (uint32_t)bos) >= ROM_SIZE
+          && px[0] == 1 && cart[0] != 1 && !memcmp(px + 1, cart + 1, sizeof px - 1) && !memcmp(pal, cpal, sizeof pal), "BOS's logo, a pixel changed");
+    uint32_t list = r32(m, LG(FeaturedPictures) + 4u * (uint32_t)kc), pic = 0;
+    for (; r32(m, list); list += 6) pic = r32(m, list);
+    CHECK(pic >= ROM_SIZE && art_photo(&bs, pic, px) == 0 && px[0] == 6 && px[47] == 5, "KC's photo its own, its shades by brightness");
+    printf("  %s: art of its own: a logo drawn, a logo changed, a photo in colours\n", dir);
     league_next(NULL);
     league_power_on();
 }
@@ -133,7 +153,8 @@ static void other(const char *dir)
 /* a hack's league (romsrc.c), extracted to dir and built: its teams as the hack has them (what the
  * game reads of each block, byte for byte, but for its palettes, the art team's until its art
  * comes too, and the count of defensemen, which the game counts itself), its ratings and songs,
- * its playoff draws but for the places a team in none was given */
+ * its playoff draws but for the places a team in none was given, and its art (art.c): each
+ * logo and its colours, centre ice, both banners and photo the hack's, pixel for pixel */
 static void hack(const char *path, const char *dir)
 {
     static uint8_t h[0x400001];
@@ -178,6 +199,42 @@ static void hack(const char *path, const char *dir)
     }
     CHECK(moved == missing, "the draws: %d places changed, for %d teams in none", moved, missing);
     printf("  %s: %d of %d team blocks the hack's (their palettes aside), %d draw places given to teams in none\n", dir, blocks, s.teams, moved);
+    /* its art as the hack's: each logo (and its colours), centre ice, both banners, each photo */
+    struct romsrc bs;
+    romsrc_cartridge(&bs, rom_image);
+    bs.size = rom_limit;
+    memcpy(bs.table, league.table, sizeof bs.table);
+    bs.teams = league.teams;
+    int logos = 0, ices = 0, banners = 0, photos = 0, pics = 0;
+    static uint8_t a[64 * 64 * 4], b[64 * 64 * 4];
+    for (int t = 0; t < league.teams && t < s.teams; t++) {
+        uint16_t pa[32], pb[32];
+        int same = art_logo(&bs, t, a, pa) == 0 && art_logo(&s, t, b, pb) == 0 && !memcmp(a, b, ART_LOGO * ART_LOGO) && !memcmp(pa, pb, 32);
+        CHECK(same, "team %d's logo", t);
+        logos += same;
+        uint8_t ta[24 * 32], tb[24 * 32];
+        same = art_tiles(&bs, r32(m, LG(TeamGfxList) + 4u * (uint32_t)t) + 8, ta, 24) == 24
+               && art_tiles(&s, rs32(&s, s.table[LG_TeamGfxList] + 4u * (uint32_t)t) + 8, tb, 24) == 24 && !memcmp(ta, tb, sizeof ta);
+        CHECK(same, "team %d's centre ice", t);
+        ices += same;
+        /* (the top banner in its row of the league's Teamblocksmap, the setup screen's its 22 tiles) */
+        same = art_banners(&s, t, b, pb) == 0 && art_banners(&bs, league_block((uint16_t)t), a, pa) == 0 && !memcmp(a, b, 16 * ART_BANNER_W);
+        for (int i = 0; same && i < 22 * 64; i++) {
+            int x = i % 88, y = i / 88, tile = (y / 8) * 11 + x / 8, v = rom_image[league.banner_tiles[t] + (uint32_t)(tile * 32 + (y % 8) * 4 + (x % 8) / 2)];
+            same = league.banner_tiles[t] && (x % 2 ? v & 15 : v >> 4) == b[(16 + y) * ART_BANNER_W + x] - 16;
+        }
+        CHECK(same, "team %d's banners", t);
+        banners += same;
+        uint32_t la = r32(m, LG(FeaturedPictures) + 4u * (uint32_t)t), lb = rs32(&s, s.table[LG_FeaturedPictures] + 4u * (uint32_t)t);
+        for (; r32(m, la) && rs32(&s, lb); la += 6, lb += 6) {
+            same = art_photo(&bs, r32(m, la), a) == 0 && art_photo(&s, rs32(&s, lb), b) == 0 && !memcmp(a, b, ART_LOGO * ART_LOGO) && r16(m, la + 4) == rs16(&s, lb + 4);
+            CHECK(same, "team %d's photo of roster place %d", t, rs16(&s, lb + 4));
+            photos += same;
+            pics++;
+        }
+        CHECK(!r32(m, la) && !rs32(&s, lb), "team %d's photos: as many as the hack's", t);
+    }
+    printf("  %s: the hack's art: %d logos, %d centre ices, %d teams' banners, %d of %d photos\n", dir, logos, ices, banners, photos, pics);
     league_next(NULL);
     league_power_on();
 }

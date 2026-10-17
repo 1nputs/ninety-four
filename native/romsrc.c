@@ -4,6 +4,7 @@
  * or into the room of the cartridge's team blocks: so a table is where the hack's code, at the
  * place where the cartridge's reads it, says it is. A hack is only read here, as data, to write a
  * league folder from (league_extract): it is never run. Everything read from it is checked. */
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include "native.h"
@@ -26,6 +27,10 @@ void romsrc_cartridge(struct romsrc *s, const uint8_t *cart)
     s->teams = SYM_NumTeams;
     s->playoff_teams = SYM_NumPlayoffTeams;
     s->rows = SYM_PlayoffRows;
+    s->bitmaps = SYM_TeamBitmaps;
+    s->rink = SYM_Rinktilelist;
+    s->rink_tiles = SYM_Rinktiles;
+    s->photos = SYM_PicturePalette;
 }
 
 /* "movea.l #address,An" or "lea address,An": the instructions the cartridge's code reads its
@@ -111,6 +116,16 @@ int romsrc_hack(struct romsrc *s, const uint8_t *rom, uint32_t size, const uint8
             return -1;
         }
         s->table[find[k].table] = a;
+    }
+    /* its art's (in place, or where its code reads it from: the cartridge's places otherwise) */
+    static const struct { uint32_t addr; size_t at; } art[] = {
+        { SYM_TeamBitmaps, offsetof(struct romsrc, bitmaps) }, { SYM_Rinktilelist, offsetof(struct romsrc, rink) },
+        { SYM_Rinktiles, offsetof(struct romsrc, rink_tiles) }, { SYM_PicturePalette, offsetof(struct romsrc, photos) },
+    };
+    for (size_t k = 0; k < sizeof art / sizeof art[0]; k++) {
+        uint32_t a = moved(s, cart, art[k].addr);
+        if (!a || a & 1 || a >= size) a = art[k].addr;
+        memcpy((char *)s + art[k].at, &a, sizeof a);
     }
     /* the counts: its teams, as many blocks as read well; its playoff teams and draws, from the
      * playoff code (NewPO: moveq #PlayoffRows,d0 ... cmp.w #NumPlayoffTeams-1,d2) */

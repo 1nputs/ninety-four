@@ -35,9 +35,10 @@ rulestest: build/rulestest
 
 # leagues: the cartridge's exported and built again (byte for byte), a 32-team one, broken ones
 # (tools/leaguetest.py; the ROM as for make nhl94)
-build/leaguetest: native/league.c native/banner.c native/romsrc.c src/league.c src/rom.c src/league.h src/rom.h native/native.h test/league_test.c
+build/leaguetest: native/league.c native/banner.c native/romsrc.c native/art.c src/league.c src/rom.c src/league.h src/rom.h native/native.h test/league_test.c mdrt
 	@mkdir -p build
-	$(CC) $(CFLAGS) -Isrc -Inative -I$(MDRT)/include -o $@ native/league.c native/banner.c native/romsrc.c src/league.c src/rom.c test/league_test.c
+	$(CC) $(CFLAGS) -Isrc -Inative -I$(MDRT)/include -o $@ native/league.c native/banner.c native/romsrc.c native/art.c src/league.c src/rom.c \
+	    test/league_test.c $(MDRT)/$(MDRTB)/libmdrt.a -lm $(CXXLIB)
 leaguetest: build/leaguetest build/nhl94$(EXE)
 	$(PY) tools/leaguetest.py
 

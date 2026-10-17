@@ -10,7 +10,9 @@
  *                 bonuses on the power play, killing a penalty, at home, away), songs (the organ's
  *                 6), banner (the name on its banners, when not its city). An empty one: the art
  *                 team's. A team whose city is not its art team's gets banners of its own, its
- *                 name in the cartridge's letters on its art team's (banner.c).
+ *                 name in the cartridge's letters on its art team's (banner.c), unless it has a
+ *                 picture of its own for them (art/banners, below); a name given here comes
+ *                 before that picture.
  *   goalies.csv   team, number, name, 14 ratings (0-15: weight agility speed offense defense
  *                 shot_power checking glove_hand glove_left glove_right stick_right stick_left
  *                 consistency aggression) and start (1-15: how often he starts).
@@ -22,10 +24,16 @@
  *                 made from its roster's order.
  *   colours.csv   team, palette (home away logo matchup matchup2), colours: 16 Genesis colour
  *                 words. A palette not given: the art team's.
- *   pictures.csv  team, number (or name, as in lines.csv), picture: a cartridge picture
- *                 (CardMarioLemieux, NoPicSkater1 ...).
+ *   pictures.csv  team, number (or name, as in lines.csv), picture: a photo of the folder's
+ *                 (art/photos/NAME.png), else the cartridge's of that label (CardMarioLemieux,
+ *                 NoPicSkater1 ...).
  *   playoffs.csv  optional: rows of 16 teams, the draws a playoff starts from (a power of two of
  *                 them, at most 32); else made from the conferences.
+ *   art/          optional PNGs (art.c has their sizes and colours): logos/ABBR.png (a team's
+ *                 logo, in its own colours: its logo palette), banners/ABBR.png (its banners,
+ *                 over its name's), ice/ABBR.png (its centre ice), photos/NAME.png. A team with
+ *                 none shows its art team's; a picture the same as the cartridge's is the
+ *                 cartridge's own.
  *
  * Columns go in any order, named by the first row; others are ignored, and so are empty rows and
  * rows starting with #. Text is plain ASCII, \xNN for another byte. A league has 18 to 32 teams
@@ -65,6 +73,10 @@
 #define CART_TEAMS 28
 #define PICTURES 32
 #define ROWS_MAX 32             /* playoff draws: the password keeps 5 bits */
+#define LEN_PHOTO 40
+#define ICE_MAX (16 * 8 * 16 * 8)  /* (a centre ice picture: the rink round its 24 tiles) */
+#define PHOTOS_MAX (LEAGUE_MAX * PICTURES)
+#define IMAGE_MAX 0x800000u     /* a league built: the cartridge and all that comes past it */
 
 static const char *const cart_abbr[CART_TEAMS] = {
     "ANH", "BOS", "BUF", "CGY", "CHI", "DAL", "DET", "EDM", "FLA", "HFD", "LA", "MTL", "NJ", "NYI",
@@ -92,14 +104,21 @@ struct team {
     int players, goalies, forwards;
     uint8_t line[8][7];         /* roster slots from 1, 0 nobody */
     int has_lines;
-    struct { uint32_t pic; uint8_t slot; } pic[PICTURES];
+    struct { uint32_t pic; uint8_t slot; int16_t photo; } pic[PICTURES];   /* the cartridge's picture, or photo (>= 0) one of the folder's */
     int pics;
+    /* its art from the folder (art/): its logo (and the logo's colours), its banners, its centre ice */
+    uint8_t logo[ART_LOGO * ART_LOGO], banners[ART_BANNER_H * ART_BANNER_W], ice[ICE_MAX];
+    uint16_t logo_pal[16];
+    int has_logo, has_banners, has_ice;
 };
+struct photo { char name[LEN_PHOTO + 1]; uint8_t px[ART_LOGO * ART_LOGO]; };
 struct lg {
     char name[64];
     int teams, playoff_teams, rows;
     uint8_t seats[ROWS_MAX][16];
     struct team t[LEAGUE_MAX];
+    struct photo *photo;        /* the folder's photos (art/photos) the pictures name */
+    int photos;
 };
 /* a league built: the cartridge with it past the end */
 struct built { uint8_t *img; uint32_t size; struct league league; uint64_t hash; };
@@ -518,24 +537,146 @@ static int read_colours(char *t, struct lg *L)
     return r;
 }
 
-static int read_pictures(char *t, struct lg *L)
+/* ---- the folder's art (art/), read: a picture there for a team or a photo is its own ---------- */
+
+static const struct romsrc *cart_src(void)
+{
+    static struct romsrc s;
+    if (s.b != rom_cart) romsrc_cartridge(&s, rom_cart);
+    return &s;
+}
+
+/* art/KIND/NAME.png, read into p (w x h): 1, 0 none, -1 (league_error) */
+static int art_png(const char *dir, const char *kind, const char *name, mdrt_png *p, int w, int h)
+{
+    char path[1200];
+    snprintf(path, sizeof path, "%s/art/%s/%s.png", dir, kind, name);
+    int r = art_load(path, p, w, h);
+    err_file = NULL;
+    err_line = 0;
+    if (r < 0) fail("%s", art_error());
+    return r;
+}
+
+/* the photo art/photos/NAME.png (its 8 shades: colours 5 to 12 of the photos' palette, an indexed
+ * PNG's indexes, or each colour as the shade nearest its brightness) into px: 1, 0 none, -1 */
+static int read_photo(const char *dir, const char *name, uint8_t px[ART_LOGO * ART_LOGO])
+{
+    mdrt_png p;
+    int r = art_png(dir, "photos", name, &p, ART_LOGO, ART_LOGO);
+    if (r <= 0) return r;
+    uint16_t pal[16];
+    art_photo_palette(cart_src(), pal);
+    int by_index = p.index != NULL;
+    for (int i = 0; by_index && i < ART_LOGO * ART_LOGO; i++) by_index = p.index[i] >= 5 && p.index[i] <= 12;
+    for (int i = 0; i < ART_LOGO * ART_LOGO; i++) {
+        if (by_index) { px[i] = p.index[i]; continue; }
+        uint32_t c = p.rgba[i];
+        long lum = (long)(c >> 16 & 0xFF) * 299 + (long)(c >> 8 & 0xFF) * 587 + (long)(c & 0xFF) * 114, best = -1;
+        for (int k = 5; k <= 12; k++) {
+            uint32_t q = art_rgb(pal[k]);
+            long d = labs((long)(q >> 16 & 0xFF) * 299 + (long)(q >> 8 & 0xFF) * 587 + (long)(q & 0xFF) * 114 - lum);
+            if (best < 0 || d < best) { best = d; px[i] = (uint8_t)k; }
+        }
+    }
+    mdrt_png_free(&p);
+    return 1;
+}
+
+/* the photo named name (the folder's, read now if it is not yet) or the cartridge's picture of that
+ * label: *photo its place in L (or -1), *pic the cartridge's (or 0). 0, -1 */
+static int find_photo(const char *dir, struct lg *L, const char *name, int *photo, uint32_t *pic)
+{
+    *photo = -1;
+    *pic = 0;
+    for (int k = 0; k < L->photos; k++)
+        if (!strcmp(L->photo[k].name, name)) { *photo = k; return 0; }
+    if (strlen(name) > LEN_PHOTO || strchr(name, '/') || strchr(name, '\\') || name[0] == '.') return fail("picture: \"%s\" is no name for a photo", name);
+    if (!L->photo && !(L->photo = calloc(PHOTOS_MAX, sizeof *L->photo))) return fail("out of memory");
+    if (L->photos == PHOTOS_MAX) return fail("more than %d photos", PHOTOS_MAX);
+    struct photo *P = &L->photo[L->photos];
+    int r = read_photo(dir, name, P->px);
+    if (r < 0) return -1;
+    if (r > 0) {
+        snprintf(P->name, sizeof P->name, "%s", name);
+        *photo = L->photos++;
+        return 0;
+    }
+    if (!(*pic = picture_named(name)))
+        return fail("picture: \"%s\" is neither a photo of the folder's (art/photos/%s.png) nor one of the cartridge's (CardMarioLemieux, NoPicSkater1 ...)", name, name);
+    return 0;
+}
+
+static int read_pictures(char *t, struct lg *L, const char *dir)
 {
     static const char *const cols[] = { "team", "number", "picture" };
     struct csv c;
     if (csv_open(&c, t, "pictures.csv", cols, 3, 3) < 0) return -1;
     int r;
     while ((r = csv_row(&c)) > 0) {
-        int tm, i;
+        int tm, i, photo;
+        uint32_t pic;
         if (find_team(L, get(&c, 0), &tm) < 0) return -1;
         struct team *T = &L->t[tm];
         if (find_player(T, get(&c, 1), "number", &i) < 0) return -1;
-        uint32_t pic = picture_named(get(&c, 2));
-        if (!pic) return fail("picture: \"%s\" is not one of the cartridge's (CardMarioLemieux, NoPicSkater1 ...)", get(&c, 2));
+        int line = err_line;
+        if (find_photo(dir, L, get(&c, 2), &photo, &pic) < 0) {
+            if (!err_file) { char why[700]; snprintf(why, sizeof why, "%s", err); err_file = "pictures.csv"; err_line = line; return fail("%s", why); }
+            return -1;
+        }
+        err_file = "pictures.csv";
+        err_line = line;
         if (T->pics == PICTURES) return fail("%s: more than %d pictures", T->abbr, PICTURES);
         T->pic[T->pics].pic = pic;
+        T->pic[T->pics].photo = (int16_t)photo;
         T->pic[T->pics++].slot = (uint8_t)i;
     }
     return r;
+}
+
+/* each team's logo, banners and centre ice from art/ (logos/ABBR.png, banners/ABBR.png,
+ * ice/ABBR.png), when the folder has them: 0, -1 */
+static int read_art(const char *dir, struct lg *L)
+{
+    const struct romsrc *cs = cart_src();
+    uint16_t pal[32], ice_pal[16];
+    uint8_t px[ICE_MAX];
+    int iw = 0, ih = 0;
+    if (art_banners(cs, 0, px, pal) < 0 || art_ice(cs, 0, px, &iw, &ih, ice_pal) < 0) return fail("the cartridge's art cannot be read");
+    for (int t = 0; t < L->teams; t++) {
+        struct team *T = &L->t[t];
+        mdrt_png p;
+        int r;
+        char path[1200];
+        if ((r = art_png(dir, "logos", T->abbr, &p, ART_LOGO, ART_LOGO)) < 0) return -1;
+        if (r) {
+            snprintf(path, sizeof path, "%s/art/logos/%s.png", dir, T->abbr);
+            r = art_own_palette(path, &p, T->logo_pal, T->logo);
+            mdrt_png_free(&p);
+            if (r < 0) return fail("%s", art_error());
+            T->has_logo = 1;
+            memcpy(T->pal[PAL_LOGO], T->logo_pal, sizeof T->logo_pal);   /* (its colours: the logo's, whatever colours.csv says) */
+            T->has_pal[PAL_LOGO] = 1;
+        }
+        if ((r = art_png(dir, "banners", T->abbr, &p, ART_BANNER_W, ART_BANNER_H)) < 0) return -1;
+        if (r) {
+            snprintf(path, sizeof path, "%s/art/banners/%s.png", dir, T->abbr);
+            r = art_indexes(path, &p, 0, 0, ART_BANNER_W, 16, pal, 16, 0, T->banners) < 0
+                || art_indexes(path, &p, 0, 16, ART_BANNER_W, 16, pal + 16, 16, 16, T->banners + 16 * ART_BANNER_W) < 0 ? -1 : 0;
+            mdrt_png_free(&p);
+            if (r < 0) return fail("%s", art_error());
+            T->has_banners = 1;
+        }
+        if ((r = art_png(dir, "ice", T->abbr, &p, iw, ih)) < 0) return -1;
+        if (r) {
+            snprintf(path, sizeof path, "%s/art/ice/%s.png", dir, T->abbr);
+            r = art_indexes(path, &p, 0, 0, iw, ih, ice_pal, 16, 0, T->ice);
+            mdrt_png_free(&p);
+            if (r < 0) return fail("%s", art_error());
+            T->has_ice = 1;
+        }
+    }
+    return 0;
 }
 
 static int read_playoffs(char *t, struct lg *L)
@@ -631,7 +772,7 @@ static void make_lines(struct team *T)
     }
 }
 
-static void free_lg(struct lg *L) { free(L); }
+static void free_lg(struct lg *L) { if (L) free(L->photo); free(L); }
 
 /* a folder's name without the slashes after it */
 static void clean_dir(char *out, size_t size, const char *dir)
@@ -687,7 +828,8 @@ static int read_league(const char *folder, struct lg **out)
     if (t[3] && read_lines(t[3], L) < 0) goto done;
     for (int i = 0; i < L->teams; i++) make_lines(&L->t[i]);
     if (t[4] && read_colours(t[4], L) < 0) goto done;
-    if (t[5] && read_pictures(t[5], L) < 0) goto done;
+    if (t[5] && read_pictures(t[5], L, dir) < 0) goto done;
+    if (read_art(dir, L) < 0) goto done;
     if (t[6]) { if (read_playoffs(t[6], L) < 0) goto done; }
     else make_draws(L);
     r = 0;
@@ -710,8 +852,8 @@ static void src_string(const struct romsrc *s, uint32_t *a, char *out, int max)
     *a += n;
 }
 
-/* team t of the ROM s, as a league folder has it (its art: the cartridge's team t; a hack's
- * pictures are its own, so none) */
+/* team t of the ROM s, as a league folder has it (its art: the cartridge's team t; its pictures
+ * at their places in s) */
 static void src_team(const struct romsrc *s, int t, struct team *T)
 {
     uint32_t b = rs32(s, s->table[LG_TeamList] + 4u * (uint32_t)t), sr = b + rs16(s, b + 8), so = rs16(s, b + rs16(s, b + 10));
@@ -756,8 +898,9 @@ static void src_team(const struct romsrc *s, int t, struct team *T)
     src_string(s, &p, T->abbr, LEN_ABBR);
     src_string(s, &p, T->nickname, LEN_NICK);
     src_string(s, &p, T->arena, LEN_ARENA);
-    for (uint32_t a = rs32(s, s->table[LG_FeaturedPictures] + 4u * (uint32_t)t); !s->hack && rs32(s, a) && T->pics < PICTURES; a += 6) {
+    for (uint32_t a = rs32(s, s->table[LG_FeaturedPictures] + 4u * (uint32_t)t), k = 0; rs32(s, a) && T->pics < PICTURES && k < 64; a += 6, k++) {
         T->pic[T->pics].pic = rs32(s, a);
+        T->pic[T->pics].photo = -1;
         T->pic[T->pics++].slot = (uint8_t)rs16(s, a + 4);
     }
     for (int r = 0; r < s->rows && !T->conference[0]; r++)   /* the side of the draws it plays on */
@@ -902,10 +1045,18 @@ static void dma_align(struct buf *b, uint32_t size)
         while (at(b) & 0x1FFFF && !b->bad) put8(b, 0);
 }
 
-/* the team name banners, when a team has its own: Teamblocksmap again with its banners' tiles
- * and map rows after the cartridge's 28 (plain tiles, as the game loads them for the playoff
- * tree), and every team's TeamBitmaps banner (the setup screen draws them one at a time) */
-static void put_banners(struct buf *b, struct lg *L, const uint8_t *c, const char *const text[], struct league *lg)
+/* set's half (0 on top, 1 below) of a team's own banners (88 x 32) as banner.c's pixels */
+static void half(const uint8_t *own, int set, uint8_t px[16][88])
+{
+    for (int y = 0; y < 16; y++)
+        for (int x = 0; x < 88; x++) px[y][x] = (uint8_t)(own[(16 * set + y) * ART_BANNER_W + x] - 16 * set);
+}
+
+/* the team name banners, when a team has its own (own[t]: both, 88 x 32): Teamblocksmap again
+ * with its banners' tiles and map rows after the cartridge's 28 (plain tiles, as the game loads
+ * them for the playoff tree), and every team's TeamBitmaps banner (the setup screen draws them
+ * one at a time) */
+static void put_banners(struct buf *b, struct lg *L, const uint8_t *c, uint8_t *const own_px[], struct league *lg)
 {
     static uint8_t tiles[22 * 32];
     uint8_t px[16][88];
@@ -917,13 +1068,13 @@ static void put_banners(struct buf *b, struct lg *L, const uint8_t *c, const cha
     uint32_t tb = lg->table[LG_Teamblocksmap] = at(b);
     put32(b, SYM_Teamblocksmap + c32(c, SYM_Teamblocksmap) - tb);   /* (its palette: the cartridge's) */
     put32(b, 0);
-    for (int t = 0; t < L->teams; t++) own += text[t] != NULL;
+    for (int t = 0; t < L->teams; t++) own += own_px[t] != NULL;
     put16(b, (unsigned)(count + 22 * own));               /* (plain: DMA'd as they are) */
     put(b, cart_tiles, 32u * (uint32_t)count);
     for (int t = 0, k = 0; t < L->teams; t++) {
         lg->block[t] = (uint8_t)L->t[t].art;
-        if (!text[t]) continue;
-        banner_pixels(BANNER_BLOCKS, L->t[t].art, text[t], px);
+        if (!own_px[t]) continue;
+        half(own_px[t], 0, px);
         banner_tiles(px, tiles);
         lg->block[t] = (uint8_t)(CART_TEAMS + k++);
         lg->block_tiles[t] = at(b);
@@ -934,14 +1085,15 @@ static void put_banners(struct buf *b, struct lg *L, const uint8_t *c, const cha
     put16(b, (unsigned)(2 * (CART_TEAMS + own)));
     put(b, c + map + 4, 2u * 11 * 2 * CART_TEAMS);
     for (int t = 0, k = 0; t < L->teams; t++) {
-        if (!text[t]) continue;
+        if (!own_px[t]) continue;
         for (int i = 0; i < 22; i++)                      /* (its art team's priority and palette, no flips) */
             put16(b, (c16(c, map + 4 + 2u * (uint32_t)(L->t[t].art * 22 + i)) & 0xE000) | (unsigned)(count + 22 * k + i));
         k++;
     }
     dma_align(b, 22u * 32 * (uint32_t)L->teams);
     for (int t = 0; t < L->teams; t++) {
-        banner_pixels(BANNER_BITMAPS, L->t[t].art, text[t], px);
+        if (own_px[t]) half(own_px[t], 1, px);
+        else banner_pixels(BANNER_BITMAPS, L->t[t].art, NULL, px);
         banner_tiles(px, tiles);
         lg->banner_tiles[t] = at(b);
         put(b, tiles, sizeof tiles);
@@ -957,22 +1109,41 @@ static void put_banners(struct buf *b, struct lg *L, const uint8_t *c, const cha
 static int build(struct lg *L, const uint8_t *c, struct built *B)
 {
     struct buf b = { 0 };
-    const char *text[LEAGUE_MAX] = { NULL };
+    static uint8_t made[LEAGUE_MAX][ART_BANNER_H * ART_BANNER_W];
+    uint8_t *own_px[LEAGUE_MAX] = { NULL };
     int own = 0;
     memset(B, 0, sizeof *B);
     if (banner_prepare(c) < 0) return fail("the cartridge's team banners cannot be read");
+    const struct romsrc *cs = cart_src();
     for (int t = 0; t < L->teams; t++) {                  /* (what a team leaves to its art team's) */
         struct team *T = &L->t[t], A;
         cart_team(c, T->art, &A);
+        /* its banners: the name in its banner column; else its picture (art/banners), unless that
+         * is its art team's as it is; else its city's name, when the city is its own (and fits) */
         char why[200];
-        if (!T->banner[0] && !same_word(T->city, A.city) && strlen(T->city) <= LEN_BANNER) {   /* (a city of its own: its name on its banners, */
-            for (size_t k = 0; k <= strlen(T->city); k++)                                   /* when they have room for it) */
+        int picture = 0;
+        if (T->has_banners) {
+            uint16_t pal[32];
+            if (art_banners(cs, T->art, made[t], pal) < 0) return fail("the cartridge's team banners cannot be read");
+            picture = memcmp(made[t], T->banners, sizeof made[t]) != 0;
+        }
+        if (!T->banner[0] && !picture && !same_word(T->city, A.city) && strlen(T->city) <= LEN_BANNER) {
+            for (size_t k = 0; k <= strlen(T->city); k++)
                 T->banner[k] = T->city[k] >= 'a' && T->city[k] <= 'z' ? (char)(T->city[k] - 32) : T->city[k];
             if (banner_check(T->banner, why, sizeof why) < 0) T->banner[0] = 0;
         }
-        if (T->banner[0]) {
+        if (!T->banner[0] && picture) {
+            own_px[t] = T->banners;
+            own++;
+        } else if (T->banner[0]) {
             if (banner_check(T->banner, why, sizeof why) < 0) { err_file = "teams.csv"; err_line = 0; return fail("%s: %s", T->abbr, why); }
-            text[t] = T->banner;
+            uint8_t px[16][88];
+            for (int set = 0; set < 2; set++) {
+                banner_pixels(set ? BANNER_BITMAPS : BANNER_BLOCKS, T->art, T->banner, px);
+                for (int y = 0; y < 16; y++)
+                    for (int x = 0; x < 88; x++) made[t][(16 * set + y) * ART_BANNER_W + x] = (uint8_t)(px[y][x] + 16 * set);
+            }
+            own_px[t] = made[t];
             own++;
         }
         int *mine[7] = { &T->rating, &T->offense, &T->defense, &T->pp, &T->pk, &T->home, &T->away };
@@ -991,14 +1162,57 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
         set32(&b, list + 4u * (uint32_t)t, at(&b));
         put_block(&b, &L->t[t]);
     }
+    /* the art of its own: each logo and centre ice not its art team's, each photo not the
+     * cartridge's of its name (the tiles a logo or centre ice has are DMA'd: none across 128 KB) */
+    uint32_t logo_at[LEAGUE_MAX], ice_at[LEAGUE_MAX], *photo_at = calloc((size_t)L->photos + 1, sizeof *photo_at);
+    if (!photo_at) { free(b.b); return fail("out of memory"); }
+    for (int t = 0; t < L->teams; t++) {
+        struct team *T = &L->t[t];
+        uint8_t px[ICE_MAX], asset[ART_LOGO_BYTES];
+        uint16_t pal[16];
+        logo_at[t] = c32(c, SYM_TeamLogoBitmaps + 4u * (uint32_t)T->art);
+        ice_at[t] = c32(c, SYM_TeamGfxList + 4u * (uint32_t)T->art);
+        if (T->has_logo && (art_logo(cs, T->art, px, pal) < 0 || memcmp(px, T->logo, ART_LOGO * ART_LOGO) || memcmp(pal, T->logo_pal, sizeof pal))) {
+            size_t n = art_logo_make(T->logo, asset);
+            dma_align(&b, (uint32_t)n);
+            logo_at[t] = at(&b);
+            put(&b, asset, n);
+            even(&b);
+        }
+        if (T->has_ice) {
+            int w, h;
+            if (art_ice(cs, T->art, px, &w, &h, pal) < 0 || art_ice_make(cs, T->ice, w, h, asset) < 0) {
+                free(photo_at);
+                free(b.b);
+                return fail("%s: %s", T->abbr, art_error());
+            }
+            if (memcmp(asset, c + ice_at[t], ART_ICE_BYTES)) {
+                dma_align(&b, ART_ICE_BYTES);
+                ice_at[t] = at(&b);
+                put(&b, asset, ART_ICE_BYTES);
+            }
+        }
+    }
+    for (int k = 0; k < L->photos; k++) {
+        uint8_t px[ART_LOGO * ART_LOGO], asset[ART_PHOTO_BYTES];
+        uint32_t pic = picture_named(L->photo[k].name);
+        if (pic && art_photo(cs, pic, px) == 0 && !memcmp(px, L->photo[k].px, sizeof px)) { photo_at[k] = pic; continue; }
+        if (art_photo_make(L->photo[k].px, asset) < 0) {
+            free(photo_at);
+            free(b.b);
+            return fail("art/photos/%s.png: a photo has 8 shades, colours 5 to 12 of its palette", L->photo[k].name);
+        }
+        photo_at[k] = at(&b);
+        put(&b, asset, sizeof asset);
+    }
     lg->table[LG_TeamPalettes] = at(&b);
     for (int t = 0; t < L->teams; t++)
         for (int p = PAL_MATCHUP; p <= PAL_MATCHUP2; p++)
             for (int k = 0; k < 16; k++) put16(&b, L->t[t].pal[p][k]);
     lg->table[LG_TeamLogoBitmaps] = at(&b);
-    for (int t = 0; t < L->teams; t++) put32(&b, c32(c, SYM_TeamLogoBitmaps + 4u * (uint32_t)L->t[t].art));
+    for (int t = 0; t < L->teams; t++) put32(&b, logo_at[t]);
     lg->table[LG_TeamGfxList] = at(&b);
-    for (int t = 0; t < L->teams; t++) put32(&b, c32(c, SYM_TeamGfxList + 4u * (uint32_t)L->t[t].art));
+    for (int t = 0; t < L->teams; t++) put32(&b, ice_at[t]);
     lg->table[LG_TeamSongs] = at(&b);
     for (int t = 0; t < L->teams; t++)
         for (int k = 0; k < 6; k++) put8(&b, (unsigned)L->t[t].songs[k]);
@@ -1013,7 +1227,10 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
     for (int t = 0; t < L->teams; t++) put32(&b, 0);
     for (int t = 0; t < L->teams; t++) {
         set32(&b, pics + 4u * (uint32_t)t, at(&b));
-        for (int i = 0; i < L->t[t].pics; i++) { put32(&b, L->t[t].pic[i].pic); put16(&b, L->t[t].pic[i].slot); }
+        for (int i = 0; i < L->t[t].pics; i++) {
+            put32(&b, L->t[t].pic[i].photo >= 0 ? photo_at[L->t[t].pic[i].photo] : L->t[t].pic[i].pic);
+            put16(&b, L->t[t].pic[i].slot);
+        }
         put32(&b, 0);
     }
     lg->table[LG_playoffseats] = at(&b);
@@ -1023,8 +1240,10 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
         put16(&b, t < CART_TEAMS ? 26u * (unsigned)t : LEAGUE_SRAM_PLAYERS / 4 + 26u * (unsigned)(t - CART_TEAMS));
     lg->table[LG_Teamblocksmap] = SYM_Teamblocksmap;
     for (int t = 0; t < L->teams; t++) lg->block[t] = (uint8_t)L->t[t].art;
-    if (own) put_banners(&b, L, c, text, lg);
+    if (own) put_banners(&b, L, c, own_px, lg);
+    free(photo_at);
     if (b.bad) { free(b.b); return fail("out of memory"); }
+    if (at(&b) > IMAGE_MAX) { free(b.b); return fail("%u KB past the cartridge: a league holds %u KB at most", (unsigned)((at(&b) - ROM_SIZE) >> 10), (IMAGE_MAX - ROM_SIZE) >> 10); }
     lg->teams = (uint16_t)L->teams;
     lg->playoff_teams = (uint16_t)L->playoff_teams;
     lg->playoff_rows = (uint16_t)L->rows;
@@ -1284,12 +1503,14 @@ int league_extract(const struct romsrc *s, const char *dir, const char *name)
     char cell[64];
     if (!(f = create(dir, "league.ini"))) return -1;
     if (s->hack)
-        fprintf(f, "# %s's league, from the hack: the files beside this one are its teams, players and\n"
-                   "# lines, to change as you like (README.md, \"Leagues\"). Its colours, logos, banners and pictures\n"
-                   "# go with its art (its colours are for its own player sprites): the art team's (teams.csv) for now\n", name);
+        fprintf(f, "# %s's league, from the hack: the files beside this one are its teams, players, lines,\n"
+                   "# colours and art (art/: logos, banners, centre ice, photos), to change as you like (README.md,\n"
+                   "# \"Leagues\"). Its jerseys' colours are for its own player sprites, still to come: until then its\n"
+                   "# teams wear their art team's (teams.csv)\n", name);
     else
         fprintf(f, "# NHL '94's league, from the cartridge: the files beside this one are its teams, players,\n"
-                   "# lines, colours and pictures, to change as you like (README.md, \"Leagues\")\n");
+                   "# lines, colours, pictures and art (art/: logos, banners, centre ice, photos), to change as you\n"
+                   "# like (README.md, \"Leagues\")\n");
     fprintf(f, "name = %s\nplayoff_teams = %d\n", name, s->playoff_teams);
     fclose(f);
     if (!(f = create(dir, "teams.csv"))) return -1;
@@ -1337,23 +1558,79 @@ int league_extract(const struct romsrc *s, const char *dir, const char *name)
     fputs("team,palette,colours\n", f);
     for (int t = 0; t < s->teams; t++)
         for (int p = 0; p < PALS; p++) {
-            if (s->hack) break;                               /* (a hack's go with its art: its sprites, logos, banners) */
+            if (s->hack && p != PAL_MATCHUP && p != PAL_MATCHUP2) continue;   /* (a hack's jerseys go with its sprites; a logo's colours are its PNG's) */
             field(f, T[t].abbr, 0);
             fprintf(f, "%s,", pal_names[p]);
             for (int k = 0; k < 16; k++) fprintf(f, "%04X%c", T[t].pal[p][k], k < 15 ? ' ' : '\n');
         }
     fclose(f);
+    /* the pictures: the cartridge's by their labels; a hack's by the players they are of (its own
+     * may sit where the cartridge's were), each once */
+    static struct { uint32_t pic; char name[LEN_PHOTO + 1]; } named[PHOTOS_MAX];
+    int nnamed = 0;
     if (!(f = create(dir, "pictures.csv"))) return -1;
     fputs("team,number,picture\n", f);
     for (int t = 0; t < s->teams; t++)
         for (int i = 0; i < T[t].pics; i++) {
-            const char *pic = picture_name(T[t].pic[i].pic);
-            if (!pic || T[t].pic[i].slot >= T[t].players) continue;
+            uint32_t pic = T[t].pic[i].pic;
+            if (T[t].pic[i].slot >= T[t].players) continue;
+            int k = 0;
+            while (k < nnamed && named[k].pic != pic) k++;
+            if (k == nnamed) {
+                char nm[LEN_PHOTO + 1];
+                const char *label = s->hack ? NULL : picture_name(pic);
+                if (label) snprintf(nm, sizeof nm, "%s", label);
+                else {
+                    int n = snprintf(nm, sizeof nm, "Card");
+                    for (const char *q = T[t].pl[T[t].pic[i].slot].name; *q && n < LEN_PHOTO - 2; q++)
+                        if ((*q >= 'A' && *q <= 'Z') || (*q >= 'a' && *q <= 'z') || (*q >= '0' && *q <= '9')) nm[n++] = *q;
+                    nm[n] = 0;
+                    for (int again = 2, clash = 1; clash; again++) {   /* (another's of that name: 2, 3 ...) */
+                        clash = 0;
+                        for (int j = 0; j < nnamed; j++) clash |= !strcmp(named[j].name, nm);
+                        if (clash) snprintf(nm + n, sizeof nm - (size_t)n, "%d", again);
+                    }
+                }
+                if (nnamed == PHOTOS_MAX) continue;
+                named[nnamed].pic = pic;
+                snprintf(named[nnamed++].name, sizeof named[0].name, "%s", nm);
+            }
             field(f, T[t].abbr, 0);
             field(f, player_cell(&T[t], T[t].pic[i].slot, cell, sizeof cell), 0);
-            fprintf(f, "%s\n", pic);
+            fprintf(f, "%s\n", named[k].name);
         }
     fclose(f);
+    /* the art: each team's logo, banners and centre ice, each picture's photo (art/) */
+    char sub[1100];
+    static const char *const kinds[4] = { "logos", "banners", "ice", "photos" };
+    for (int k = 0; k < 4; k++) {
+        snprintf(sub, sizeof sub, "%.900s/art/%s", dir, kinds[k]);
+        if (make_dirs(sub) < 0) return -1;
+    }
+    for (int t = 0; t < s->teams; t++) {
+        static uint8_t px[ICE_MAX];
+        uint16_t pal[32];
+        int w, h;
+        char path[1200];
+        snprintf(path, sizeof path, "%.900s/art/logos/%.3s.png", dir, T[t].abbr);
+        if (art_logo(s, t, px, pal) < 0) return fail("%s's logo cannot be read", T[t].abbr);
+        if (art_save(path, px, ART_LOGO, ART_LOGO, pal, 16, 1) < 0) return fail("%s", art_error());
+        snprintf(path, sizeof path, "%.900s/art/banners/%.3s.png", dir, T[t].abbr);
+        if (art_banners(s, t, px, pal) < 0) return fail("%s's banners cannot be read", T[t].abbr);
+        if (art_save(path, px, ART_BANNER_W, ART_BANNER_H, pal, 32, 0) < 0) return fail("%s", art_error());
+        snprintf(path, sizeof path, "%.900s/art/ice/%.3s.png", dir, T[t].abbr);
+        if (art_ice(s, t, px, &w, &h, pal) < 0) return fail("%s's centre ice cannot be read", T[t].abbr);
+        if (art_save(path, px, w, h, pal, 16, 0) < 0) return fail("%s", art_error());
+    }
+    for (int k = 0; k < nnamed; k++) {
+        uint8_t px[ART_LOGO * ART_LOGO];
+        uint16_t pal[16];
+        char path[1200];
+        art_photo_palette(s, pal);
+        snprintf(path, sizeof path, "%.900s/art/photos/%.40s.png", dir, named[k].name);
+        if (art_photo(s, named[k].pic, px) < 0) return fail("the photo %s cannot be read", named[k].name);
+        if (art_save(path, px, ART_LOGO, ART_LOGO, pal, 16, 0) < 0) return fail("%s", art_error());
+    }
     char path[1100];
     snprintf(path, sizeof path, "%s/playoffs.csv", dir);
     remove(path);

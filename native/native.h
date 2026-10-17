@@ -77,6 +77,7 @@ struct romsrc {
     int hack;                           /* 0: the cartridge */
     uint32_t table[LG_TABLES];          /* (league.h's tables; BannerSlotMap none) */
     int teams, playoff_teams, rows;
+    uint32_t bitmaps, rink, rink_tiles, photos;   /* TeamBitmaps, Rinktilelist, Rinktiles, PicturePalette */
 };
 void romsrc_cartridge(struct romsrc *s, const uint8_t *cart);
 /* rom (size bytes), a hack read against the cartridge cart: 0, else -1 and why */
@@ -87,6 +88,32 @@ uint16_t rs16(const struct romsrc *s, uint32_t a);
 uint32_t rs32(const struct romsrc *s, uint32_t a);
 /* s's league written as a folder named name (league_export: the cartridge's): 0, -1 */
 int league_extract(const struct romsrc *s, const char *dir, const char *name);
+
+/* team art as pictures (art.c): logos, banners, centre ice and photos out of a ROM as palette
+ * indexes, PNGs of them, and the game's formats again from PNGs */
+#include "mdrt/png.h"
+#define ART_LOGO 48                     /* a logo's and a photo's side */
+#define ART_LOGO_BYTES (8 + 2 + 36 * 32 + 4 + 72)
+#define ART_PHOTO_BYTES (8 + 2 + 36 * 24)
+#define ART_ICE_BYTES (8 + 2 + 24 * 32)
+#define ART_BANNER_W 88
+#define ART_BANNER_H 32
+const char *art_error(void);
+uint32_t art_rgb(uint16_t word);
+uint16_t art_word(uint32_t rgb);
+int art_tiles(const struct romsrc *s, uint32_t a, uint8_t *out, int max);
+int art_logo(const struct romsrc *s, int t, uint8_t px[ART_LOGO * ART_LOGO], uint16_t pal[16]);
+size_t art_logo_make(const uint8_t px[ART_LOGO * ART_LOGO], uint8_t *out);
+void art_photo_palette(const struct romsrc *s, uint16_t pal[16]);
+int art_photo(const struct romsrc *s, uint32_t pic, uint8_t px[ART_LOGO * ART_LOGO]);
+int art_photo_make(const uint8_t px[ART_LOGO * ART_LOGO], uint8_t out[ART_PHOTO_BYTES]);
+int art_ice(const struct romsrc *s, int t, uint8_t *px, int *w, int *h, uint16_t pal[16]);
+int art_ice_make(const struct romsrc *s, const uint8_t *px, int w, int h, uint8_t out[ART_ICE_BYTES]);
+int art_banners(const struct romsrc *s, int t, uint8_t px[ART_BANNER_H * ART_BANNER_W], uint16_t pal[32]);
+int art_save(const char *path, const uint8_t *px, int w, int h, const uint16_t *pal, int n, int transparent0);
+int art_load(const char *path, mdrt_png *p, int w, int h);
+int art_indexes(const char *path, const mdrt_png *p, int x0, int y0, int w, int h, const uint16_t *pal, int n, int base, uint8_t *out);
+int art_own_palette(const char *path, const mdrt_png *p, uint16_t pal[16], uint8_t *out);
 /* the leagues/ folder's leagues for the menu (the cartridge's first): the count */
 int league_list(const char *const **names, const char *const **labels);
 const char *league_sram(const char *base);   /* the next game's save RAM file (base: the cartridge's) */

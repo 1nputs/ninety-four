@@ -18,8 +18,10 @@ user's ROM, so they stay in out/ (never committed).
 import csv
 import os
 import shutil
+import struct
 import subprocess
 import sys
+import zlib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NHL94 = os.path.join(ROOT, 'build', 'nhl94')
@@ -78,6 +80,7 @@ def thirty_two(src=CARTRIDGE, dst=THIRTY_TWO):
             added += [[abbr] + r[1:] for r in table[1:] if r[0] == source]
         write(os.path.join(dst, name), table + added)
     share_number(dst, 'CLE', 1, 2)                         # (two wear one number: named in its lines)
+    own_art(dst)
 
 
 def share_number(d, team, first, second, name_first=True):
@@ -97,6 +100,47 @@ def share_number(d, team, first, second, name_first=True):
         if r[0] == team:
             r[2:] = [renamed.get(c, c) for c in r[2:]]
     write(os.path.join(d, 'lines.csv'), lines)
+
+
+def png_rgb(path, w, h, pixel):
+    """a truecolour PNG with alpha (as any editor writes): pixel(x, y) -> (r, g, b, a)"""
+    raw = b''.join(b'\0' + b''.join(bytes(pixel(x, y)) for x in range(w)) for y in range(h))
+    chunk = lambda t, d: struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t + d) & 0xFFFFFFFF)
+    with open(path, 'wb') as f:
+        f.write(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 6, 0, 0, 0))
+                + chunk(b'IDAT', zlib.compress(raw, 9)) + chunk(b'IEND', b''))
+
+
+def png_poke(path, x, y, index):
+    """one pixel of an indexed PNG as nhl94 writes them (8 bits, filter 0) set to index"""
+    d = bytearray(open(path, 'rb').read())
+    o, w, out = 8, 0, b''
+    while o < len(d):
+        n = struct.unpack('>I', d[o:o + 4])[0]
+        t, c = bytes(d[o + 4:o + 8]), bytes(d[o + 8:o + 8 + n])
+        if t == b'IHDR':
+            w = struct.unpack('>I', c[:4])[0]
+        if t == b'IDAT':
+            raw = bytearray(zlib.decompress(c))
+            raw[y * (w + 1) + 1 + x] = index
+            c = zlib.compress(bytes(raw))
+            out += struct.pack('>I', len(c)) + t + c + struct.pack('>I', zlib.crc32(t + c) & 0xFFFFFFFF)
+        else:
+            out += bytes(d[o:o + 12 + n])
+        o += 12 + n
+    open(path, 'wb').write(bytes(d[:8]) + out)
+
+
+# the art the 32-team league draws its own: HOU a logo in plain RGB (a corner transparent, red,
+# white), KC a photo in colours (a ramp of greys: the shades by brightness), BOS its logo with one
+# pixel changed
+def own_art(dst):
+    png_rgb(os.path.join(dst, 'art', 'logos', 'HOU.png'), 48, 48,
+            lambda x, y: (0, 0, 0, 0) if x < 8 and y < 8 else (255, 0, 0, 255) if x < 24 else (255, 255, 255, 255))
+    png_rgb(os.path.join(dst, 'art', 'photos', 'KCScout.png'), 48, 48, lambda x, y: (x * 255 // 47, x * 255 // 47, x * 200 // 47, 255))
+    with open(os.path.join(dst, 'pictures.csv'), 'a') as f:
+        f.write('KC,%s,KCScout\n' % read(os.path.join(dst, 'players.csv'))[1:][[r[0] for r in read(os.path.join(dst, 'players.csv'))[1:]].index('KC')][2])
+    png_poke(os.path.join(dst, 'art', 'logos', 'BOS.png'), 0, 0, 1)
 
 
 # broken leagues: (name, the change to the cartridge's files, what the refusal must say)
@@ -124,12 +168,20 @@ BROKEN = [
     ('a shared number', lambda d: share_number(d, 'ANH', 1, 2, name_first=False), 'lines.csv, line 2: ANH X: 2 players wear 27: name him instead'),
     ('art', edit('teams.csv', lambda t: cell(t, 1, 'art', 'SEA')), 'art: SEA is not a cartridge team'),
     ('a colour', edit('colours.csv', lambda t: cell(t, 1, 'colours', '0EEE')), 'colours.csv, line 2: colours: 16 Genesis colour words'),
-    ('a picture', edit('pictures.csv', lambda t: cell(t, 1, 'picture', 'CardNobody')), 'picture: "CardNobody" is not one'),
     ('a draw', edit('playoffs.csv', lambda t: cell(t, 1, '2', 'BUF')), 'playoffs.csv, line 2: BUF twice in a draw'),
     ('too few teams', edit('teams.csv', lambda t: t.__delitem__(slice(18, None))), 'teams.csv: 17 teams'),
     ('no teams file', lambda d: os.remove(os.path.join(d, 'teams.csv')), 'teams.csv: not in'),
     ('a wide banner', edit('teams.csv', lambda t: cell(t, 1, 'banner', 'WWWWWWWWWW')), 'ANH: banner: "WWWWWWWWWW" is 110 pixels wide, a banner holds 82'),
     ('a banner letter', edit('teams.csv', lambda t: cell(t, 1, 'banner', 'A#B')), "ANH: banner: the banners have no letter '#'"),
+    ('a logo\'s size', lambda d: png_rgb(os.path.join(d, 'art', 'logos', 'BUF.png'), 50, 48, lambda x, y: (0, 0, 0, 255)),
+     'art/logos/BUF.png: 50 x 48 pixels; it must be 48 x 48'),
+    ('a logo\'s colours', lambda d: png_rgb(os.path.join(d, 'art', 'logos', 'BUF.png'), 48, 48, lambda x, y: (x * 5, y * 5, 0, 255)),
+     'art/logos/BUF.png: more than 15 colours'),
+    ('a banner\'s colour', lambda d: png_rgb(os.path.join(d, 'art', 'banners', 'CGY.png'), 88, 32, lambda x, y: (1, 200, 3, 255)),
+     'art/banners/CGY.png: the colour #01C803 at 0, 0 is none of its palette\'s'),
+    ('not a PNG', lambda d: open(os.path.join(d, 'art', 'ice', 'CHI.png'), 'wb').write(b'GIF89a not a PNG'), 'art/ice/CHI.png: not a PNG'),
+    ('a photo missing', edit('pictures.csv', lambda t: cell(t, 1, 'picture', 'CardNoSuchPlayer')),
+     'pictures.csv, line 2: picture: "CardNoSuchPlayer" is neither a photo of the folder\'s'),
 ]
 
 
