@@ -7,6 +7,7 @@
 #include "game.h"
 #include "rom.h"
 #include "rules.h"
+#include "symbols_gen.h"
 
 static int checks, fails;
 #define CHECK(c) do { checks++; if (!(c)) { fails++; printf("  FAIL %s:%d: %s\n", __FILE__, __LINE__, #c); } } while (0)
@@ -115,6 +116,63 @@ static void assists(void)
     memset(rules, 0, sizeof rules);
 }
 
+/* plus/minus: the skaters on the ice for a goal (objects 0-11: position > 0, a roster number),
+ * plus for the scorers, minus for the others; none for a power play goal or with the rule off */
+static void plusminus(void)
+{
+    memset(&g, 0, sizeof g);
+    rules_clear_stats();
+    for (int i = 0; i < 12; i++) {                        /* six a team: a goalie (0) and five skaters */
+        struct SortObj *o = sortobj(i);
+        o->position = (int16_t)(i % 6);
+        o->pnum = (uint8_t)(i % 6 + 2);
+        o->pflags = (uint16_t)(i >= 6 ? 1 << pfteam : 0);
+    }
+    sortobj(5)->position = -1;                            /* (home's last skater off the ice: in the box) */
+    rules_count_goal(0, 2);                               /* rule off: nothing */
+    CHECK(rule_plusminus[0][3] == 0 && rule_plusminus[1][3] == 0);
+    rules[RULE_MORE_STATS] = 1;
+    rules_count_goal(0, 2);                               /* home scores at even strength */
+    CHECK(rule_plusminus[0][3] == 1 && rule_plusminus[0][6] == 1 && rule_plusminus[1][3] == -1 && rule_plusminus[1][7] == -1);
+    CHECK(rule_plusminus[0][2] == 0 && rule_plusminus[1][2] == 0);   /* the goalies */
+    CHECK(rule_plusminus[0][7] == 0);                     /* the one in the box */
+    rules_count_goal(1, 3);                               /* away on the power play: nothing */
+    CHECK(rule_plusminus[0][3] == 1 && rule_plusminus[1][3] == -1);
+    rules_count_goal(1, 1);                               /* away short handed: counts */
+    CHECK(rule_plusminus[0][3] == 0 && rule_plusminus[1][3] == 0);
+    rules_clear_stats();
+    CHECK(rule_plusminus[1][4] == 0);
+    memset(rules, 0, sizeof rules);
+}
+
+/* the Player Stats list with more stats: the two columns' values, and sorted by plus/minus every
+ * player listed, negative ones too (the list's key cannot be negative: the sort adds $80) */
+static void stats_list(void)
+{
+    memset(&g, 0, sizeof g);
+    rules_clear_stats();
+    uint8_t *tm = team_struct(0);
+    wr32(tm + tmdata, rd32(rom_ptr(SYM_TeamList)));       /* Anaheim's players */
+    uint16_t players = GetPlayerCount(tm), goalies = GetGoalieCount(tm);
+    rules[RULE_MORE_STATS] = 1;
+    for (uint16_t p = goalies; p < players; p++) rule_plusminus[0][p] = (int8_t)((int)p % 7 - 3);   /* -3 ... 3 */
+    tm[tmpchecks + goalies] = 9;
+    CHECK(ReadStatColumn(goalies, 6, tm, 0) == 9 && (int16_t)ReadStatColumn((uint16_t)(goalies + 1), 5, tm, 0) == (int)(goalies + 1) % 7 - 3);
+    CHECK(GetStatColumn(0, 5, tm, 0) == 0 && GetStatColumn(0, 6, tm, 0) == 0);   /* (goalies: none) */
+    g.DispAttribCtr = 5;
+    DrawStatsList(tm, 0);
+    const uint8_t *order = ram_ptr(RAM_BASE + RAM_OFF_Satt);
+    int listed = 0, sorted = 1;
+    for (int i = 0; i < 32 && !(order[i] & 0x80); i++) {
+        listed++;
+        if (i && (int16_t)GetStatColumn(order[i], 5, tm, 0) > (int16_t)GetStatColumn(order[i - 1], 5, tm, 0)) sorted = 0;
+    }
+    printf("  stats list: %d of %d players by plus/minus, the first %+d, the last %+d\n", listed, players,
+           (int16_t)GetStatColumn(order[0], 5, tm, 0), (int16_t)GetStatColumn(order[listed - 1], 5, tm, 0));
+    CHECK(listed == players && sorted);
+    memset(rules, 0, sizeof rules);
+}
+
 int main(void)
 {
     const char *rom = getenv("NHL94_ROM");
@@ -123,6 +181,8 @@ int main(void)
     overtime();
     weights();
     assists();
+    plusminus();
+    stats_list();
     printf("rulestest: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }

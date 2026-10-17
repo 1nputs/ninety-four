@@ -338,6 +338,7 @@ void clearTeamStats(void)
     memcpy(RAM_W(RAM_OFF_awayhotcoldsave), away + 0x1A2, 0x1A0);
     memset(home, 0, tmsize);
     memset(away, 0, tmsize);
+    rules_clear_stats();                                  /* (the rules' own, beside the RAM) */
     memcpy(home + 0x1A2, RAM_W(RAM_OFF_homehotcoldsave), 0x1A0);
     memcpy(away + 0x1A2, RAM_W(RAM_OFF_awayhotcoldsave), 0x1A0);
     wr16(away + tmgoalie, ag);

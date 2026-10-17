@@ -759,6 +759,8 @@ goal:
     int16_t gk = (int16_t)rd16(a1 + tmgoalie);
     if (gk >= 0)
         a1[0xB4 + gk]++;                                 /* goal against */
+    if (!(g.sflags4 & HI(5)) && !(g.gmode2 & HI(0)))     /* (rules: plus/minus; not a penalty shot's or a shootout's) */
+        rules_count_goal(a2 == team_struct(1), e[2] & 0x7F);
     ChkShotStat();
     PenGoalStuff(a1, a2);
     g.BA_PS_flags &= (uint16_t)~HI(3);

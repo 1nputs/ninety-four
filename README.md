@@ -62,8 +62,9 @@ player and the whole game (set before it starts; a state keeps its game's rules)
 default, is the original exactly. So far: more period lengths in the setup (2, 3, 7 and 15 minutes
 besides 5, 10 and 20), a 5:00 or 3:00 regular season overtime, the weight bug fixed (the
 original sums a check's weights in a byte that wraps, so a heavy skater checked by a lighter
-player falls easily) and the second assist kept on a give-and-go. More are coming: the new
-stats, physics, energy and penalties, presets, then 32 teams and leagues of your own.
+player falls easily), the second assist kept on a give-and-go, and plus/minus with body checks in
+Player Stats (the sort scrolls on to two more columns; power play goals count for no one's +/-).
+More are coming: physics, energy and penalties, presets, then 32 teams and leagues of your own.
 
 **Captures:** the last 20 seconds are always kept; F10 (or the menu's Capture page) saves them,
 and F11 records until you press it again. They go to `videos/` as GIFs (exact colours, 30 frames
@@ -191,7 +192,7 @@ From the least ambitious to the most.
 - [x] Controller remapping, player slots, turbo, dead zones
 - [x] Capture: the replay (the last 20 seconds) and recordings, as GIFs
 - [x] Save slots with thumbnails; quick resume on quit and start (states during play)
-- [x] Game rules, the host's for every player (Classic: the original): period lengths, overtime, the weight bug fix, the second assist fix
+- [x] Game rules, the host's for every player (Classic: the original): period lengths, overtime, the weight bug fix, the second assist fix, plus/minus and checks
 - [ ] Skip the EA screen, boot straight into a game
 - [x] Colour options; scanlines, CRT mask, composite dither blending
 - [ ] IPS and BPS patches, soft-patching, the ROM check as a toggle for data hacks

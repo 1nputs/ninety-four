@@ -28,7 +28,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(ROOT, 'tools', 'oracle', 'scripts')
 NHL94 = os.path.join(ROOT, 'build', 'nhl94')
 
-RULES_ON = ['--rule', 'period_lengths=more', '--rule', 'overtime=5min', '--rule', 'weight_fix=on', '--rule', 'assist_fix=on']
+RULES_ON = ['--rule', 'period_lengths=more', '--rule', 'overtime=5min', '--rule', 'weight_fix=on', '--rule', 'assist_fix=on',
+            '--rule', 'more_stats=on']
 # (name, frames, options): power on unless --snap
 RUNS = [
     ('attract', 7200, []),
