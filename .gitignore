@@ -11,6 +11,7 @@
 /out/
 /screenshots/
 /states/
+/videos/
 /settings.ini
 __pycache__/
 *.o

@@ -10,7 +10,8 @@ frames a second, without the cartridge's slowdown.
 
 And things the cartridge never had: **save in the middle of a game (F9), load it back (F10), and
 hold F4 to rewind** the goal you just gave up. Hold F6 to fast-forward, slow the replay of that
-one-timer down, step through it a frame at a time, and press F12 to keep it.
+one-timer down, step through it a frame at a time, and press F12 to keep it. Scored a beauty?
+**Shift+F12 saves the last 20 seconds** as a GIF or an MP4 to share.
 
 Bring your own cartridge dump and you're on the ice in a minute (what to install first is
 under [Build](#build)):
@@ -44,14 +45,24 @@ Game controllers work too (the first two are players 1 and 2).
 | F9 / F10 | save / load a state (the slot chosen last) |
 | F11 or Alt+Enter | full screen |
 | F12 | screenshot (a PNG in `screenshots/`) |
+| Shift+F12 | save the replay: the last 20 seconds (in `videos/`) |
+| Ctrl+F12 | start / stop recording a video |
 | Esc | the menu |
 
 **The menu** (Esc, or a controller's Back button; arrows and Enter, or the d-pad, A and B) has the
 ROM, a reset, states, the video (a pixel-art upscaler: Scale2x, Scale3x or MMPX, which smooth the
 staircases without blurring or adding colours; sharp, integer or fit scaling; square pixels or
-4:3; full screen), the sound (volume, and the FM sound core and chip: hear the difference as you play),
-players (see below), options, and every key of the pads and the controls: pick one and press the
-new key.
+4:3; the colours' levels, standard, full range or the console's own; dithering blended as a
+television blended it; a picture tube's scanlines and its aperture grille, slot mask or shadow
+mask; full screen), captures (below), the sound (volume, and the FM sound core and chip: hear the
+difference as you play), players (see below), options, and every key of the pads and the
+controls: pick one and press the new key (with Shift, Ctrl or Alt if you like).
+
+**Captures:** the last 20 seconds are always kept; Shift+F12 (or the menu's Capture page) saves
+them, and Ctrl+F12 records until you press it again. They go to `videos/` as a GIF (exact
+colours, 30 frames a second, no sound) or an MP4 with the sound, made by
+[ffmpeg](https://ffmpeg.org) if it is installed (otherwise a GIF). The Capture page picks the
+format, how long the replay is, and a GIF's size.
 
 **Save slots and quick resume:** the menu's Save and Load pages have eight slots, each with a
 picture of the moment, in `states/` beside the game. States are taken during play (not in the menus
@@ -173,10 +184,10 @@ From the least ambitious to the most.
 - [x] Fast-forward, slow motion, frame step
 - [x] Pause when the window loses focus
 - [x] Controller remapping, player slots, turbo, dead zones
-- [ ] Video and audio capture
+- [x] Video and audio capture: the replay (the last 20 seconds) and recordings, GIF or MP4
 - [x] Save slots with thumbnails; quick resume on quit and start (states during play)
 - [ ] Skip the EA screen, boot straight into a game
-- [ ] Colour options; scanlines, CRT mask, composite dither blending
+- [x] Colour options; scanlines, CRT mask, composite dither blending
 - [ ] IPS and BPS patches, soft-patching, the ROM check as a toggle for data hacks
 - [ ] Game Genie and Action Replay codes
 - [ ] Input recording and replay files
