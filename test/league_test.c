@@ -5,8 +5,10 @@
  * CARTRIDGE_DIR is the cartridge's league as nhl94 --export-league writes it: built again it must
  * be the cartridge's, byte for byte (every team block and every entry of every table, the counts,
  * the playoff draws), on an untouched cartridge. OTHER_DIR (tools/leaguetest.py: 32 teams) must
- * build with its save RAM records apart from each other and from the cartridge's, and with every
- * playoff team in a draw of 16 different ones. */
+ * build with its save RAM records apart from each other and from the cartridge's, with every
+ * playoff team in a draw of 16 different ones, and with banners of their own for the teams whose
+ * cities the cartridge has none for. The banners' letters (banner.c) must all be read off the
+ * cartridge, and its banners drawn again from them as they are. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -62,6 +64,9 @@ static void round_trip(const char *dir)
         CHECK(league.art[t] == t, "team %u shows team %d's art", t, league.art[t]);
     }
     CHECK(memcmp(m + LG(playoffseats), c + SYM_playoffseats, 16 * SYM_PlayoffRows) == 0, "the playoff draws");
+    int own = 0;
+    for (int t = 0; t < league.teams; t++) own += league.block_tiles[t] != 0 || league.banner_tiles[t] != 0 || league.block[t] != t;
+    CHECK(LG(Teamblocksmap) == SYM_Teamblocksmap && own == 0, "the cartridge's banners (%d teams with others)", own);
     printf("  %s: %d of %d team blocks and %d of %d table entries the cartridge's\n", dir, blocks, SYM_NumTeams, tables, 7 * SYM_NumTeams);
     league_next(NULL);
     league_power_on();
@@ -104,6 +109,16 @@ static void other(const char *dir)
         }
     }
     CHECK(missing == 0 && twice == 0, "the draws: %d playoff teams in none, %d places repeated or not playoff teams", missing, twice);
+    int own = 0, all = 0;
+    for (int t = 0; t < teams; t++) {                     /* banners: their own for the new cities, every team's for the setup screen */
+        own += league.block_tiles[t] != 0 && league.block[t] >= SYM_NumTeams;
+        all += league.banner_tiles[t] != 0;
+        CHECK((league.block_tiles[t] != 0) == (league.block[t] >= SYM_NumTeams), "team %d's block row %d", t, league.block[t]);
+    }
+    printf("  %s: %d teams with banners of their own\n", dir, own);
+    CHECK(own == 4 && all == teams && LG(Teamblocksmap) >= ROM_SIZE && LG(BannerSlotMap) >= ROM_SIZE, "banners: %d own, %d drawn", own, all);
+    uint32_t tb = LG(Teamblocksmap), count = r16(m, tb + 8);
+    CHECK(!(count & 0x8000) && count == 501 + 22 * 4 && (tb + 10) >> 17 == (tb + 10 + 32 * count - 1) >> 17, "the league's Teamblocksmap: %u tiles", count);
     for (int t = 0; t < teams; t++) {                     /* every block readable: its players to the end word */
         uint32_t b = r32(m, LG(TeamList) + 4u * (uint32_t)t), p = b + r16(m, b);
         int n = 0;
@@ -118,6 +133,11 @@ int main(int argc, char **argv)
 {
     if (argc < 3) { fprintf(stderr, "usage: %s ROM CARTRIDGE_DIR [OTHER_DIR]\n", argv[0]); return 2; }
     if (!rom_load(argv[1])) { fprintf(stderr, "cannot load %s\n", argv[1]); return 1; }
+    int letters = 0, same = 0, banners = 0;
+    CHECK(banner_prepare(rom_cart) == 0, "the cartridge's banners");
+    banners = banner_selfcheck(&letters, &same);
+    printf("  banners: %d letters; %d of %d cartridge banners drawn again from their letters as they are\n", letters, same, banners);
+    CHECK(letters == 25 + 14 && same == banners, "the banners' letters");
     round_trip(argv[2]);
     if (argc > 3) other(argv[3]);
     printf("league_test: %d checks, %d failed\n", checks, failed);

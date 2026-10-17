@@ -1,6 +1,7 @@
 /* The native game: NHL '94 on pulseman (ext/pulseman), with the Z80's sound relay (src/z80.c)
  * feeding its FM chip. */
 #pragma once
+#include <stddef.h>
 #include <stdint.h>
 #include "mdrt/mdrt.h"
 #include "mdrt/platform_sdl2.h"
@@ -70,6 +71,17 @@ int league_export(const char *dir);     /* the cartridge's league as a folder: 0
 /* the leagues/ folder's leagues for the menu (the cartridge's first): the count */
 int league_list(const char *const **names, const char *const **labels);
 const char *league_sram(const char *base);   /* the next game's save RAM file (base: the cartridge's) */
+
+/* team name banners (banner.c): the cartridge's two sets (Teamblocksmap, TeamBitmaps), 88 x 16
+ * pixels a team, and new ones drawn in their letters for a league's teams */
+enum { BANNER_BLOCKS, BANNER_BITMAPS, BANNER_SETS };
+int banner_prepare(const uint8_t *cart);                 /* its sets and letters: 0, -1 */
+int banner_check(const char *text, char *why, size_t n); /* a name a banner can show: 0, else -1 and why */
+/* team art's banner in a set (text: with that name in place of its own) */
+void banner_pixels(int set, int art, const char *text, uint8_t px[16][88]);
+void banner_tiles(const uint8_t px[16][88], uint8_t out[22 * 32]);   /* its 22 tiles, row by row */
+const uint8_t *banner_set(int set, int *count, uint32_t *map);       /* a set's tiles (unpacked) and map */
+int banner_selfcheck(int *letters, int *same);           /* -> the banners checked (league_test) */
 
 /* lockstep against the oracle (lockstep.c) */
 int lockstep_load(const char *path, mdrt *m);

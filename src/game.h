@@ -773,6 +773,7 @@ uint16_t ReadSetupPads(void);                           /* -> d1 */
 void SetupDemo(void);
 void SetupStart(void);
 uint16_t LoadSetupTiles(void);                          /* -> d4 */
+uint32_t SetupTilesRemap(void);                         /* (native) the visitors' TeamBitmaps colour table */
 void UpdateRosterPlayers(void);
 void EraseCard(void);
 void DrawHomeBlock(void);

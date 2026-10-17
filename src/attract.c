@@ -75,10 +75,17 @@ void DrawMatchupBitmaps(void)
 }
 
 /* attract94.asm:DrawTeamBitmap. Rows d1 * 2 and the next of TeamBitmaps' map (no tiles) at
- * printx / printy from char d4 -> d4. */
+ * printx / printy from char d4 -> d4. A league with banners of its own draws each from its 22
+ * tiles, put into the first 22 chars of the set (the home team's at char 2, as loaded; the
+ * visitors' remapped, as LoadSetupTiles loads theirs): one banner of a set shows at a time. */
 uint16_t DrawTeamBitmap(uint16_t team, uint16_t chars)
 {
     uint32_t img = SYM_TeamBitmaps, map = img + rd32(rom_ptr(img + 4));
+    if (team < LEAGUE_MAX && league.banner_tiles[team]) {
+        if (chars == 2) DoDMApro(league.banner_tiles[team], 0x16 * 16, (uint16_t)(chars << 5));
+        else remap(league.banner_tiles[team], SetupTilesRemap(), 0x16 * 16, (uint16_t)(chars << 5));
+        return dobitmap(img + rd32(rom_ptr(img)), LG(BannerSlotMap), SYM_NoTiles, 0, 0, 0xB, 2, chars, 0);
+    }
     return dobitmap(img + rd32(rom_ptr(img)), map, SYM_NoTiles, 0, (uint16_t)(league_art(team) << 1), rd16(rom_ptr(map)), 2, chars, 0);   /* (its art) */
 }
 

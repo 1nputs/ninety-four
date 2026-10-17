@@ -217,6 +217,17 @@ uint8_t *CopyTeamBlockMapData(uint32_t map, uint16_t team, uint16_t vram, uint8_
     return dst;
 }
 
+/* a team's block for setupTeamBlocksMap: its row of the cartridge's (CopyTeamBlockMapData), or a
+ * banner of the league's own, its 22 tiles straight from the league to vram (native/banner.c) */
+static uint8_t *CopyTeamBlock(uint32_t map, uint16_t team, uint16_t vram, uint8_t *dst)
+{
+    if (team >= LEAGUE_MAX || !league.block_tiles[team]) return CopyTeamBlockMapData(map, league_block(team), vram, dst);
+    uint32_t own = LG(Teamblocksmap) + rd32(rom_ptr(LG(Teamblocksmap) + 4)) + 4 + (uint32_t)league_block(team) * 0x2C;
+    DoDMApro(league.block_tiles[team], 0x16 * 16, vram);
+    for (int i = 0; i < 0x16; i++, dst += 2) wr16(dst, (uint16_t)((rd16(rom_ptr(own + 2u * (uint32_t)i)) & 0xF800) | ((vram >> 5) + i) | 0x8000));
+    return dst;
+}
+
 /* setup94.asm:setupTeamBlocksMap. d4 = first char: the TeamBlocks tiles at d4 + $2C, then the
  * home and visitor blocks copied to basetileoffset and basetileoffset + $16 -> d4 =
  * basetileoffset + $2C. */
@@ -226,8 +237,8 @@ uint16_t setupTeamBlocksMap(uint16_t chars)
     uint8_t *buf = RAM_W(RAM_OFF_TeamBlockMap);
     DecompressGraphicsPlain(SYM_Teamblocksmap + 8, (uint16_t)(chars + 0x2C));
     uint32_t map = SYM_Teamblocksmap + rd32(rom_ptr(SYM_Teamblocksmap + 4));
-    buf = CopyTeamBlockMapData(map, league_art(g.HomeTeam), (uint16_t)(g.basetileoffset << 5), buf);   /* (the league's: its art) */
-    CopyTeamBlockMapData(map, league_art(g.VisTeam), (uint16_t)((g.basetileoffset + 0x16) << 5), buf);
+    buf = CopyTeamBlock(map, g.HomeTeam, (uint16_t)(g.basetileoffset << 5), buf);   /* (the league's: its art's, or its own) */
+    CopyTeamBlock(map, g.VisTeam, (uint16_t)((g.basetileoffset + 0x16) << 5), buf);
     return (uint16_t)(g.basetileoffset + 0x2C);
 }
 
@@ -595,8 +606,8 @@ void DrawTeamBlocks(uint16_t row)
 {
     uint8_t user = (uint8_t)(g.potree[g.potreeteam] << 1);
     if (user == (uint8_t)row) g.printa = 0x6000;
-    uint32_t map = SYM_Teamblocksmap + rd32(rom_ptr(SYM_Teamblocksmap + 4));
-    dobitmap(0, map, SYM_NoTiles, 0, (uint16_t)(league_art((uint16_t)(row >> 1)) << 1), rd16(rom_ptr(map)), 2, 2, 0);   /* (its art) */
+    uint32_t map = LG(Teamblocksmap) + rd32(rom_ptr(LG(Teamblocksmap) + 4));
+    dobitmap(0, map, SYM_NoTiles, 0, (uint16_t)(league_block((uint16_t)(row >> 1)) << 1), rd16(rom_ptr(map)), 2, 2, 0);   /* (its art's, or its own) */
 }
 
 /* setup94.asm:VBlank_Playoff. The playoff screen's vblank: unless dfng, the sprites (and the tree's

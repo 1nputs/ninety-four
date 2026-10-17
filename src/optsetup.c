@@ -531,14 +531,20 @@ void SetupStart(void)
     maketree();
 }
 
+/* the colour table LoadSetupTiles remaps the visitors' TeamBitmaps with (its 68k address) */
+uint32_t SetupTilesRemap(void)
+{
+    static const uint8_t table[8] = { 0x03, 0x41, 0x25, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
+    return rom_find(SYM_LoadSetupTiles, SYM_UpdateRosterPlayers, table, 8);
+}
+
 /* optsetup94.asm:LoadSetupTiles. The TeamBitmaps tiles from char 2, then again remapped
  * (teambitmapchars) -> d4 = the char after them. */
 uint16_t LoadSetupTiles(void)
 {
-    static const uint8_t table[8] = { 0x03, 0x41, 0x25, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
     uint16_t c = DecompressGraphicsPlain(SYM_TeamBitmaps + 8, 2);
     g.teambitmapchars = c;
-    return DecompressGraphicsWithCallback(SYM_TeamBitmaps + 8, c, rom_find(SYM_LoadSetupTiles, SYM_UpdateRosterPlayers, table, 8));
+    return DecompressGraphicsWithCallback(SYM_TeamBitmaps + 8, c, SetupTilesRemap());
 }
 
 /* optsetup94.asm:UpdateRosterPlayers. Empty. */

@@ -76,8 +76,9 @@ player's numbers and ratings), `lines.csv`, `colours.csv`, `pictures.csv`, and `
 name, how many teams play for the cup). To start one, `nhl94 --export-league leagues/my-league`
 writes the cartridge's league out, to change as you like; `nhl94 --check-league leagues/my-league`
 says what holds, or what is wrong and on which line (the columns are described at the top of
-`native/league.c`). A new team shows a cartridge team's logo, banners and colours for now (its
-`art` column). Each league keeps its own records (`out/nhl94-my-league.srm`), and a saved state
+`native/league.c`). A new team shows a cartridge team's logo and colours (its `art` column),
+and its own name on the banners (the setup screen's, the playoff tree's, the game's top bar),
+drawn in the cartridge's own lettering on its art team's colours. Each league keeps its own records (`out/nhl94-my-league.srm`), and a saved state
 plays on with the league it was saved in. The cartridge's own league, exported and built again,
 plays the original frame for frame.
 
@@ -210,7 +211,7 @@ From the least ambitious to the most.
 - [x] Capture: the replay (the last 20 seconds) and recordings, as GIFs
 - [x] Save slots with thumbnails; quick resume on quit and start (states during play)
 - [x] Game rules, the host's for every player (Classic: the original): period lengths, overtime, the weight bug fix, the second assist fix, plus/minus and checks, skating, burst, shots, puck, energy, penalties, streaks, presets
-- [x] Leagues of your own, up to 32 teams: teams, players, lines, colours and pictures in files (logos and banners borrowed from the cartridge's teams for now)
+- [x] Leagues of your own, up to 32 teams: teams, players, lines, colours and pictures in files, name banners drawn for new teams (logos borrowed from the cartridge's teams for now)
 - [ ] Skip the EA screen, boot straight into a game
 - [x] Colour options; scanlines, CRT mask, composite dither blending
 - [ ] IPS and BPS patches, soft-patching, the ROM check as a toggle for data hacks

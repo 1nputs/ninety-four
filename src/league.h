@@ -8,7 +8,8 @@
 #include <stdint.h>
 
 enum { LG_TeamList, LG_TeamPalettes, LG_TeamLogoBitmaps, LG_TeamGfxList, LG_TeamSongs, LG_TeamRatings,
-       LG_TeamLogoPalettes, LG_FeaturedPictures, LG_playoffseats, LG_PlayerRecordOffsets, LG_TABLES };
+       LG_TeamLogoPalettes, LG_FeaturedPictures, LG_playoffseats, LG_PlayerRecordOffsets, LG_Teamblocksmap,
+       LG_BannerSlotMap, LG_TABLES };
 #define LEAGUE_MAX 32                                   /* (a team is a byte in the playoff tree and 5 bits elsewhere) */
 
 struct league {
@@ -16,13 +17,20 @@ struct league {
     uint16_t teams;             /* NumTeams */
     uint16_t playoff_teams;     /* NumPlayoffTeams: those that play for the cup (the first ones) */
     uint16_t playoff_rows;      /* PlayoffRows: playoffseats' rows of 16 teams (a power of two) */
-    uint8_t art[LEAGUE_MAX];    /* the cartridge's team whose team block and bitmap each team shows */
+    uint8_t art[LEAGUE_MAX];    /* the cartridge's team whose art each team shows (its logo, its banners unless it has its own) */
+    /* the team name banners (native/banner.c). block: the team's row pair in Teamblocksmap's map,
+     * its art team's, or its own past the cartridge's 28 (block_tiles: its 22 tiles, plain, row by
+     * row). banner_tiles: in a league with banners of its own, each team's TeamBitmaps banner (22
+     * tiles), drawn into the first 22 chars of its set (BannerSlotMap) */
+    uint8_t block[LEAGUE_MAX];
+    uint32_t block_tiles[LEAGUE_MAX], banner_tiles[LEAGUE_MAX];
 };
 extern struct league league;
 #define LG(name) (league.table[LG_##name])
 
 void league_retail(void);       /* the cartridge's */
 static inline uint16_t league_art(uint16_t team) { return team < LEAGUE_MAX ? league.art[team] : team; }
+static inline uint16_t league_block(uint16_t team) { return team < LEAGUE_MAX ? league.block[team] : team; }
 /* save RAM for the teams past the cartridge's 28 (at most 4), in space its layout leaves free
  * below LineDataBase: their crowd records (16 bytes each), then their player records (26 roster
  * slots of 4 bytes; PlayerRecordOffsets, in words of 4 bytes) */

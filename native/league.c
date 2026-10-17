@@ -8,7 +8,9 @@
  *                 whose logo, banners and colours it shows), rating, offense and defense (0-7:
  *                 its other playoff games, simulated), pp, pk, home, away (0-15: its players'
  *                 bonuses on the power play, killing a penalty, at home, away), songs (the organ's
- *                 6). An empty one: the art team's.
+ *                 6), banner (the name on its banners, when not its city). An empty one: the art
+ *                 team's. A team whose city is not its art team's gets banners of its own, its
+ *                 name in the cartridge's letters on its art team's (banner.c).
  *   goalies.csv   team, number, name, 14 ratings (0-15: weight agility speed offense defense
  *                 shot_power checking glove_hand glove_left glove_right stick_right stick_left
  *                 consistency aggression) and start (1-15: how often he starts).
@@ -54,6 +56,7 @@
 #define LEN_ARENA 23
 #define LEN_NAME 19
 #define LEN_CONF 15
+#define LEN_BANNER 16
 #define ROSTER 25               /* players a team: the cartridge's most */
 #define CART_TEAMS 28
 #define PICTURES 32
@@ -76,6 +79,7 @@ static const char *const goalie_cols[14] = { "weight", "agility", "speed", "offe
 struct player { char name[LEN_NAME + 1]; char pos; uint8_t number, nib[14], start; };
 struct team {
     char abbr[LEN_ABBR + 1], city[LEN_CITY + 1], nickname[LEN_NICK + 1], arena[LEN_ARENA + 1], conference[LEN_CONF + 1];
+    char banner[LEN_BANNER + 1];    /* the name on its banners ("": its city's, when its art team's is another) */
     int art;
     int rating, offense, defense, pp, pk, home, away, songs[6];   /* -1: the art team's */
     uint16_t pal[PALS][16];
@@ -339,9 +343,9 @@ static int read_ini(const char *dir, struct lg *L)
 static int read_teams(char *t, struct lg *L)
 {
     static const char *const cols[] = { "team", "city", "nickname", "arena", "conference", "art", "rating", "offense", "defense",
-                                        "pp", "pk", "home", "away", "songs" };
+                                        "pp", "pk", "home", "away", "songs", "banner" };
     struct csv c;
-    if (csv_open(&c, t, "teams.csv", cols, 14, 2) < 0) return -1;
+    if (csv_open(&c, t, "teams.csv", cols, 15, 2) < 0) return -1;
     int r;
     while ((r = csv_row(&c)) > 0) {
         if (L->teams == LEAGUE_MAX) return fail("more than %d teams", LEAGUE_MAX);
@@ -363,6 +367,8 @@ static int read_teams(char *t, struct lg *L)
             || num_or_unset(get(&c, 8), 0, 7, "defense", &T->defense) < 0 || num_or_unset(get(&c, 9), 0, 15, "pp", &T->pp) < 0
             || num_or_unset(get(&c, 10), 0, 15, "pk", &T->pk) < 0 || num_or_unset(get(&c, 11), 0, 15, "home", &T->home) < 0
             || num_or_unset(get(&c, 12), 0, 15, "away", &T->away) < 0) return -1;
+        if (text(get(&c, 14), T->banner, LEN_BANNER, "banner") < 0) return -1;
+        for (char *b = T->banner; *b; b++) if (*b >= 'a' && *b <= 'z') *b = (char)(*b - 32);
         const char *s = get(&c, 13);
         T->songs[0] = -1;
         if (*s) {
@@ -797,14 +803,85 @@ static uint64_t fnv64(uint64_t h, const void *p, size_t n)
     return h;
 }
 
+/* pad so the next size bytes do not cross a 128 KB boundary: the VDP's DMA does not cross one */
+static void dma_align(struct buf *b, uint32_t size)
+{
+    uint32_t a = at(b);
+    if ((a >> 17) != ((a + size - 1) >> 17))
+        while (at(b) & 0x1FFFF && !b->bad) put8(b, 0);
+}
+
+/* the team name banners, when a team has its own: Teamblocksmap again with its banners' tiles
+ * and map rows after the cartridge's 28 (plain tiles, as the game loads them for the playoff
+ * tree), and every team's TeamBitmaps banner (the setup screen draws them one at a time) */
+static void put_banners(struct buf *b, struct lg *L, const uint8_t *c, const char *const text[], struct league *lg)
+{
+    static uint8_t tiles[22 * 32];
+    uint8_t px[16][88];
+    int count, own = 0;
+    uint32_t map;
+    const uint8_t *cart_tiles = banner_set(BANNER_BLOCKS, &count, &map);
+    uint32_t size = 8 + 2 + 32u * (uint32_t)count + 22u * 32 * LEAGUE_MAX;
+    dma_align(b, size);
+    uint32_t tb = lg->table[LG_Teamblocksmap] = at(b);
+    put32(b, SYM_Teamblocksmap + c32(c, SYM_Teamblocksmap) - tb);   /* (its palette: the cartridge's) */
+    put32(b, 0);
+    for (int t = 0; t < L->teams; t++) own += text[t] != NULL;
+    put16(b, (unsigned)(count + 22 * own));               /* (plain: DMA'd as they are) */
+    put(b, cart_tiles, 32u * (uint32_t)count);
+    for (int t = 0, k = 0; t < L->teams; t++) {
+        lg->block[t] = (uint8_t)L->t[t].art;
+        if (!text[t]) continue;
+        banner_pixels(BANNER_BLOCKS, L->t[t].art, text[t], px);
+        banner_tiles(px, tiles);
+        lg->block[t] = (uint8_t)(CART_TEAMS + k++);
+        lg->block_tiles[t] = at(b);
+        put(b, tiles, sizeof tiles);
+    }
+    set32(b, tb + 4, at(b) - tb);
+    put16(b, 11);
+    put16(b, (unsigned)(2 * (CART_TEAMS + own)));
+    put(b, c + map + 4, 2u * 11 * 2 * CART_TEAMS);
+    for (int t = 0, k = 0; t < L->teams; t++) {
+        if (!text[t]) continue;
+        for (int i = 0; i < 22; i++)                      /* (its art team's priority and palette, no flips) */
+            put16(b, (c16(c, map + 4 + 2u * (uint32_t)(L->t[t].art * 22 + i)) & 0xE000) | (unsigned)(count + 22 * k + i));
+        k++;
+    }
+    dma_align(b, 22u * 32 * (uint32_t)L->teams);
+    for (int t = 0; t < L->teams; t++) {
+        banner_pixels(BANNER_BITMAPS, L->t[t].art, text[t], px);
+        banner_tiles(px, tiles);
+        lg->banner_tiles[t] = at(b);
+        put(b, tiles, sizeof tiles);
+    }
+    banner_set(BANNER_BITMAPS, &count, &map);
+    lg->table[LG_BannerSlotMap] = at(b);
+    put16(b, 11);
+    put16(b, 2);
+    for (int i = 0; i < 22; i++) put16(b, (c16(c, map + 4 + 2u * (uint32_t)i) & 0xE000) | (unsigned)i);
+}
+
 /* L built on the cartridge c: the art team's for what the folder leaves out */
 static int build(struct lg *L, const uint8_t *c, struct built *B)
 {
     struct buf b = { 0 };
+    const char *text[LEAGUE_MAX] = { NULL };
+    int own = 0;
     memset(B, 0, sizeof *B);
+    if (banner_prepare(c) < 0) return fail("the cartridge's team banners cannot be read");
     for (int t = 0; t < L->teams; t++) {                  /* (what a team leaves to its art team's) */
         struct team *T = &L->t[t], A;
         cart_team(c, T->art, &A);
+        if (!T->banner[0] && !same_word(T->city, A.city))   /* (a city of its own: its name on its banners) */
+            for (size_t k = 0; k <= strlen(T->city) && k <= LEN_BANNER; k++)
+                T->banner[k] = T->city[k] >= 'a' && T->city[k] <= 'z' ? (char)(T->city[k] - 32) : T->city[k];
+        if (T->banner[0]) {
+            char why[200];
+            if (banner_check(T->banner, why, sizeof why) < 0) { err_file = "teams.csv"; err_line = 0; return fail("%s: %s", T->abbr, why); }
+            text[t] = T->banner;
+            own++;
+        }
         int *mine[7] = { &T->rating, &T->offense, &T->defense, &T->pp, &T->pk, &T->home, &T->away };
         const int theirs[7] = { A.rating, A.offense, A.defense, A.pp, A.pk, A.home, A.away };
         for (int k = 0; k < 7; k++) if (*mine[k] < 0) *mine[k] = theirs[k];
@@ -851,6 +928,9 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
     lg->table[LG_PlayerRecordOffsets] = at(&b);           /* (save RAM: the cartridge's places, the rest where it has room) */
     for (int t = 0; t < L->teams; t++)
         put16(&b, t < CART_TEAMS ? 26u * (unsigned)t : LEAGUE_SRAM_PLAYERS / 4 + 26u * (unsigned)(t - CART_TEAMS));
+    lg->table[LG_Teamblocksmap] = SYM_Teamblocksmap;
+    for (int t = 0; t < L->teams; t++) lg->block[t] = (uint8_t)L->t[t].art;
+    if (own) put_banners(&b, L, c, text, lg);
     if (b.bad) { free(b.b); return fail("out of memory"); }
     lg->teams = (uint16_t)L->teams;
     lg->playoff_teams = (uint16_t)L->playoff_teams;
@@ -861,7 +941,7 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
     uint64_t h = fnv64(0xCBF29CE484222325ull, B->img + ROM_SIZE, B->size - ROM_SIZE);
     uint8_t counts[6] = { (uint8_t)(lg->teams >> 8), (uint8_t)lg->teams, (uint8_t)(lg->playoff_teams >> 8), (uint8_t)lg->playoff_teams,
                           (uint8_t)(lg->playoff_rows >> 8), (uint8_t)lg->playoff_rows };
-    h = fnv64(fnv64(h, counts, sizeof counts), lg->art, sizeof lg->art);
+    h = fnv64(fnv64(fnv64(h, counts, sizeof counts), lg->art, sizeof lg->art), lg->block, sizeof lg->block);
     B->hash = h ? h : 1;                                  /* (0 is the cartridge's) */
     return 0;
 }
@@ -1064,12 +1144,12 @@ int league_export(const char *dir)
                "name = NHL '94 (from the cartridge)\nplayoff_teams = %d\n", SYM_NumPlayoffTeams);
     fclose(f);
     if (!(f = create(dir, "teams.csv"))) return -1;
-    fputs("team,city,nickname,arena,conference,art,rating,offense,defense,pp,pk,home,away,songs\n", f);
+    fputs("team,city,nickname,arena,conference,art,rating,offense,defense,pp,pk,home,away,songs,banner\n", f);
     for (int t = 0; t < CART_TEAMS; t++) {
         const struct team *X = &T[t];
         field(f, X->abbr, 0); field(f, X->city, 0); field(f, X->nickname, 0); field(f, X->arena, 0); field(f, X->conference, 0);
         field(f, cart_abbr[t], 0);
-        fprintf(f, "%d,%d,%d,%d,%d,%d,%d,%d %d %d %d %d %d\n", X->rating, X->offense, X->defense, X->pp, X->pk, X->home, X->away,
+        fprintf(f, "%d,%d,%d,%d,%d,%d,%d,%d %d %d %d %d %d,\n", X->rating, X->offense, X->defense, X->pp, X->pk, X->home, X->away,
                 X->songs[0], X->songs[1], X->songs[2], X->songs[3], X->songs[4], X->songs[5]);
     }
     fclose(f);

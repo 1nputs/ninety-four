@@ -103,6 +103,8 @@ BROKEN = [
     ('a draw', edit('playoffs.csv', lambda t: cell(t, 1, '2', 'BUF')), 'playoffs.csv, line 2: BUF twice in a draw'),
     ('too few teams', edit('teams.csv', lambda t: t.__delitem__(slice(18, None))), 'teams.csv: 17 teams'),
     ('no teams file', lambda d: os.remove(os.path.join(d, 'teams.csv')), 'teams.csv: not in'),
+    ('a wide banner', edit('teams.csv', lambda t: cell(t, 1, 'banner', 'WWWWWWWWWW')), 'ANH: banner: "WWWWWWWWWW" is 110 pixels wide, a banner holds 82'),
+    ('a banner letter', edit('teams.csv', lambda t: cell(t, 1, 'banner', 'A#B')), "ANH: banner: the banners have no letter '#'"),
 ]
 
 

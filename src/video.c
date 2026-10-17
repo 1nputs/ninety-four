@@ -1116,8 +1116,9 @@ uint16_t AddFramer(uint16_t start)
     return DecompressGraphicsPlain(SYM_FramerMap + 8, start);
 }
 
-/* video94.asm:AddTeamBlock. Load the team block tiles at char 2 -> d4 = next char. */
+/* video94.asm:AddTeamBlock. Load the team block tiles at char 2 -> d4 = next char (the league's:
+ * with banners of its own after the cartridge's). */
 uint16_t AddTeamBlock(void)
 {
-    return DecompressGraphicsPlain(SYM_Teamblocksmap + 8, 2);
+    return DecompressGraphicsPlain(LG(Teamblocksmap) + 8, 2);
 }
