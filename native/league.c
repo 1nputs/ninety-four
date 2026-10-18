@@ -730,6 +730,8 @@ static int read_art(const char *dir, struct lg *L)
     uint16_t pal[ART_BANNER_COLOURS], ice_pal[16];
     uint8_t px[ICE_MAX];
     int iw = 0, ih = 0;
+    err_file = NULL;
+    err_line = 0;
     if (art_banners(cs, 0, px, pal) < 0 || art_ice(cs, 0, px, &iw, &ih, ice_pal) < 0) return fail("the cartridge's art cannot be read");
     for (int t = 0; t < L->teams; t++) {
         struct team *T = &L->t[t];
@@ -877,8 +879,9 @@ static void clean_dir(char *out, size_t size, const char *dir)
     for (size_t n = strlen(out); n > 1 && out[n - 1] == '/'; n--) out[n - 1] = 0;
 }
 
-/* the folder into L (allocated): 0, or -1 with league_error() */
-static int read_league(const char *folder, struct lg **out)
+/* the folder into L (allocated), its pictures and art too when art (read against the cartridge's,
+ * which the window's menu has not loaded yet when it lists the leagues): 0, or -1 with league_error() */
+static int read_league(const char *folder, struct lg **out, int art)
 {
     char dir[512];
     clean_dir(dir, sizeof dir, folder);
@@ -927,8 +930,8 @@ static int read_league(const char *folder, struct lg **out)
     if (t[3] && read_lines(t[3], L) < 0) goto done;
     for (int i = 0; i < L->teams; i++) make_lines(&L->t[i]);
     if (t[4] && read_colours(t[4], L) < 0) goto done;
-    if (t[5] && read_pictures(t[5], L, dir) < 0) goto done;
-    if (read_art(dir, L) < 0) goto done;
+    if (art && t[5] && read_pictures(t[5], L, dir) < 0) goto done;   /* (its pictures and art: read against the cartridge's) */
+    if (art && read_art(dir, L) < 0) goto done;
     if (t[6]) { if (read_playoffs(t[6], L) < 0) goto done; }
     else make_draws(L);
     r = 0;
@@ -1493,7 +1496,7 @@ static int build_dir(const char *dir, struct built *B, char *name, size_t name_s
 {
     struct lg *L;
     if (!rom_cart) return fail("no cartridge");
-    if (read_league(dir, &L) < 0) { src_close(); return -1; }
+    if (read_league(dir, &L, 1) < 0) { src_close(); return -1; }
     err_file = NULL;
     err_line = 0;
     int r = build(L, rom_cart, B);
@@ -1578,7 +1581,7 @@ int league_list(const char *const **names, const char *const **labels)
         struct lg *L;
         if (!strcmp(found[i], "cartridge")) { fprintf(stderr, "leagues/cartridge: the name is the cartridge's own: give the folder another\n"); continue; }
         snprintf(dir, sizeof dir, "leagues/%.63s", found[i]);
-        if (read_league(dir, &L) < 0) { fprintf(stderr, "%s: %s (not in the menu)\n", dir, err); src_close(); continue; }
+        if (read_league(dir, &L, 0) < 0) { fprintf(stderr, "%s: %s (not in the menu)\n", dir, err); src_close(); continue; }   /* (no cartridge yet: its art is read when it is played) */
         snprintf(list_name[n], sizeof list_name[n], "%.63s", found[i]);
         snprintf(list_label[n], sizeof list_label[n], "%.39s", L->name);
         free_lg(L);

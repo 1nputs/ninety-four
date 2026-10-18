@@ -359,6 +359,11 @@ def main():
     hacks = extract_hacks()
     packages = pack(hacks)
     args = [os.path.relpath(d, ROOT) for d in (CARTRIDGE, THIRTY_TWO, THIRTY_TWO + '.zip')]
+    listing = os.path.join(ROOT, 'out', 'leagues', 'listing')        # (a folder with leagues/ as the window's)
+    if os.path.exists(listing):
+        shutil.rmtree(listing)
+    shutil.copytree(THIRTY_TWO, os.path.join(listing, 'leagues', 'thirty-two'))
+    args += ['--listed', os.path.relpath(listing, ROOT), 'thirty-two']
     for path, d in hacks:
         args += ['--hack', path, os.path.relpath(d, ROOT)]
     r = subprocess.run([os.path.join(ROOT, 'build', 'leaguetest'), ROM] + args, cwd=ROOT)

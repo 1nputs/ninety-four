@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "native.h"
 #include "league.h"
 #include "rom.h"
@@ -271,9 +272,27 @@ static void hack(const char *path, const char *dir)
     league_power_on();
 }
 
+/* the leagues the window's menu lists, before any cartridge is loaded (as at its start): in the
+ * folder dir's leagues/, name among them */
+static void listed(const char *dir, const char *name)
+{
+    char here[1024];
+    const char *const *names, *const *labels;
+    int found = 0, n = 0;
+    if (getcwd(here, sizeof here) && chdir(dir) == 0) {
+        n = league_list(&names, &labels);
+        for (int i = 0; i < n; i++) found |= !strcmp(names[i], name);
+        if (chdir(here) != 0) CHECK(0, "cannot go back to %s", here);
+    }
+    CHECK(found, "%s/leagues/%s not listed with no cartridge loaded (%d listed)", dir, name, n);
+    printf("  %s/leagues: %d listed with no cartridge loaded, %s among them\n", dir, n, name);
+}
+
 int main(int argc, char **argv)
 {
-    if (argc < 3) { fprintf(stderr, "usage: %s ROM CARTRIDGE_DIR [OTHER_DIR] [--hack HACK DIR ...]\n", argv[0]); return 2; }
+    if (argc < 3) { fprintf(stderr, "usage: %s ROM CARTRIDGE_DIR [OTHER_DIR] [--hack HACK DIR ...] [--listed DIR NAME]\n", argv[0]); return 2; }
+    for (int i = 3; i + 2 < argc; i++)                    /* (first: before the cartridge is loaded) */
+        if (!strcmp(argv[i], "--listed")) listed(argv[i + 1], argv[i + 2]);
     if (!rom_load(argv[1])) { fprintf(stderr, "cannot load %s\n", argv[1]); return 1; }
     int letters = 0, same = 0, banners = 0;
     CHECK(banner_prepare(rom_cart) == 0, "the cartridge's banners");
@@ -283,6 +302,7 @@ int main(int argc, char **argv)
     round_trip(argv[2]);
     for (int i = 3; i < argc; i++) {
         if (!strcmp(argv[i], "--hack") && i + 2 < argc) { hack(argv[i + 1], argv[i + 2]); i += 2; }
+        else if (!strcmp(argv[i], "--listed") && i + 2 < argc) i += 2;
         else other(argv[i]);
     }
     printf("league_test: %d checks, %d failed\n", checks, failed);
