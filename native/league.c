@@ -51,7 +51,7 @@
  * package (league_pack: a zip of its files, played as it is from leagues/). The game reads the league
  * through the tables of src/league.h, so it plays as the cartridge does with whatever teams it
  * has; the cartridge's own league, exported and built again, is the cartridge's byte for byte
- * (make leaguetest). */
+ * (make leaguetest). docs/LEAGUES.md tells it all for a league's maker. */
 #include <dirent.h>
 #include <stdarg.h>
 #include <stdio.h>

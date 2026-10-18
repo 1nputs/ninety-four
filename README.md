@@ -48,35 +48,64 @@ Game controllers work too (the first two are players 1 and 2).
 | Esc | the menu: save and load states there |
 | Alt+Enter | full screen |
 
-**The menu** (Esc, or a controller's Back button; arrows and Enter, or the d-pad, A and B) has the
-ROM, a reset, states, the video (a pixel-art upscaler: Scale2x, Scale3x or MMPX, which smooth the
-staircases without blurring or adding colours, or xBR, which blends its edges smooth; sharp,
-integer or fit scaling; square pixels or 4:3; the colours' levels, standard, full range or the
-console's own; dithering blended as a television blended it; a picture tube's scanlines and its
-aperture grille, slot mask or shadow mask; full screen; vsync, so nothing tears, on unless you
-turn it off), captures (below), the sound (volume, and the FM sound core and chip: hear the
-difference as you play), players (see below), options, and every key of the pads and the controls:
-pick one and press the new key (with Shift, Ctrl or Alt if you like).
+## Playing
 
-**Game rules:** things the cartridge never offered, on the menu's Game rules page, for every
-player and the whole game (set before it starts; a state keeps its game's rules). Classic, the
-default, is the original exactly. So far: more period lengths in the setup (2, 3, 7 and 15 minutes
-besides 5, 10 and 20), a 5:00 or 3:00 regular season overtime, the weight bug fixed (the
-original sums a check's weights in a byte that wraps, so a heavy skater checked by a lighter
-player falls easily), the second assist kept on a give-and-go, and plus/minus with body checks in
-Player Stats (the sort scrolls on to two more columns; power play goals count for no one's +/-).
-How it plays: skating speed, the speed burst, shot power, how far the puck slides, tiring, bench
-rest, rest in the penalty box, how many penalties are called, and hot and cold streaks. Presets
-set them all: Classic, Simulation (the fixes and stats, a weaker burst, fewer penalties, milder
-streaks) and Arcade (faster, harder, livelier). And the rink view: 320 wide instead of the
-cartridge's 256, showing the whole width of the ice with the camera moving less, the scoreboard
-and overlays in the middle (the pause screen stays 256 wide, as on the cartridge).
+### The menu
 
-The rules that are amounts are numbers underneath, and the page's choices are named ones of them
-(Skating speed: classic 100%, faster 110%, fastest 125%, slower 90%). `settings.ini` takes a
-name or any number in the rule's range, and the page shows one that is none of its choices as
-"custom (115%)"; the presets follow what the file holds. `--rule` takes the same
-(`--rule skating=115`; a wrong one says what the rule takes).
+Esc (or a controller's Back button) opens it; arrows and Enter, or the d-pad, A and B, work it.
+
+- **Game ROM**: your cartridge dump, in a file browser.
+- **Reset**, and **Save a state** / **Load a state**: eight slots, each with a picture of the
+  moment, in `states/` beside the game. States are taken during play (not in the menus or a
+  pause). Quit in the middle of a game and the next start puts you back where you were (quick
+  resume, an option).
+- **Video**: a pixel-art upscaler (Scale2x, Scale3x or MMPX, which smooth the staircases without
+  blurring or adding colours, or xBR, which blends its edges smooth); sharp, integer or fit
+  scaling; square pixels or 4:3; the colours' levels (standard, full range or the console's own);
+  dithering blended as a television blended it; a picture tube's scanlines and its aperture
+  grille, slot mask or shadow mask; full screen; and **Vsync**, so nothing tears (on unless you
+  turn it off).
+- **Capture**: the last 20 seconds are always kept; F10 (or this page) saves them, and F11
+  records until you press it again. They go to `videos/` as GIFs (exact colours, 30 frames a
+  second, no sound). The page sets how long the replay is and a GIF's size.
+- **Sound**: volume, and the FM sound core and chip (hear the difference as you play).
+- **Players**: which controller each player has, a controller's buttons (press the new one),
+  turbo A / B / C, the stick's dead zone, and EA's **4 Way Play** for four players (as on the
+  cartridge: set it, Reset, then choose Players: Three or Four in the game's setup screen).
+- **League**: who plays (below).
+- **Game rules**: how the game plays (below).
+- **Options** and **Keys**: pausing when the window loses focus, fast-forward's speed, and every
+  key of the pads and the controls (pick one and press the new key, with Shift, Ctrl or Alt if you
+  like).
+
+All of it is kept in `settings.ini`, in the folder you run the game from, beside its saves; you
+can edit it while the game is closed. On a Mac, hold Fn for the function keys.
+
+### Game rules
+
+Things the cartridge never offered, for every player and the whole game. They are set before a
+game starts (a change made during one shows from the next Reset), and a saved state keeps its
+game's rules. **Classic**, the default, is the original exactly.
+
+- **Fixes and stats**: the weight bug fixed (the original sums a check's weights in a byte that
+  wraps, so a heavy skater checked by a lighter player falls easily), the second assist kept on a
+  give-and-go, and plus/minus with body checks in Player Stats (the sort scrolls on to two more
+  columns; power play goals count for no one's +/-).
+- **Time**: more period lengths in the setup (2, 3, 7 and 15 minutes besides 5, 10 and 20), and
+  the regular season's overtime length.
+- **How it plays**: skating speed, the speed burst, shot power, how far the puck slides, tiring,
+  bench rest, rest in the penalty box, how many penalties are called, and hot and cold streaks.
+- **Presets** set them all: Classic, Simulation (the fixes and stats, a weaker burst, fewer
+  penalties, milder streaks) and Arcade (faster, harder, livelier).
+- **The rink view**: 320 wide instead of the cartridge's 256, showing the whole width of the ice
+  with the camera moving less, the scoreboard and overlays in the middle (the pause screen stays
+  256 wide, as on the cartridge).
+
+The rules that are amounts are numbers underneath. The page steps through named choices, each
+showing its number (Skating speed: classic, faster 110%, fastest 125%, slower 90%), and
+`settings.ini` takes a name or any number in the rule's range (`rules.skating = 115`), which the
+page then shows as "custom (115%)"; the preset line follows what the file holds. `--rule` takes the
+same (`--rule skating=115`; a wrong one says what the rule takes).
 
 | Rule | Its number | Named | Range |
 |---|---|---|---|
@@ -91,75 +120,40 @@ name or any number in the rule's range, and the page shows one that is none of i
 | `streaks` | % of hot and cold streaks' effect on ratings | classic 100, milder 50, off 0 | 0 to 200 |
 
 The ranges are what the game's motion takes: headless games at both ends of every one, all at
-once, play on with every speed well inside what the game keeps.
+once, play on with every speed well inside what the game keeps. The on / off rules and period
+lengths are `on` / `off` and `classic` / `more`; the rink view is `classic` / `wide`.
 
-**Leagues:** who plays, on the menu's League page: the cartridge's teams, or a league of your own,
-up to 32 teams. Under the choice the page says where the league's files are (a folder, or a
-package and its size), its teams (and how many play for the cup), and its best five skaters, five
-goalies and eleven teams, by the overall and team ratings the game's cards show. A league in
-`leagues/` that will not read is left out, and the page says how many (`--check-league` says why).
-Each league keeps its own records (`out/nhl94-NAME.srm`). A league is a folder in `leagues/`
-beside the game, of text files a spreadsheet opens: `teams.csv` (names, arenas, conferences,
-ratings, songs), `goalies.csv` and `players.csv` (every player's numbers and ratings),
-`lines.csv`, `colours.csv`, `pictures.csv`, and `league.ini` (its name, how many teams play for
-the cup). To start one, `nhl94 --export-league leagues/my-league` writes the cartridge's league
-out, to change as you like; `nhl94 --check-league leagues/my-league` says what holds, or what is
-wrong and on which line (the columns are described at the top of `native/league.c`). The art is in
-`art/` as PNGs: each team's logo (`logos/`, in its own 15 colours), banners (`banners/`: the
-playoff tree's and game's on top, the setup screen's below), centre ice (`ice/`, with the rink
-round it) and the players' photos (`photos/`, 8 shades of grey; any picture is turned into them by
-brightness); and in `game/` the art every team shares: the title screens, setup screens, the
-rinks, scoreboard, fonts, the crowd, the Zamboni, the players' sprites (a sheet of their tiles)
-and the rest, by the names the game knows them by. Draw over them in any editor: an indexed PNG
-keeps its colours' places, a plain one is matched to the colours the screen has (the
-`--check-league` message says which colour and where, when one is not). A shared picture is taken
-back through its own map, so a tile it shows in two places must look the same in both (the message
-says where it does not); its order and the sprites' frames stay as they were. A team with no
-picture shows its art team's (its `art` column), and a new city gets its own name on the banners,
-drawn in the cartridge's own lettering. Each league keeps its own records
-(`out/nhl94-my-league.srm`), and a saved state plays on with the league it was saved in. The
-cartridge's own league, exported and built again, plays the original frame for frame.
+## Leagues
 
-A league can also come from a community hack made on the 32-team template (NHL 94 2025, NHL 2026
-94 Edition, the 30th Anniversary Championship Teams and the like): `nhl94 --extract-rom "HACK.bin"
-leagues/2026` writes its teams, players, ratings, lines, playoff draws, colours (jerseys too, with
-its player sprites) and all its art out the same way: the shared art it has of its own goes in
-`art/game` as the game reads it (NAME.bin, gathered from wherever the hack put it) beside its
-picture to draw over. The hack is only read, never run, and stays yours: nothing from it goes
-anywhere but that folder. Its code is not taken, so what it changed there (its gameplay, the photo
-carousel's order) is not either. Some of what its code shows is still taken as data: where the
-screen after the EA logo puts its pictures (`hiscore_screen` in `league.ini`: the hacks draw a
-whole screen there), and, where the hack's setup screen banners are one label for every team (the
-template's HOME, beside an AWAY its code makes), each team's own name in their place. Two players
-may share a number (the lines then name them); names up to 24 letters are taken, though the roster
-screen has room for about 19.
+Play the cartridge's 26 teams (and its two All-Star teams), or a league of your own of up to 32:
+teams, players, ratings, lines, colours, logos, banners, centre ice, player photos, and even the
+title screens, rinks, sprites and fonts every team shares. A league is a folder of text files a
+spreadsheet opens and PNGs any paint program edits, in `leagues/` beside the game, or the same
+packed in one zip.
 
-A league travels as one file: `nhl94 --pack-league leagues/2026 2026.zip` puts its files in a
-zip (any unzip tool opens it), and a package in `leagues/` plays as it is, no unpacking. The same
-folder always makes the same package, which must build the folder's league exactly (it says the
-package's checksum and the league's); for online play the league's checksum is part of the
-session and of saved states, so every player's game can tell it has the host's. A package from
-someone else is only read: every name, size and checksum in it is checked, and its pictures and
-files are checked as a folder's are. The NHL 2026 edition's whole league, every photo included,
-is a package of about 1.7 MB.
+```
+./build/nhl94 --export-league leagues/my-league          # the cartridge's league, to change as you like
+./build/nhl94 --extract-rom "HACK.bin" leagues/2026      # a hack's league (read as data, never run)
+./build/nhl94 --check-league leagues/my-league           # what holds, or what is wrong and on which line
+./build/nhl94 --pack-league leagues/my-league my.zip     # one file to keep or send, played as it is
+```
 
-**Captures:** the last 20 seconds are always kept; F10 (or the menu's Capture page) saves them,
-and F11 records until you press it again. They go to `videos/` as GIFs (exact colours, 30 frames
-a second, no sound). The Capture page sets how long the replay is and a GIF's size.
+(Each needs the cartridge too: `--rom FILE`, or your dump in the folder as `NHL 94 (UE) [!].gen`.)
 
-**Save slots and quick resume:** the menu's Save and Load pages have eight slots, each with a
-picture of the moment, in `states/` beside the game. States are taken during play (not in the menus
-or a pause). Quit in the middle of a game and the next start puts you back where you were (an
-option in the menu).
+Choose one on the menu's **League** page and Reset. The page says what the chosen league holds:
+where its files are, how many teams it has (and how many play for the cup), and its best five
+skaters, five goalies and eleven teams, by the overall and team ratings the game's cards show.
+Each league keeps its own records, and a saved state plays on with the league it was saved in.
+The cartridge's own league, exported and built again, plays the original frame for frame.
 
-**Four players** (EA's 4 Way Play, as on the cartridge): in the menu, Players, set Controllers to
-EA 4 Way Play and Reset; then choose Players: Three or Four in the game's setup screen. The
-Players page also gives each player a controller, moves a controller's buttons (press the new
-one), adds turbo A / B / C, and sets the stick's dead zone.
+Community hacks made on the 32-team template (NHL 94 2025, NHL 2026 94 Edition, the 30th
+Anniversary Championship Teams and the like) extract whole: teams, players, ratings, lines,
+playoff draws, colours and jerseys, and all their art. Their code is not taken, so what a hack
+changed there (its own gameplay, extra menu lines, its texts) is not either.
 
-All of it is kept in `settings.ini`, in the folder you run the game from, beside its saves (you
-can also edit it while the game is closed). The game pauses when its window loses focus (an
-option in the menu). On a Mac, hold Fn for the function keys.
+**Everything about leagues, file by file and column by column, is in
+[docs/LEAGUES.md](docs/LEAGUES.md):** the folder's layout, every CSV column and its range, the
+art's sizes and colours, what is and is not taken from a hack, packages, records and states.
 
 ## Build
 
@@ -204,7 +198,7 @@ The C++ runtime is linked in, so outside the MSYS2 shell `build/nhl94.exe` needs
 If a compiler newer than these warns about something, `make WERROR= nhl94` builds anyway; please
 tell us what it said.
 
-## For agents: where this stands (16 October 2026)
+## For agents: where this stands (18 October 2026)
 
 - **What it is.** A hand-written C reimplementation of NHL '94 (Genesis, US/Europe retail, SHA-1
   `7b1489ab501258133bf03e5f0892b77d04312580`). `src/` has one C file per asm module of the
@@ -215,19 +209,24 @@ tell us what it said.
   with an SDL2 platform. There is no 68k or Z80 emulation. A change to pulseman is committed and
   pushed there, then the submodule's new commit is committed here.
 - **How it is verified.** Genesis Plus GX with a hook (the oracle, a development tool only)
-  records real play. `make test` replays 10,197 recorded routine calls. `make lockstep` runs 17
+  records real play. `make test` replays 10,276 recorded routine calls. `make lockstep` runs 18
   whole sessions against the oracle, checking work RAM and VDP at every vblank. `make
-  golden-check` compares the native build's own output with a recorded build, bit for bit
-  (about 227,000 frames, the rules' and leagues' own runs among them), plus save-state round
-  trips. `make rulestest` and `make leaguetest` check the game rules and the leagues (the
-  cartridge's league exported and built again, byte for byte; with hack ROMs in `../roms` or
-  `HACKS=`, each extracted, built to its teams and art, played, and packed). pulseman is checked on the oracle's vectors
-  (`make runtime-check`) and on this game's own recordings (`make runtime-selfcheck`).
+  golden-check` compares the native build's own output with a recorded build, bit for bit (20
+  runs, about 227,000 frames, the rules' and leagues' own among them), plus save-state round
+  trips. `make rulestest` checks the game rules on the game's own routines (and the League page's
+  ratings against the cards' for every player). `make leaguetest` checks the leagues: the
+  cartridge's exported and built again, byte for byte; a 32-team one; 22 broken ones refused; and
+  with hack ROMs in `../roms` (or `HACKS=`), each extracted, built to its teams, colours and art
+  as the hack has them, played and packed. pulseman is checked on the oracle's vectors (`make
+  runtime-check`) and on this game's own recordings (`make runtime-selfcheck`).
 - **Done.** The harness, the game-play core, video and sound, the frame drivers, native running,
   lockstep, the whole front end (it boots from power on), a cleanup, golden runs, native save
-  states and rewind. In pulseman: the console's state as a value, a client-owned clock with
-  line-by-line drawing and an H-interrupt hook, a bus map, FM cores and models chosen at run
-  time, and a trace recorder.
+  states and rewind. Then the game rules (`src/rules.h`: numbers, Classic the original's, kept in
+  states) and leagues (`src/league.h`'s tables; `native/league.c` reads and builds them,
+  `native/romsrc.c` reads hacks, `native/art.c` the pictures, `docs/LEAGUES.md` the format), the
+  League and Game rules pages. In pulseman: the console's state as a value, a client-owned clock
+  with line-by-line drawing and an H-interrupt hook, a bus map, FM cores and models chosen at run
+  time, a trace recorder, PNG and zip, the client's option pages, and vsync.
 - **Deferred by the owner.** WebAssembly (it first needs `src/ram.h`'s GCC-only big-endian
   struct replaced: the choice is part of that job) and the cartridge's slowdown (it needs a 68k
   cost model).
@@ -273,10 +272,13 @@ From the least ambitious to the most.
 - [x] Capture: the replay (the last 20 seconds) and recordings, as GIFs
 - [x] Save slots with thumbnails; quick resume on quit and start (states during play)
 - [x] Game rules, the host's for every player (Classic: the original): period lengths, overtime, the weight bug fix, the second assist fix, plus/minus and checks, skating, burst, shots, puck, energy, penalties, streaks, presets, the rink view
-- [x] Leagues of your own, up to 32 teams: teams, players, lines, colours and pictures in files, name banners drawn for new teams (logos borrowed from the cartridge's teams for now)
+- [x] The rules as numbers: any value in a rule's range in `settings.ini` or `--rule`, named choices on the page
+- [x] Leagues of your own, up to 32 teams: teams, players, lines, colours and pictures in files, name banners drawn for new teams
 - [x] Leagues extracted from hacks on the 32-team template (teams, players, ratings, lines, draws, colours and all their art)
 - [x] League packages: a league in one zip, to keep or send, played as it is
 - [x] League art as PNGs to draw over: logos, banners, centre ice, photos, and the art every team shares (title screens, rinks, sprites, fonts ...)
+- [x] A League page: choose the league, and see its files, teams, best players and teams
+- [x] Vsync: no tearing
 - [ ] Skip the EA screen, boot straight into a game
 - [x] Colour options; scanlines, CRT mask, composite dither blending
 - [ ] IPS and BPS patches, soft-patching, the ROM check as a toggle for data hacks
