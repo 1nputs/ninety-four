@@ -43,7 +43,8 @@
  * (18 or more for the cup); a team 2 to 4 goalies, 9 to 15 forwards, 6 to 15 defensemen and 26
  * players at most; names as long as the screens take (LEN_ below). The
  * folder is written from the cartridge (league_export) or from a hack made on the community's
- * 32-team template (league_extract, romsrc.c: read as data, never run). The game reads the league
+ * 32-team template (league_extract, romsrc.c: read as data, never run), and may travel as a
+ * package (league_pack: a zip of its files, played as it is from leagues/). The game reads the league
  * through the tables of src/league.h, so it plays as the cartridge does with whatever teams it
  * has; the cartridge's own league, exported and built again, is the cartridge's byte for byte
  * (make leaguetest). */
@@ -57,6 +58,7 @@
 #include "league.h"
 #include "rom.h"
 #include "symbols_gen.h"
+#include "mdrt/zip.h"
 #ifdef _WIN32
 #include <direct.h>
 #define make_dir(p) _mkdir(p)
@@ -152,20 +154,79 @@ const char *league_error(void) { return err; }
 /* ---- reading: files, CSV rows, fields ------------------------------------------------------------ */
 
 /* the file's text (NUL ended), NULL when it is not there (*missing) or cannot be read */
+/* ---- where a league's files are: a folder, or a package (a zip of one, mdrt/zip.h) -------------- */
+
+static struct { char path[512]; int zip; mdrt_zip z; uint8_t *bytes; } src;
+
+static int is_package(const char *path)
+{
+    size_t n = strlen(path);
+    const char *e = path + n - 4;
+    return n > 4 && e[0] == '.' && (e[1] | 32) == 'z' && (e[2] | 32) == 'i' && (e[3] | 32) == 'p';
+}
+
+/* the file at path, whole (at most max bytes; a NUL after them) into *out: its length; 0 and *out
+ * NULL when there is none; -1 when it cannot be read */
+static long file_bytes(const char *path, uint8_t **out, size_t max)
+{
+    FILE *f = fopen(path, "rb");
+    *out = NULL;
+    if (!f) return 0;
+    long n = fseek(f, 0, SEEK_END) ? -1 : ftell(f);
+    uint8_t *b = n >= 0 && (size_t)n <= max ? malloc((size_t)n + 1) : NULL;
+    if (b && (fseek(f, 0, SEEK_SET) || fread(b, 1, (size_t)n, f) != (size_t)n)) { free(b); b = NULL; }
+    fclose(f);
+    if (!b) return n > 0 && (size_t)n > max ? fail("%s: too big", path) : fail("%s cannot be read", path);
+    b[n] = 0;
+    *out = b;
+    return n;
+}
+
+static void src_close(void)
+{
+    if (src.zip) mdrt_zip_close(&src.z);
+    free(src.bytes);
+    memset(&src, 0, sizeof src);
+}
+
+/* the league at path (a folder, or a package: NAME.zip) is the one read now: 0, -1 */
+static int src_open(const char *path)
+{
+    src_close();
+    snprintf(src.path, sizeof src.path, "%s", path);
+    if (!is_package(path)) return 0;
+    long n = file_bytes(path, &src.bytes, MDRT_ZIP_MAX_TOTAL);
+    char why[200];
+    if (n <= 0) return n < 0 ? -1 : fail("no package %s", path);
+    if (mdrt_zip_open(&src.z, src.bytes, (size_t)n, why, sizeof why) < 0) return fail("%s: %s", path, why);
+    src.zip = 1;
+    return 0;
+}
+
+/* its file name (art/logos/ANA.png ...): as file_bytes */
+static long src_read(const char *name, uint8_t **out, size_t max)
+{
+    char path[1200];
+    *out = NULL;
+    if (src.zip) {
+        int i = mdrt_zip_find(&src.z, name);
+        if (i < 0) return 0;
+        if (src.z.entry[i].size > max) return fail("%s/%s: too big", src.path, name);
+        long n = mdrt_zip_read(&src.z, i, out);
+        return n < 0 ? fail("%s/%s: damaged", src.path, name) : n;
+    }
+    snprintf(path, sizeof path, "%s/%s", src.path, name);
+    return file_bytes(path, out, max);
+}
+
 static char *slurp(const char *dir, const char *name, int *missing)
 {
-    char path[1100];
-    snprintf(path, sizeof path, "%s/%s", dir, name);
-    *missing = 0;
-    FILE *f = fopen(path, "rb");
-    if (!f) { *missing = 1; return NULL; }
-    long n = fseek(f, 0, SEEK_END) ? -1 : ftell(f);
-    char *t = n >= 0 && n < (4 << 20) ? malloc((size_t)n + 1) : NULL;
-    if (t && (fseek(f, 0, SEEK_SET) || fread(t, 1, (size_t)n, f) != (size_t)n)) { free(t); t = NULL; }
-    fclose(f);
-    if (!t) { err_file = name; err_line = 0; fail("cannot be read"); return NULL; }
-    t[n] = 0;
-    return t;
+    uint8_t *b;
+    (void)dir;
+    long n = src_read(name, &b, 4 << 20);
+    *missing = n == 0 && !b;
+    if (n < 0) { char why[700]; snprintf(why, sizeof why, "%s", err); err_file = name; err_line = 0; fail("cannot be read (%s)", why); }
+    return (char *)b;
 }
 
 #define CSV_FIELDS 40
@@ -563,13 +624,19 @@ static void shared_colours(const struct romsrc *s, uint16_t screen[64], uint16_t
 /* art/KIND/NAME.png, read into p (w x h): 1, 0 none, -1 (league_error) */
 static int art_png(const char *dir, const char *kind, const char *name, mdrt_png *p, int w, int h)
 {
-    char path[1200];
-    snprintf(path, sizeof path, "%s/art/%s/%s.png", dir, kind, name);
-    int r = art_load(path, p, w, h);
+    char rel[300], path[1200];
+    uint8_t *b;
+    (void)dir;
+    snprintf(rel, sizeof rel, "art/%s/%s.png", kind, name);
+    snprintf(path, sizeof path, "%s/%s", src.path, rel);
+    long n = src_read(rel, &b, 16u << 20);
     err_file = NULL;
     err_line = 0;
-    if (r < 0) fail("%s", art_error());
-    return r;
+    if (n <= 0 && !b) return n < 0 ? -1 : 0;
+    int r = art_load_bytes(path, b, (size_t)n, p, w, h);
+    free(b);
+    if (r < 0) return fail("%s", art_error());
+    return 1;
 }
 
 /* the photo art/photos/NAME.png (its 8 shades: colours 5 to 12 of the photos' palette, an indexed
@@ -817,8 +884,10 @@ static int read_league(const char *folder, struct lg **out)
     err_line = 0;
     if (!L) return fail("out of memory");
     snprintf(L->dir, sizeof L->dir, "%s", dir);
+    if (src_open(dir) < 0) { free_lg(L); return -1; }
     const char *base = strrchr(dir, '/');
     snprintf(L->name, sizeof L->name, "%.63s", base && base[1] ? base + 1 : dir);
+    if (is_package(L->name)) L->name[strlen(L->name) - 4] = 0;
     if (read_ini(dir, L) < 0) goto done;
     for (int i = 0; i < 7; i++) {
         t[i] = slurp(dir, files[i], &missing);
@@ -1154,22 +1223,6 @@ static void put_banners(struct buf *b, struct lg *L, const uint8_t *c, uint8_t *
     for (int i = 0; i < 22; i++) put16(b, (c16(c, map + 4 + 2u * (uint32_t)i) & 0xE000) | (unsigned)i);
 }
 
-/* the folder's file name (whole, malloc'd; at most max bytes) into *out: its length, 0 when there
- * is none, -1 */
-static long slurp_file(const char *path, uint8_t **out, size_t max)
-{
-    FILE *f = fopen(path, "rb");
-    *out = NULL;
-    if (!f) return 0;
-    uint8_t *b = malloc(max + 1);
-    size_t n = b ? fread(b, 1, max + 1, f) : 0;
-    fclose(f);
-    if (!b) return fail("out of memory");
-    if (n > max) { free(b); return fail("%s: too big", path); }
-    *out = b;
-    return (long)n;
-}
-
 /* the shared art of the folder (art/game): each asset's bytes from NAME.bin (a hack's: the
  * cartridge's otherwise), made again from NAME.png when that is not the same picture; past the
  * cartridge when they are not its own, read through league.asset (ART()). Their tiles go where
@@ -1186,9 +1239,10 @@ static int shared_build(struct buf *b, struct lg *L, struct league *lg)
         uint8_t *blob, *made = NULL;
         struct romsrc bs = *cs;
         uint32_t a = cs->asset[k];
-        snprintf(path, sizeof path, "%s/art/game/%s.bin", L->dir, art_shared_name(i));
-        long n = slurp_file(path, &blob, 0x80000);
+        snprintf(path, sizeof path, "art/game/%s.bin", art_shared_name(i));
+        long n = src_read(path, &blob, 0x80000);
         if (n < 0) return -1;
+        if (n == 0 && blob) { free(blob); blob = NULL; }
         if (n) {
             bs.b = blob;
             bs.size = (uint32_t)n;
@@ -1200,9 +1254,9 @@ static int shared_build(struct buf *b, struct lg *L, struct league *lg)
         const uint8_t *bytes = n ? blob : NULL;
         size_t size = n ? (size_t)n : 0;
         mdrt_png p;
-        snprintf(path, sizeof path, "%s/art/game/%s.png", L->dir, art_shared_name(i));
-        int r = art_load(path, &p, 0, 0);
-        if (r < 0) { free(blob); return fail("%s", art_error()); }
+        int r = art_png(L->dir, "game", art_shared_name(i), &p, 0, 0);
+        snprintf(path, sizeof path, "%s/art/game/%s.png", src.path, art_shared_name(i));
+        if (r < 0) { free(blob); return -1; }
         if (r) {
             struct art_view base, v;
             memcpy(team, L->t[0].pal[PAL_HOME], sizeof team);
@@ -1432,12 +1486,13 @@ static int build_dir(const char *dir, struct built *B, char *name, size_t name_s
 {
     struct lg *L;
     if (!rom_cart) return fail("no cartridge");
-    if (read_league(dir, &L) < 0) return -1;
+    if (read_league(dir, &L) < 0) { src_close(); return -1; }
     err_file = NULL;
     err_line = 0;
     int r = build(L, rom_cart, B);
     if (name) snprintf(name, name_size, "%s", L->name);
     free_lg(L);
+    src_close();
     return r;
 }
 
@@ -1479,7 +1534,8 @@ int league_check(const char *dir, int describe)
     char name[64];
     if (build_dir(dir, &B, name, sizeof name) < 0) return -1;
     if (describe) printf("%s: %s, %d teams (%d for the cup), %d playoff draws, %u bytes past the cartridge, checksum %016llx\n", dir, name, B.league.teams,
-           B.league.playoff_teams, B.league.playoff_rows, (unsigned)(B.size - ROM_SIZE), (unsigned long long)B.hash);
+           B.league.playoff_teams, B.league.playoff_rows, (unsigned)(B.size - ROM_SIZE - (B.size > SRAM_END ? SRAM_END - SRAM_START : 0)),
+           (unsigned long long)B.hash);                   /* (the save RAM's addresses left out) */
     free(B.img);
     return 0;
 }
@@ -1506,7 +1562,7 @@ int league_list(const char *const **names, const char *const **labels)
         struct stat st;
         if (e->d_name[0] == '.' || strlen(e->d_name) >= sizeof found[0]) continue;
         snprintf(path, sizeof path, "leagues/%.200s/teams.csv", e->d_name);
-        if (stat(path, &st) == 0) snprintf(found[nf++], sizeof found[0], "%.63s", e->d_name);
+        if (stat(path, &st) == 0 || is_package(e->d_name)) snprintf(found[nf++], sizeof found[0], "%.63s", e->d_name);   /* (a folder, or a package) */
     }
     if (d) closedir(d);
     qsort(found, (size_t)nf, sizeof found[0], by_name);
@@ -1515,10 +1571,11 @@ int league_list(const char *const **names, const char *const **labels)
         struct lg *L;
         if (!strcmp(found[i], "cartridge")) { fprintf(stderr, "leagues/cartridge: the name is the cartridge's own: give the folder another\n"); continue; }
         snprintf(dir, sizeof dir, "leagues/%.63s", found[i]);
-        if (read_league(dir, &L) < 0) { fprintf(stderr, "%s: %s (not in the menu)\n", dir, err); continue; }
+        if (read_league(dir, &L) < 0) { fprintf(stderr, "%s: %s (not in the menu)\n", dir, err); src_close(); continue; }
         snprintf(list_name[n], sizeof list_name[n], "%.63s", found[i]);
         snprintf(list_label[n], sizeof list_label[n], "%.39s", L->name);
         free_lg(L);
+        src_close();
         n++;
     }
     for (int i = 0; i < n; i++) { list_names[i] = list_name[i]; list_labels[i] = list_label[i]; }
@@ -1534,8 +1591,9 @@ const char *league_sram(const char *base)
     if (!next_dir[0] || !base) return base;
     const char *slash = strrchr(next_dir, '/'), *name = slash && slash[1] ? slash + 1 : next_dir;
     const char *dot = strrchr(base, '.'), *bs = strrchr(base, '/');
-    int stem = dot && (!bs || dot > bs) ? (int)(dot - base) : (int)strlen(base);
-    snprintf(path, sizeof path, "%.*s-%s.srm", stem, base, name);
+    int stem = dot && (!bs || dot > bs) ? (int)(dot - base) : (int)strlen(base), len = (int)strlen(name);
+    if (is_package(name)) len -= 4;                       /* (a package's: its name's) */
+    snprintf(path, sizeof path, "%.*s-%.*s.srm", stem, base, len, name);
     return path;
 }
 
@@ -1822,5 +1880,76 @@ int league_extract(const struct romsrc *s, const char *dir, const char *name)
             for (int k = 0; k < 16; k++) field(f, T[seats[r][k]].abbr, k == 15);
         fclose(f);
     }
+    return 0;
+}
+
+/* ---- a league as a package: its files in a zip, to keep or send ------------------------------------ */
+
+/* the files of dir a league reads, into w: 0, -1 */
+static int pack_files(const char *dir, mdrt_zip_writer *w, int *count)
+{
+    static const char *const files[] = { "league.ini", "teams.csv", "goalies.csv", "players.csv", "lines.csv", "colours.csv", "pictures.csv", "playoffs.csv" };
+    static const char *const kinds[] = { "logos", "banners", "ice", "photos", "game" };
+    char path[1200], rel[400];
+    uint8_t *b;
+    for (size_t k = 0; k < sizeof files / sizeof files[0]; k++) {
+        snprintf(path, sizeof path, "%s/%s", dir, files[k]);
+        long n = file_bytes(path, &b, 4 << 20);
+        if (n < 0) return -1;
+        if (!b) continue;
+        int r = mdrt_zip_add(w, files[k], b, (size_t)n);
+        free(b);
+        if (r < 0) return fail("%s cannot be packed", path);
+        ++*count;
+    }
+    for (size_t k = 0; k < sizeof kinds / sizeof kinds[0]; k++) {
+        snprintf(path, sizeof path, "%s/art/%s", dir, kinds[k]);
+        DIR *d = opendir(path);
+        struct dirent *e;
+        while (d && (e = readdir(d))) {
+            size_t n = strlen(e->d_name);
+            if (e->d_name[0] == '.' || n < 5 || (!same_word(e->d_name + n - 4, ".png") && !same_word(e->d_name + n - 4, ".bin"))) continue;
+            snprintf(rel, sizeof rel, "art/%s/%.300s", kinds[k], e->d_name);
+            snprintf(path, sizeof path, "%s/%s", dir, rel);
+            long len = file_bytes(path, &b, 16u << 20);
+            if (len < 0 || !b) { closedir(d); return len < 0 ? -1 : fail("%s cannot be read", path); }
+            int r = mdrt_zip_add(w, rel, b, (size_t)len);
+            free(b);
+            if (r < 0) { closedir(d); return fail("%s cannot be packed (its name: letters, digits, . _ - only)", path); }
+            ++*count;
+        }
+        if (d) closedir(d);
+    }
+    return 0;
+}
+
+int league_pack(const char *dir, const char *zip_path)
+{
+    struct built B;
+    char name[64];
+    err_file = NULL;
+    err_line = 0;
+    if (is_package(dir)) return fail("%s is a package already", dir);
+    if (!is_package(zip_path)) return fail("%s: a package's name ends in .zip", zip_path);
+    if (build_dir(dir, &B, name, sizeof name) < 0) return -1;   /* (it builds: else what is wrong) */
+    uint64_t hash = B.hash;
+    free(B.img);
+    mdrt_zip_writer w = { 0 };
+    int count = 0;
+    if (pack_files(dir, &w, &count) < 0) { mdrt_zip_writer_free(&w); return -1; }
+    uint8_t *zip;
+    size_t n = mdrt_zip_finish(&w, &zip);
+    if (!n) return fail("%s cannot be made", zip_path);
+    FILE *f = fopen(zip_path, "wb");
+    int ok = f && fwrite(zip, 1, n, f) == n;
+    if (f && fclose(f)) ok = 0;
+    uint64_t pack_hash = fnv64(0xCBF29CE484222325ull, zip, n);
+    free(zip);
+    if (!ok) return fail("cannot write %s", zip_path);
+    if (build_dir(zip_path, &B, NULL, 0) < 0) return -1;  /* (and the package builds the same league) */
+    free(B.img);
+    if (B.hash != hash) return fail("%s builds another league than %s", zip_path, dir);
+    printf("%s: %s, %d files, %u KB; the package's checksum %016llx, its league's %016llx\n", zip_path, name, count,
+           (unsigned)((n + 1023) >> 10), (unsigned long long)pack_hash, (unsigned long long)hash);
     return 0;
 }

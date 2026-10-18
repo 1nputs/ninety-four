@@ -361,6 +361,18 @@ int art_save(const char *path, const uint8_t *px, int w, int h, const uint16_t *
     return ok ? 0 : fail("cannot write %s", path);
 }
 
+/* the PNG in b (n bytes; name for what is said of it), w x h (0: any), into p: 0, -1 (art_error) */
+int art_load_bytes(const char *name, const uint8_t *b, size_t n, mdrt_png *p, int w, int h)
+{
+    char why[120];
+    if (mdrt_png_read(b, n, p, why, sizeof why) < 0) return fail("%s: %s", name, why);
+    if ((w && p->width != w) || (h && p->height != h)) {
+        mdrt_png_free(p);
+        return fail("%s: %d x %d pixels; it must be %d x %d", name, p->width, p->height, w, h);
+    }
+    return 0;
+}
+
 /* the PNG at path, w x h (0: any; *w and *h say), into p: 1, 0 when there is none, -1 when it will
  * not do (art_error) */
 int art_load(const char *path, mdrt_png *p, int w, int h)
@@ -382,15 +394,9 @@ int art_load(const char *path, mdrt_png *p, int w, int h)
         if (!got) break;
     }
     fclose(f);
-    char why[120];
-    int r = mdrt_png_read(b, n, p, why, sizeof why);
+    int r = art_load_bytes(path, b, n, p, w, h);
     free(b);
-    if (r < 0) return fail("%s: %s", path, why);
-    if ((w && p->width != w) || (h && p->height != h)) {
-        mdrt_png_free(p);
-        return fail("%s: %d x %d pixels; it must be %d x %d", path, p->width, p->height, w, h);
-    }
-    return 1;
+    return r < 0 ? -1 : 1;
 }
 
 /* the colours of p's pixels in the box (x0, y0, w, h) as indexes of pal (n colours) into out (w

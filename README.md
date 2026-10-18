@@ -104,6 +104,15 @@ gameplay, the photo carousel's order) is not either. Two players may share a num
 then name them); names up to 24 letters are taken, though the roster screen has room for about
 19.
 
+A league travels as one file: `nhl94 --pack-league leagues/2026 2026.zip` puts its files in a
+zip (any unzip tool opens it), and a package in `leagues/` plays as it is, no unpacking. The same
+folder always makes the same package, which must build the folder's league exactly (it says the
+package's checksum and the league's); for online play the league's checksum is part of the
+session and of saved states, so every player's game can tell it has the host's. A package from
+someone else is only read: every name, size and checksum in it is checked, and its pictures and
+files are checked as a folder's are. The NHL 2026 edition's whole league, every photo included,
+is a package of about 1.7 MB.
+
 **Captures:** the last 20 seconds are always kept; F10 (or the menu's Capture page) saves them,
 and F11 records until you press it again. They go to `videos/` as GIFs (exact colours, 30 frames
 a second, no sound). The Capture page sets how long the replay is and a GIF's size.
@@ -182,7 +191,7 @@ tell us what it said.
   (about 227,000 frames, the rules' and leagues' own runs among them), plus save-state round
   trips. `make rulestest` and `make leaguetest` check the game rules and the leagues (the
   cartridge's league exported and built again, byte for byte; with hack ROMs in `../roms` or
-  `HACKS=`, each extracted, built to its teams and played). pulseman is checked on the oracle's vectors
+  `HACKS=`, each extracted, built to its teams and art, played, and packed). pulseman is checked on the oracle's vectors
   (`make runtime-check`) and on this game's own recordings (`make runtime-selfcheck`).
 - **Done.** The harness, the game-play core, video and sound, the frame drivers, native running,
   lockstep, the whole front end (it boots from power on), a cleanup, golden runs, native save
@@ -236,6 +245,7 @@ From the least ambitious to the most.
 - [x] Game rules, the host's for every player (Classic: the original): period lengths, overtime, the weight bug fix, the second assist fix, plus/minus and checks, skating, burst, shots, puck, energy, penalties, streaks, presets, the rink view
 - [x] Leagues of your own, up to 32 teams: teams, players, lines, colours and pictures in files, name banners drawn for new teams (logos borrowed from the cartridge's teams for now)
 - [x] Leagues extracted from hacks on the 32-team template (teams, players, ratings, lines, draws, colours and all their art)
+- [x] League packages: a league in one zip, to keep or send, played as it is
 - [x] League art as PNGs to draw over: logos, banners, centre ice, photos, and the art every team shares (title screens, rinks, sprites, fonts ...)
 - [ ] Skip the EA screen, boot straight into a game
 - [x] Colour options; scanlines, CRT mask, composite dither blending

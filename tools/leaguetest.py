@@ -10,7 +10,9 @@
   3. Broken leagues must be refused, each saying what is wrong and where.
   4. Each hack ROM on the community's 32-team template beside the repository (../roms, or HACKS=)
      is extracted (nhl94 --extract-rom: read, never run) to out/leagues/hacks, must build to its
-     teams, and plays a game.
+     teams and art, and plays a game.
+  5. The 32-team league and the hacks' as packages (--pack-league: zips building the same league;
+     the 32-team one's checked again from its zip), and damaged packages refused.
 
 tools/golden.py plays games with the first two (make golden-check). The files come from the
 user's ROM, so they stay in out/ (never committed).
@@ -254,6 +256,27 @@ def extract_hacks():
     return out
 
 
+def pack(hacks):
+    """the 32-team league and each hack's as packages (nhl94 --pack-league: the package must build the
+    folder's league, checked by nhl94), and damaged packages refused. True when all is well"""
+    ok = True
+    for d in [THIRTY_TWO] + [h[1] for h in hacks]:
+        r = subprocess.run([NHL94, '--rom', ROM, '--pack-league', d, d + '.zip'], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        print('  ' + (r.stdout.strip().replace(ROOT + '/', '') if r.returncode == 0 else 'FAIL --pack-league %s: %s' % (d, r.stderr.strip())))
+        ok &= r.returncode == 0
+    z = open(THIRTY_TWO + '.zip', 'rb').read()
+    broken = os.path.join(ROOT, 'out', 'leagues', 'broken.zip')
+    for what, data, says in [('cut short', z[:len(z) // 2], 'not a zip archive'),
+                             ('a file damaged', z[:200] + bytes([z[200] ^ 0x55]) + z[201:], 'damaged')]:
+        open(broken, 'wb').write(data)
+        r = subprocess.run([NHL94, '--rom', ROM, '--check-league', broken], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        refused = r.returncode != 0 and says in r.stderr
+        print('  a package %s: %s' % (what, 'refused' if refused else 'FAIL: ' + (r.stderr or r.stdout).strip()))
+        ok &= refused
+    os.remove(broken)
+    return ok
+
+
 def play_hacks(hacks):
     """a game with each hack's league (golden's full_game script, 16000 frames): it must play to the
     end. True when one does not"""
@@ -276,11 +299,12 @@ def main():
     export()
     thirty_two()
     hacks = extract_hacks()
-    args = [os.path.relpath(d, ROOT) for d in (CARTRIDGE, THIRTY_TWO)]
+    packages = pack(hacks)
+    args = [os.path.relpath(d, ROOT) for d in (CARTRIDGE, THIRTY_TWO, THIRTY_TWO + '.zip')]
     for path, d in hacks:
         args += ['--hack', path, os.path.relpath(d, ROOT)]
     r = subprocess.run([os.path.join(ROOT, 'build', 'leaguetest'), ROM] + args, cwd=ROOT)
-    bad = play_hacks(hacks) | (r.returncode != 0)
+    bad = play_hacks(hacks) | (r.returncode != 0) | (not packages)
     base = os.path.join(ROOT, 'out', 'leagues', 'broken')
     refused = 0
     for name, change, says in BROKEN:

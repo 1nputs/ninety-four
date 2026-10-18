@@ -69,6 +69,8 @@ const char *league_name(void);
 int league_use(const char *dir, uint64_t hash);   /* a state's league (dir's, when its checksum is hash): 0, -1 */
 int league_check(const char *dir, int describe);   /* it builds (described on stdout): 0, -1 */
 int league_export(const char *dir);     /* the cartridge's league as a folder: 0, -1 */
+/* dir's league as a package (zip_path: a zip of its files, to send or keep): 0, -1 */
+int league_pack(const char *dir, const char *zip_path);
 /* where a ROM keeps its league (romsrc.c): the cartridge, or a hack on the community's 32-team
  * template, whose tables its code points at where the cartridge's points at its own */
 struct romsrc {
@@ -115,6 +117,7 @@ int art_ice_make(const struct romsrc *s, const uint8_t *px, int w, int h, uint8_
 int art_banners(const struct romsrc *s, int t, uint8_t px[ART_BANNER_H * ART_BANNER_W], uint16_t pal[ART_BANNER_COLOURS]);
 int art_save(const char *path, const uint8_t *px, int w, int h, const uint16_t *pal, int n, int transparent0);
 int art_load(const char *path, mdrt_png *p, int w, int h);
+int art_load_bytes(const char *name, const uint8_t *b, size_t n, mdrt_png *p, int w, int h);
 int art_indexes(const char *path, const mdrt_png *p, int x0, int y0, int w, int h, const uint16_t *pal, int n, int base, uint8_t *out);
 int art_own_palette(const char *path, const mdrt_png *p, uint16_t pal[16], uint8_t *out);
 /* the art every team shares (art.c: league.h's ART_ assets): their names, sizes in a ROM, views
