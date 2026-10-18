@@ -52,6 +52,8 @@ const mdrt_sdl_option *rules_page(int *count);
 /* the menu's pages of them: League (who plays, and what the league chosen holds), Game rules */
 const mdrt_sdl_page *rules_pages(int *count);
 void rules_page_text(int page, const int *values, char *text, size_t size, void *user);
+int rules_page_pick(int which, const char *path, char *why, size_t why_size, void *user);
+void rules_page_detail(int which, int value, char *text, size_t size, void *user);
 void rules_page_use(const int *values, void *user);
 int rules_page_changed(int which, int *values, void *user);
 const char *rules_arg(const char *arg);   /* NULL, or what is wrong */
@@ -144,6 +146,12 @@ int league_list(const char *const **names, const char *const **labels);
  * one's right */
 void league_about(int i, char *text, size_t size);
 int league_unread(void);                /* the leagues in leagues/ the list left out (why: on stderr) */
+/* list entry i's folder or package (NULL: the cartridge's) into out; its files as the League page
+ * says them ("leagues/x.zip, 1652 KB"); a league the player found at path made an entry of the
+ * list: its index (an entry already, by any name: that one's), or -1 and why */
+const char *league_list_dir(int i, char *out, size_t size);
+void league_files(int i, char *text, size_t size);
+int league_add(const char *path, char *why, size_t why_size);
 /* a player's overall rating as his card shows it, from his 14 ratings and number (ratings.c);
  * *sum (NULL: not wanted) the sum it comes from, past 99 */
 int rating_overall(const uint8_t *cart, const uint8_t nib[14], int number, int goalie, int *sum);

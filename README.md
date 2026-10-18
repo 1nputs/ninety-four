@@ -140,11 +140,12 @@ packed in one zip.
 
 (Each needs the cartridge too: `--rom FILE`, or your dump in the folder as `NHL 94 (UE) [!].gen`.)
 
-Choose one on the menu's **League** page and Reset. The page says what the chosen league holds:
-where its files are, how many teams it has (and how many play for the cup), and its best five
-skaters, five goalies and eleven teams, by the overall and team ratings the game's cards show.
-Each league keeps its own records, and a saved state plays on with the league it was saved in.
-The cartridge's own league, exported and built again, plays the original frame for frame.
+Choose one on the menu's **League** page and Reset: those in `leagues/` are listed, and its
+**Files** line finds one anywhere else (a folder, or a package). The page says what the chosen
+league holds: where its files are, how many teams it has (and how many play for the cup), and its
+best five skaters, five goalies and eleven teams, by the overall and team ratings the game's cards
+show. Each league keeps its own records, and a saved state plays on with the league it was saved
+in. The cartridge's own league, exported and built again, plays the original frame for frame.
 
 Community hacks made on the 32-team template (NHL 94 2025, NHL 2026 94 Edition, the 30th
 Anniversary Championship Teams and the like) extract whole: teams, players, ratings, lines,

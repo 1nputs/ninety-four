@@ -386,6 +386,19 @@ static void about(const char *dir)
         }
         CHECK(lines >= 7 && lines <= 14 && best == 1 && width, "%s: the League page's lines (%d)", labels[i], lines);
     }
+    /* a league found elsewhere (the menu's Files line): made an entry of the list; one listed
+     * already, by another name, is that entry; a folder that is no league says why */
+    char why[300] = "", files[200], place[600];
+    int found = league_add("../thirty-two", why, sizeof why), again = league_add("leagues/thirty-two", why, sizeof why), listed_at = -1;
+    for (int i = 0; i < n; i++) if (!strcmp(names[i], "thirty-two")) listed_at = i;
+    league_files(found, files, sizeof files);
+    league_about(found, text, sizeof text);
+    CHECK(found == n && !strcmp(labels[found], "Thirty-two teams") && !strcmp(league_list_dir(found, place, sizeof place), "../thirty-two")
+          && strstr(files, "../thirty-two, a folder") && strstr(text, "Teams\t32 (30 cup)"), "a league found elsewhere: %d (%s; %s)", found, files, why);
+    CHECK(again == listed_at && listed_at > 0, "a league listed already, found again: %d, not %d", again, listed_at);
+    CHECK(league_add("nowhere", why, sizeof why) < 0 && strstr(why, "teams.csv"), "a folder that is no league: %s", why);
+    CHECK(league_add("../thirty-two", why, sizeof why) == found, "a league found twice");
+    printf("  a league found elsewhere: entry %d, %s; \"nowhere\": %s\n", found, files, why);
     if (chdir(here) != 0) CHECK(0, "cannot go back to %s", here);
 }
 

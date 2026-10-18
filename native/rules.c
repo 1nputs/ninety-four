@@ -46,21 +46,21 @@ static const int streak_pct[3] = { 100, 50, 0 };
 /* the numbers' ranges: the percentages within what the game's motion takes (headless games at
  * each end, rules_test) */
 const mdrt_sdl_option rule_options[RULE_COUNT] = {
-    [RULE_PERIOD_LENGTHS] = { "rules.period_lengths", "Period lengths", 2, period_names, period_labels, 0, 0, 0, 0, NULL, NULL },
-    [RULE_OVERTIME] = { "rules.overtime", "Season overtime", 3, overtime_names, overtime_labels, 1, 20, 1, 0, overtime_minutes, " min" },
-    [RULE_WEIGHT_FIX] = { "rules.weight_fix", "Weight bug fix", 2, off_on, NULL, 0, 0, 0, 0, NULL, NULL },
-    [RULE_ASSIST_FIX] = { "rules.assist_fix", "Second assist fix", 2, off_on, NULL, 0, 0, 0, 0, NULL, NULL },
-    [RULE_MORE_STATS] = { "rules.more_stats", "Plus/minus and checks", 2, off_on, NULL, 0, 0, 0, 0, NULL, NULL },
-    [RULE_SKATING] = { "rules.skating", "Skating speed", 4, skating_names, skating_labels, 50, 150, 5, 0, skating_pct, "%" },
-    [RULE_BURST] = { "rules.burst", "Speed burst", 4, burst_names, burst_labels, 0, 200, 5, 0, burst_pct, "%" },
-    [RULE_SHOT_POWER] = { "rules.shot_power", "Shot power", 3, shot_names, shot_labels, 50, 150, 5, 0, shot_pct, "%" },
-    [RULE_PUCK_SLIDE] = { "rules.puck_slide", "Puck slowing", 3, slide_names, slide_labels, 25, 200, 5, 0, slide_pct, "%" },
-    [RULE_TIRING] = { "rules.tiring", "Tiring", 3, tiring_names, tiring_labels, 0, 200, 5, 0, tiring_pct, "%" },
-    [RULE_BENCH_REST] = { "rules.bench_rest", "Bench rest", 3, rest_names, rest_labels, 0, 200, 5, 0, rest_pct, "%" },
-    [RULE_BOX_REST] = { "rules.box_rest", "Rest in the penalty box", 2, off_on, NULL, 0, 0, 0, 0, NULL, NULL },
-    [RULE_PENALTIES] = { "rules.penalties", "Penalties called", 3, penalty_names, penalty_labels, 0, 100, 5, 0, penalty_pct, "%" },
-    [RULE_STREAKS] = { "rules.streaks", "Hot and cold streaks", 3, streak_names, streak_labels, 0, 200, 5, 0, streak_pct, "%" },
-    [RULE_VIEW] = { "rules.view", "Rink view", 2, view_names, view_labels, 0, 0, 0, 0, NULL, NULL },
+    [RULE_PERIOD_LENGTHS] = { "rules.period_lengths", "Period lengths", 2, period_names, period_labels, 0, 0, 0, 0, NULL, NULL, NULL },
+    [RULE_OVERTIME] = { "rules.overtime", "Season overtime", 3, overtime_names, overtime_labels, 1, 20, 1, 0, overtime_minutes, " min", NULL },
+    [RULE_WEIGHT_FIX] = { "rules.weight_fix", "Weight bug fix", 2, off_on, NULL, 0, 0, 0, 0, NULL, NULL, NULL },
+    [RULE_ASSIST_FIX] = { "rules.assist_fix", "Second assist fix", 2, off_on, NULL, 0, 0, 0, 0, NULL, NULL, NULL },
+    [RULE_MORE_STATS] = { "rules.more_stats", "Plus/minus and checks", 2, off_on, NULL, 0, 0, 0, 0, NULL, NULL, NULL },
+    [RULE_SKATING] = { "rules.skating", "Skating speed", 4, skating_names, skating_labels, 50, 150, 5, 0, skating_pct, "%", NULL },
+    [RULE_BURST] = { "rules.burst", "Speed burst", 4, burst_names, burst_labels, 0, 200, 5, 0, burst_pct, "%", NULL },
+    [RULE_SHOT_POWER] = { "rules.shot_power", "Shot power", 3, shot_names, shot_labels, 50, 150, 5, 0, shot_pct, "%", NULL },
+    [RULE_PUCK_SLIDE] = { "rules.puck_slide", "Puck slowing", 3, slide_names, slide_labels, 25, 200, 5, 0, slide_pct, "%", NULL },
+    [RULE_TIRING] = { "rules.tiring", "Tiring", 3, tiring_names, tiring_labels, 0, 200, 5, 0, tiring_pct, "%", NULL },
+    [RULE_BENCH_REST] = { "rules.bench_rest", "Bench rest", 3, rest_names, rest_labels, 0, 200, 5, 0, rest_pct, "%", NULL },
+    [RULE_BOX_REST] = { "rules.box_rest", "Rest in the penalty box", 2, off_on, NULL, 0, 0, 0, 0, NULL, NULL, NULL },
+    [RULE_PENALTIES] = { "rules.penalties", "Penalties called", 3, penalty_names, penalty_labels, 0, 100, 5, 0, penalty_pct, "%", NULL },
+    [RULE_STREAKS] = { "rules.streaks", "Hot and cold streaks", 3, streak_names, streak_labels, 0, 200, 5, 0, streak_pct, "%", NULL },
+    [RULE_VIEW] = { "rules.view", "Rink view", 2, view_names, view_labels, 0, 0, 0, 0, NULL, NULL, NULL },
 };
 
 /* a choice's value: its number, or (a list's) its index */
@@ -100,8 +100,9 @@ static void page_init(void)
     const char *const *names, *const *labels;
     if (rule_page[0].key) return;
     int n = league_list(&names, &labels);
-    rule_page[P_LEAGUE] = (mdrt_sdl_option){ "rules.league", "League", n, names, labels, 0, 0, 0, 0, NULL, NULL };
-    rule_page[P_PRESET] = (mdrt_sdl_option){ "rules.preset", "Preset", 4, preset_names, NULL, 0, 0, 0, 0, NULL, NULL };
+    static const mdrt_sdl_browse find = { "Choose a league: its folder, or a package", "Files", "leagues", ".zip", 1 };
+    rule_page[P_LEAGUE] = (mdrt_sdl_option){ "rules.league", "League", n, names, labels, 0, 0, 0, 0, NULL, NULL, &find };
+    rule_page[P_PRESET] = (mdrt_sdl_option){ "rules.preset", "Preset", 4, preset_names, NULL, 0, 0, 0, 0, NULL, NULL, NULL };
     memcpy(rule_page + P_RULES, rule_options, sizeof rule_options);
 }
 
@@ -163,10 +164,26 @@ int rules_page_changed(int which, int *values, void *user)
 void rules_page_use(const int *values, void *user)
 {
     char dir[600];
-    int l = values[P_LEAGUE];
-    snprintf(dir, sizeof dir, "leagues/%s", l > 0 && l < rule_page[P_LEAGUE].count ? rule_page[P_LEAGUE].names[l] : "");
-    league_next(l > 0 && l < rule_page[P_LEAGUE].count ? dir : NULL);
+    league_next(league_list_dir(values[P_LEAGUE], dir, sizeof dir));   /* (NULL: the cartridge's) */
     rules_next(values + P_RULES, user);
+}
+
+/* the League line's Files: a league the player found (its folder, or a package), made one of the
+ * list's; what the line says of the league chosen */
+int rules_page_pick(int which, const char *path, char *why, size_t why_size, void *user)
+{
+    (void)user;
+    if (which != P_LEAGUE) { snprintf(why, why_size, "not a league"); return -1; }
+    int k = league_add(path, why, why_size);
+    if (k >= 0 && k >= rule_page[P_LEAGUE].count) rule_page[P_LEAGUE].count = k + 1;
+    return k;
+}
+
+void rules_page_detail(int which, int value, char *text, size_t size, void *user)
+{
+    (void)user;
+    if (which == P_LEAGUE) league_files(value, text, size);
+    else text[0] = 0;
 }
 
 static uint8_t next[RULE_COUNT] = RULES_CLASSIC;   /* the rules of the next game */

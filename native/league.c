@@ -54,6 +54,7 @@
  * (make leaguetest). docs/LEAGUES.md tells it all for a league's maker. */
 #include <dirent.h>
 #include <stdarg.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1555,17 +1556,23 @@ static void use_built(struct built *B, const char *dir, const char *name)
 }
 
 /* dir's league built on the cartridge: 0, or -1 with league_error() */
+/* one league read at a time (src): the game's thread builds one at power on, and the window's may
+ * read one the player found meanwhile (league_add) */
+static atomic_flag reading = ATOMIC_FLAG_INIT;
+
 static int build_dir(const char *dir, struct built *B, char *name, size_t name_size)
 {
     struct lg *L;
     if (!rom_cart) return fail("no cartridge");
-    if (read_league(dir, &L, 1) < 0) { src_close(); return -1; }
+    while (atomic_flag_test_and_set(&reading)) {}        /* (the window's read takes a moment) */
+    if (read_league(dir, &L, 1) < 0) { src_close(); atomic_flag_clear(&reading); return -1; }
     err_file = NULL;
     err_line = 0;
     int r = build(L, rom_cart, B);
     if (name) snprintf(name, name_size, "%s", L->name);
     free_lg(L);
     src_close();
+    atomic_flag_clear(&reading);
     return r;
 }
 
@@ -1615,9 +1622,10 @@ int league_check(const char *dir, int describe)
 
 /* ---- the leagues/ folder, for the menu ----------------------------------------------------------- */
 
-#define LIST_MAX 16
-static char list_name[LIST_MAX][64], list_label[LIST_MAX][40];
+#define LIST_MAX 32
+static char list_name[LIST_MAX][512], list_label[LIST_MAX][40];   /* (a folder of leagues/, or a path the player found) */
 static const char *list_names[LIST_MAX], *list_labels[LIST_MAX];
+static int list_n;
 
 static int by_name(const void *a, const void *b) { return strcmp(a, b); }
 
@@ -1681,7 +1689,75 @@ static int by_rating(const void *a, const void *b)
     return x->sum != y->sum ? y->sum - x->sum : x->i - y->i;
 }
 
+/* list entry n, its name given: its label, and what the League page says of it (L read from dir) */
+static void listed(int n, const struct lg *L, const char *dir)
+{
+    snprintf(list_label[n], sizeof list_label[n], "%.39s", L->name);
+    list_names[n] = list_name[n];
+    list_labels[n] = list_label[n];
+    free(about[n]);
+    if ((about[n] = calloc(1, sizeof *about[n]))) {
+        struct stat st;
+        about_teams(about[n], L->t, L->teams, L->playoff_teams);
+        about[n]->package = src.zip;
+        about[n]->bytes = src.zip && stat(dir, &st) == 0 ? (long)st.st_size : 0;
+    }
+}
+
 int league_unread(void) { return list_unread; }
+
+const char *league_list_dir(int i, char *out, size_t size)
+{
+    if (i <= 0 || i >= list_n) return NULL;
+    const char *n = list_name[i];
+    if (strpbrk(n, "/\\") || (n[0] && n[1] == ':')) snprintf(out, size, "%s", n);   /* (found by the player: its path) */
+    else snprintf(out, size, "leagues/%s", n);
+    return out;
+}
+
+void league_files(int i, char *text, size_t size)
+{
+    char dir[600], file[64], kb[24];
+    if (i <= 0 || i >= list_n || !about[i]) { snprintf(text, size, "the cartridge's own"); return; }
+    snprintf(kb, sizeof kb, about[i]->package ? ", %ld KB" : ", a folder", (about[i]->bytes + 1023) / 1024);
+    short_path(file, league_list_dir(i, dir, sizeof dir), 49 - 5 - 2 - (int)strlen(kb));
+    snprintf(text, size, "%s%s", file, kb);
+}
+
+/* a path's place on disk, to know two names of one folder for one (else the path as it is) */
+static void real_place(const char *path, char *out, size_t size)
+{
+#ifdef _WIN32
+    if (!_fullpath(out, path, size)) snprintf(out, size, "%s", path);
+#else
+    char *r = realpath(path, NULL);
+    snprintf(out, size, "%s", r ? r : path);
+    free(r);
+#endif
+}
+
+int league_add(const char *path, char *why, size_t why_size)
+{
+    char place[1100], other[1100], dir[600];
+    struct lg *L;
+    real_place(path, place, sizeof place);
+    for (int i = 1; i < list_n; i++) {                    /* (listed already, by whatever name) */
+        real_place(league_list_dir(i, dir, sizeof dir), other, sizeof other);
+        if (!strcmp(place, other)) return i;
+    }
+    if (strlen(path) >= sizeof list_name[0]) { snprintf(why, why_size, "the path is too long"); return -1; }
+    if (list_n >= LIST_MAX) { snprintf(why, why_size, "the list has room for %d leagues", LIST_MAX - 1); return -1; }
+    if (atomic_flag_test_and_set(&reading)) { snprintf(why, why_size, "the game is reading its league: try again"); return -1; }
+    int r = read_league(path, &L, 0);
+    if (r == 0) {
+        snprintf(list_name[list_n], sizeof list_name[0], "%s", path);
+        listed(list_n++, L, path);
+        free_lg(L);
+    } else snprintf(why, why_size, "%s", err);
+    src_close();
+    atomic_flag_clear(&reading);
+    return r == 0 ? list_n - 1 : -1;
+}
 
 void league_about(int i, char *text, size_t size)
 {
@@ -1689,7 +1765,7 @@ void league_about(int i, char *text, size_t size)
     static struct rated r[LEAGUE_MAX * ROSTER];
     struct team *T;
     struct about *A = i == 0 ? cart : i > 0 && i < LIST_MAX ? about[i] : NULL;
-    char path[80], name[LEN_NAME + 1], file[64];
+    char name[LEN_NAME + 1];
     size_t at = 0;
     text[0] = 0;
     if (i == 0 && !A && rom_cart && (A = calloc(1, sizeof *A)) && (T = calloc(SYM_NumTeams, sizeof *T))) {
@@ -1700,14 +1776,6 @@ void league_about(int i, char *text, size_t size)
     }
     if (!A) { snprintf(text, size, "%s", i == 0 ? "The cartridge's teams: once its ROM is chosen\n" : ""); return; }
 #define LINE(...) do { if (at < size) at += (size_t)snprintf(text + at, size - at, __VA_ARGS__); } while (0)
-    if (i == 0) LINE("Files\tthe cartridge's own\n");
-    else {
-        char kb[24];
-        snprintf(kb, sizeof kb, A->package ? ", %ld KB" : ", a folder", (A->bytes + 1023) / 1024);
-        snprintf(path, sizeof path, "leagues/%s", list_name[i]);
-        short_path(file, path, 49 - 5 - 2 - (int)strlen(kb));
-        LINE("Files\t%s%s\n", file, kb);
-    }
     LINE("Teams\t%d (%d cup)\n", A->teams, A->playoff_teams);
     if (!rom_cart) { LINE("Ratings\tonce the cartridge's ROM is chosen\n"); return; }
     /* the best of the teams that play for the cup (not All-Stars), as their cards rate them: the
@@ -1774,19 +1842,12 @@ int league_list(const char *const **names, const char *const **labels)
         snprintf(dir, sizeof dir, "leagues/%.63s", found[i]);
         if (read_league(dir, &L, 0) < 0) { fprintf(stderr, "%s: %s (not in the menu)\n", dir, err); src_close(); list_unread++; continue; }   /* (no cartridge yet: its art is read when it is played) */
         snprintf(list_name[n], sizeof list_name[n], "%.63s", found[i]);
-        snprintf(list_label[n], sizeof list_label[n], "%.39s", L->name);
-        free(about[n]);
-        if ((about[n] = calloc(1, sizeof *about[n]))) {   /* (what the League page says of it) */
-            struct stat st;
-            about_teams(about[n], L->t, L->teams, L->playoff_teams);
-            about[n]->package = src.zip;
-            about[n]->bytes = src.zip && stat(dir, &st) == 0 ? (long)st.st_size : 0;
-        }
+        listed(n++, L, dir);
         free_lg(L);
         src_close();
-        n++;
     }
     for (int i = 0; i < n; i++) { list_names[i] = list_name[i]; list_labels[i] = list_label[i]; }
+    list_n = n;
     *names = list_names;
     *labels = list_labels;
     return n;

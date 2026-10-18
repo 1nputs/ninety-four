@@ -44,11 +44,15 @@ A league takes effect at the next power on, so a game in progress is never chang
 
 ## Where leagues live
 
-In `leagues/`, beside the game (the folder you run it from). Each league is a folder,
-`leagues/NAME/`, or a package, `leagues/NAME.zip`, which plays as it is with no unpacking. The
-name is how the game, the settings file (`rules.league = NAME`) and its records know it; the name
-the menu shows is the one in its `league.ini`. `cartridge` is the cartridge's own and cannot be a
-folder's name. The menu lists up to 15 leagues besides the cartridge's.
+In `leagues/`, beside the game (the folder you run it from), or anywhere you like. Each league is
+a folder, `leagues/NAME/`, or a package, `leagues/NAME.zip`, which plays as it is with no
+unpacking. The game lists what is in `leagues/` when it starts; a league anywhere else is found
+from the League page: choose **Files**, and in the browser that opens (in `leagues/`), go to the
+league's folder and choose **Use this folder**, or choose its `.zip`. It joins the list, and the
+settings file keeps its path, so it is there the next time too. The folder's (or package's) name is
+how the game, the settings file (`rules.league = NAME`, or the path) and its records know it; the
+name the menu shows is the one in its `league.ini`. `cartridge` is the cartridge's own and cannot
+be a folder's name. The list holds 31 leagues besides the cartridge's.
 
 A league in `leagues/` that will not read is left off the list. The League page's note says how
 many were left out, and the terminal the game was started from says why ("... (not in the menu)").
@@ -267,8 +271,8 @@ are. The NHL 2026 edition's whole league, every photo included, packs to about 1
 ## Records, saved states and online play
 
 Each league keeps its own battery save (its user records and record holders, team and crowd
-records, and edited lines), in a file named after it beside the cartridge's:
-`out/nhl94-my-league.srm`.
+records, and edited lines), in a file named after its folder (or package) beside the cartridge's:
+`out/nhl94-my-league.srm`. Two leagues in folders of one name, in different places, share it.
 
 A saved state remembers its league's checksum and plays on only with that league: change the
 league's files (or extract it again) and its old states will not load. Quick resume is a state
@@ -279,7 +283,8 @@ online play to come.
 
 Esc, **League**: the line to choose a league, and under it what the chosen one holds:
 
-- **Files**: the cartridge's own, or its folder or package in `leagues/` (and the package's size);
+- **Files**: the cartridge's own, or its folder or package (and the package's size). Choose it to
+  find a league anywhere on disk;
 - **Teams**: how many, and how many play for the cup;
 - **Best skaters**, **Best goalies**: the top five of each from the teams that play for the cup,
   by the overall rating their cards show (worked out the way the cartridge does, hot and cold
