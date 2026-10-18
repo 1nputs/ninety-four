@@ -13,12 +13,13 @@
  *                 name in the cartridge's letters on its art team's (banner.c), unless it has a
  *                 picture of its own for them (art/banners, below); a name given here comes
  *                 before that picture.
- *   goalies.csv   team, number, name, 14 ratings (0-15: weight agility speed offense defense
- *                 shot_power checking glove_hand glove_left glove_right stick_right stick_left
- *                 consistency aggression) and start (1-15: how often he starts).
+ *   goalies.csv   team, number, name, 14 ratings (0-15: weight agility speed off_awareness
+ *                 def_awareness puck_control unused1 glove_hand unused2 unused3 stick_right
+ *                 stick_left glove_right glove_left) and start (1-15: how often he starts).
  *   players.csv   team, pos (F or D; C LW RW LD RD as well), number, name, 14 ratings (weight
- *                 agility speed offense defense shot_power checking hand stickhandling accuracy
- *                 endurance shot_pass passing aggression).
+ *                 agility speed off_awareness def_awareness shot_power checking handed_fighting
+ *                 stick_handling shot_accuracy endurance shoot_or_pass pass_accuracy
+ *                 aggressiveness: the roster screen's names, skater_cols below).
  *   lines.csv     team, line (SC1 SC2 CHK PP1 PP2 PK1 PK2 L8), G LD RD LW C RW X: the players'
  *                 numbers, or names where two wear one number (empty: nobody). A team with none:
  *                 made from its roster's order.
@@ -93,11 +94,17 @@ enum { PAL_HOME, PAL_AWAY, PAL_LOGO, PAL_MATCHUP, PAL_MATCHUP2, PALS };
 static const char *const pal_names[PALS] = { "home", "away", "logo", "matchup", "matchup2" };
 static const char *const line_names[8] = { "SC1", "SC2", "CHK", "PP1", "PP2", "PK1", "PK2", "L8" };
 static const char *const slot_names[7] = { "G", "LD", "RD", "LW", "C", "RW", "X" };
-/* a player's 14 ratings, the nibbles after his number (the cartridge's order: wl so dp ch ga ey tm) */
-static const char *const skater_cols[14] = { "weight", "agility", "speed", "offense", "defense", "shot_power", "checking",
-                                             "hand", "stickhandling", "accuracy", "endurance", "shot_pass", "passing", "aggression" };
-static const char *const goalie_cols[14] = { "weight", "agility", "speed", "offense", "defense", "shot_power", "checking",
-                                             "glove_hand", "glove_left", "glove_right", "stick_right", "stick_left", "consistency", "aggression" };
+/* a player's 14 ratings, the nibbles after his number, named as the game's roster screen labels
+ * them (PAttribColumns, GAttribColumns; setplayer loads them). A skater's 8th is his hand (bit
+ * 0: right handed) and fighting (bits 1-3); his 12th, which no screen shows, is his odds of
+ * shooting rather than passing when the computer has the puck (spodds: the community calls it
+ * roughness). A goalie's 4th is shown by no screen, and his 7th, 9th and 10th are used by
+ * nothing. */
+static const char *const skater_cols[14] = { "weight", "agility", "speed", "off_awareness", "def_awareness", "shot_power", "checking",
+                                             "handed_fighting", "stick_handling", "shot_accuracy", "endurance", "shoot_or_pass",
+                                             "pass_accuracy", "aggressiveness" };
+static const char *const goalie_cols[14] = { "weight", "agility", "speed", "off_awareness", "def_awareness", "puck_control", "unused1",
+                                             "glove_hand", "unused2", "unused3", "stick_right", "stick_left", "glove_right", "glove_left" };
 
 struct player { char name[LEN_NAME + 1]; char pos; uint8_t number, nib[14], start; };
 struct team {

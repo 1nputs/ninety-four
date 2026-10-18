@@ -13,6 +13,8 @@
      teams and art, and plays a game.
   5. The 32-team league and the hacks' as packages (--pack-league: zips building the same league;
      the 32-team one's checked again from its zip), and damaged packages refused.
+  6. The ratings' columns named as the game's roster screen names them, and a hack's ratings as its
+     authors' own sheets beside it say (when it has them: the 2025 edition does).
 
 tools/golden.py plays games with the first two (make golden-check). The files come from the
 user's ROM, so they stay in out/ (never committed).
@@ -277,6 +279,62 @@ def pack(hacks):
     return ok
 
 
+# the ratings' columns as the game's roster screen names them (native/league.c)
+SKATER_COLS = ['weight', 'agility', 'speed', 'off_awareness', 'def_awareness', 'shot_power', 'checking', 'handed_fighting',
+               'stick_handling', 'shot_accuracy', 'endurance', 'shoot_or_pass', 'pass_accuracy', 'aggressiveness']
+GOALIE_COLS = ['weight', 'agility', 'speed', 'off_awareness', 'def_awareness', 'puck_control', 'unused1', 'glove_hand',
+               'unused2', 'unused3', 'stick_right', 'stick_left', 'glove_right', 'glove_left']
+
+
+def headers():
+    """the exported players' and goalies' columns as the game names them. True when they are"""
+    ok = read(os.path.join(CARTRIDGE, 'players.csv'))[0] == ['team', 'pos', 'number', 'name'] + SKATER_COLS \
+        and read(os.path.join(CARTRIDGE, 'goalies.csv'))[0] == ['team', 'number', 'name'] + GOALIE_COLS + ['start']
+    print('  the ratings\' columns %s' % ('named as the game names them' if ok else 'FAIL: not as the game names them'))
+    return ok
+
+
+def authors_sheets(hacks):
+    """a hack's ratings against its authors' own sheets beside it (*Ratings - Players.csv: Goalie or Player,
+    First, Last, Team, Pos, JNo, the 14 ratings in the game's order; *Ratings - Teams.csv: Team, Overall, Home
+    Bonus, Away Penalty, Offence, Defence, PP Bonus, PK Penalty), when it has them. True when all agree"""
+    ok = True
+    for path, d in hacks:
+        top = os.path.dirname(path)
+        sheets = [os.path.join(r, n) for r, _, ns in os.walk(top) for n in ns if n.endswith('.csv')] if top != os.path.dirname(ROOT) + '/roms' else []
+        players = [p for p in sheets if p.endswith('Ratings - Players.csv')]
+        teams = [p for p in sheets if p.endswith('Ratings - Teams.csv')]
+        if not players and not teams:
+            continue
+        ours = {}
+        for name, cols in (('players.csv', SKATER_COLS), ('goalies.csv', GOALIE_COLS)):
+            rows = read(os.path.join(d, name))
+            for r in rows[1:]:
+                row = dict(zip(rows[0], r))
+                ours.setdefault((row['team'], int(row['number'])), []).append((row['name'], [int(row[c]) for c in cols]))
+        same = differ = 0
+        for p in players:
+            for r in read(p):
+                if len(r) < 20 or r[0] in ('Goalie', 'Player'):
+                    continue
+                found = [v for n, v in ours.get((r[3], int(r[5])), []) if n == (r[1] + ' ' + r[2]).strip()] or [v for n, v in ours.get((r[3], int(r[5])), [])]
+                good = len(found) >= 1 and found[0] == [int(x) for x in r[6:20]]
+                same += good
+                differ += not good
+        tsame = tdiffer = 0
+        ot = {r[0]: r for r in read(os.path.join(d, 'teams.csv'))[1:]}
+        for p in teams:
+            for r in read(p)[1:]:
+                o = ot.get(r[0])
+                good = o is not None and [o[6], o[11], o[12], o[7], o[8], o[9], o[10]] == r[1:8]
+                tsame += good
+                tdiffer += not good
+        print('  %s: as its authors\' sheets: %d of %d players\' ratings, %d of %d teams\'' %
+              (os.path.relpath(d, ROOT), same, same + differ, tsame, tsame + tdiffer))
+        ok &= differ == 0 and tdiffer == 0
+    return ok
+
+
 def play_hacks(hacks):
     """a game with each hack's league (golden's full_game script, 16000 frames): it must play to the
     end. True when one does not"""
@@ -304,7 +362,7 @@ def main():
     for path, d in hacks:
         args += ['--hack', path, os.path.relpath(d, ROOT)]
     r = subprocess.run([os.path.join(ROOT, 'build', 'leaguetest'), ROM] + args, cwd=ROOT)
-    bad = play_hacks(hacks) | (r.returncode != 0) | (not packages)
+    bad = play_hacks(hacks) | (r.returncode != 0) | (not packages) | (not headers()) | (not authors_sheets(hacks))
     base = os.path.join(ROOT, 'out', 'leagues', 'broken')
     refused = 0
     for name, change, says in BROKEN:
