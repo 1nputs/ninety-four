@@ -2563,7 +2563,7 @@ void playeracc(int16_t dir, struct SortObj *o)
         int32_t nxt = (int32_t)MaxSpeed[(g.TempEnergySpd + 4) / 4];
         cap = (uint32_t)((((int32_t)nxt - (int32_t)g.TempMaxSpd) >> 1) + (int32_t)g.TempMaxSpd);
     }
-    if (rules[RULE_SKATING]) cap = (uint32_t)((uint64_t)cap * (uint32_t)(rule_percent(RULE_SKATING) * rule_percent(RULE_SKATING)) / 10000u);   /* (rules: a speed squared) */
+    if (rules[RULE_SKATING] != 100) cap = (uint32_t)((uint64_t)cap * (uint32_t)(rules[RULE_SKATING] * rules[RULE_SKATING]) / 10000u);   /* (rules: a speed squared) */
     if (o->pflags2 & 0x40) cap >>= 3;                     /* injured in a fight */
     if (o->position == 0 && puckc() == o->SCnum) cap = (uint32_t)((int32_t)cap >> 1);
     if (!(d3 > cap)) {

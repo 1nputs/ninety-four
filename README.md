@@ -71,6 +71,27 @@ streaks) and Arcade (faster, harder, livelier). And the rink view: 320 wide inst
 cartridge's 256, showing the whole width of the ice with the camera moving less, the scoreboard
 and overlays in the middle (the pause screen stays 256 wide, as on the cartridge).
 
+The rules that are amounts are numbers underneath, and the page's choices are named ones of them
+(Skating speed: classic 100%, faster 110%, fastest 125%, slower 90%). `settings.ini` takes a
+name or any number in the rule's range, and the page shows one that is none of its choices as
+"custom (115%)"; the presets follow what the file holds. `--rule` takes the same
+(`--rule skating=115`; a wrong one says what the rule takes).
+
+| Rule | Its number | Named | Range |
+|---|---|---|---|
+| `overtime` | minutes of regular season overtime | classic 10, 5min, 3min | 1 to 20 |
+| `skating` | % of acceleration and top speed | classic 100, faster 110, fastest 125, slower 90 | 50 to 150 |
+| `burst` | % of the speed burst's push | classic 100, weaker 50, weakest 25, stronger 150 | 0 to 200 |
+| `shot_power` | % of a shot's speed | classic 100, harder 115, softer 85 | 50 to 150 |
+| `puck_slide` | % of the puck's slowing on the ice (less slides farther) | classic 100, farther 67, shorter 150 | 25 to 200 |
+| `tiring` | % of the energy skating and bursts use | classic 100, less 50, more 150 | 0 to 200 |
+| `bench_rest` | % of the energy the bench gives back | classic 100, faster 150, slower 67 | 0 to 200 |
+| `penalties` | % of penalties called (icing and offside always) | classic 100, fewer 50, rare 25 | 0 to 100 |
+| `streaks` | % of hot and cold streaks' effect on ratings | classic 100, milder 50, off 0 | 0 to 200 |
+
+The ranges are what the game's motion takes: headless games at both ends of every one, all at
+once, play on with every speed well inside what the game keeps.
+
 **Leagues:** who plays, on the same page: the cartridge's teams, or a league of your own, up to
 32 teams. A league is a folder in `leagues/` beside the game, of text files a spreadsheet opens:
 `teams.csv` (names, arenas, conferences, ratings, songs), `goalies.csv` and `players.csv` (every

@@ -12,11 +12,13 @@
 static int checks, fails;
 #define CHECK(c) do { checks++; if (!(c)) { fails++; printf("  FAIL %s:%d: %s\n", __FILE__, __LINE__, #c); } } while (0)
 
+static void classic_rules(void) { memcpy(rules, rule_classic, sizeof rules); }
+
 /* the period lengths: GetPeriodTime for each option, and the setup menu's range for it */
 static void periods(void)
 {
     static const uint16_t classic[4] = { 300, 600, 1200, 30 }, more[8] = { 300, 420, 600, 900, 1200, 120, 180, 30 };
-    memset(rules, 0, sizeof rules);
+    classic_rules();
     for (int i = 0; i < 4; i++) { g.OptPerlen = (uint16_t)i; CHECK(GetPeriodTime() == classic[i]); }
     rules[RULE_PERIOD_LENGTHS] = 1;
     for (int i = 0; i < 8; i++) { g.OptPerlen = (uint16_t)i; CHECK(GetPeriodTime() == more[i]); }
@@ -31,19 +33,20 @@ static void periods(void)
     g.OptPerlen = 4; ChangeOption(8, 1); CHECK(g.OptPerlen == 5 && GetPeriodTime() == 120);
     g.OptPerlen = 6; ChangeOption(8, 1); CHECK(g.OptPerlen == 0 && GetPeriodTime() == 300);
     g.OptPerlen = 0; ChangeOption(8, -1); CHECK(g.OptPerlen == 6 && GetPeriodTime() == 180);
-    memset(rules, 0, sizeof rules);
+    classic_rules();
 }
 
-/* overtime: ResetClock in the regular season's overtime, and elsewhere the period's length */
+/* overtime: ResetClock in the regular season's overtime (its minutes: the original's 10, the
+ * page's others and some from the file), and elsewhere the period's length */
 static void overtime(void)
 {
-    static const uint16_t ot[3] = { 600, 300, 180 };
+    static const uint8_t minutes[5] = { 10, 5, 3, 7, 1 };
     g.OptPerlen = 0;
-    for (int v = 0; v < 3; v++) {
-        rules[RULE_OVERTIME] = (uint8_t)v;
+    for (int v = 0; v < 5; v++) {
+        rules[RULE_OVERTIME] = minutes[v];
         g.gsp = 3; g.OptPlayMode = 0;
         ResetClock();
-        CHECK(g.gameclock == ot[v] && g.PerTimeTotal == ot[v]);
+        CHECK(g.gameclock == minutes[v] * 60 && g.PerTimeTotal == minutes[v] * 60);
         g.gsp = 3; g.OptPlayMode = 2;                     /* (playoff overtime: a period, as the original) */
         ResetClock();
         CHECK(g.gameclock == 300);
@@ -51,7 +54,7 @@ static void overtime(void)
         ResetClock();
         CHECK(g.gameclock == 300);
     }
-    memset(rules, 0, sizeof rules);
+    classic_rules();
 }
 
 /* the weights in a check: the original's byte wraps when a light pad player (base $F0) checks a
@@ -82,7 +85,7 @@ static void weights(void)
     uint16_t c = CheckWeightOdds(0x78, &a2, &a3);
     rules[RULE_WEIGHT_FIX] = 1;
     CHECK(CheckWeightOdds(0x78, &a2, &a3) == c && c == 0x78);
-    memset(rules, 0, sizeof rules);
+    classic_rules();
 }
 
 /* the assists: a2touchpuck for Z, B, A, then B again (a give-and-go) before B scores: the
@@ -113,7 +116,7 @@ static void assists(void)
         if (fix) CHECK(a2 == 5);                          /* Z keeps his */
         else CHECK((a2 >> 8) == 0xFF);                    /* none */
     }
-    memset(rules, 0, sizeof rules);
+    classic_rules();
 }
 
 /* plus/minus: the skaters on the ice for a goal (objects 0-11: position > 0, a roster number),
@@ -142,7 +145,7 @@ static void plusminus(void)
     CHECK(rule_plusminus[0][3] == 0 && rule_plusminus[1][3] == 0);
     rules_clear_stats();
     CHECK(rule_plusminus[1][4] == 0);
-    memset(rules, 0, sizeof rules);
+    classic_rules();
 }
 
 /* the Player Stats list with more stats: the two columns' values, and sorted by plus/minus every
@@ -170,7 +173,7 @@ static void stats_list(void)
     printf("  stats list: %d of %d players by plus/minus, the first %+d, the last %+d\n", listed, players,
            (int16_t)GetStatColumn(order[0], 5, tm, 0), (int16_t)GetStatColumn(order[listed - 1], 5, tm, 0));
     CHECK(listed == players && sorted);
-    memset(rules, 0, sizeof rules);
+    classic_rules();
 }
 
 /* the play rules through the game's own routines: Classic as the original, each rule its way */
@@ -191,12 +194,12 @@ static struct SortObj *skater(void)
 
 static void play_rules(void)
 {
-    memset(rules, 0, sizeof rules);
-    CHECK(rule_percent(RULE_SKATING) == 100 && rule_scale(RULE_SKATING, -7) == -7 && rule_scale(RULE_BURST, 12345) == 12345);
+    classic_rules();
+    CHECK(rules[RULE_SKATING] == 100 && rule_scale(RULE_SKATING, -7) == -7 && rule_scale(RULE_BURST, 12345) == 12345);
     /* skating: from a standstill a step's acceleration, 110 % faster; the top speed, held */
     int16_t v[2];
     for (int r = 0; r < 2; r++) {
-        rules[RULE_SKATING] = (uint8_t)r;
+        rules[RULE_SKATING] = r ? 110 : 100;
         struct SortObj *o = skater();
         elapsed = 1;
         playeracc(2, o);
@@ -206,7 +209,7 @@ static void play_rules(void)
     CHECK(v[0] > 0 && v[1] > v[0] && v[1] <= v[0] * 11 / 10 + 2);
     int16_t top[2];
     for (int r = 0; r < 2; r++) {                         /* push for 400 steps: the speed it stops at */
-        rules[RULE_SKATING] = (uint8_t)(r ? 2 : 0);
+        rules[RULE_SKATING] = r ? 125 : 100;
         struct SortObj *o = skater();
         elapsed = 1;
         for (int k = 0; k < 400; k++) playeracc(2, o);
@@ -214,12 +217,12 @@ static void play_rules(void)
     }
     printf("  skating: top speed %d, fastest %d\n", top[0], top[1]);
     CHECK(top[1] > top[0] * 115 / 100 && top[1] < top[0] * 135 / 100);
-    rules[RULE_SKATING] = 0;
+    classic_rules();
     /* the burst: its push, and its cost with line changes on */
     int16_t push[2], left[2];
     for (int r = 0; r < 2; r++) {
-        rules[RULE_BURST] = (uint8_t)(r ? 3 : 0);         /* stronger */
-        rules[RULE_TIRING] = (uint8_t)(r ? 1 : 0);        /* less */
+        rules[RULE_BURST] = r ? 150 : 100;                /* stronger */
+        rules[RULE_TIRING] = r ? 50 : 100;                /* less */
         struct SortObj *o = skater();
         burst(o);
         push[r] = o->Xvel;
@@ -228,11 +231,11 @@ static void play_rules(void)
     printf("  burst: push %d, stronger %d; energy left %d, less tiring %d\n", push[0], push[1], left[0], left[1]);
     CHECK(left[0] == 0x1000 - 0xCC && left[1] == 0x1000 - 0x66);   /* (the push: the energy left / 128, of a step 200) */
     CHECK(push[0] == ((0x1000 - 0xCC) >> 7) * 200 && push[1] == ((0x1000 - 0x66) >> 7) * 150 / 100 * 200);
-    memset(rules, 0, sizeof rules);
+    classic_rules();
     /* bench rest: +9 a tick, faster +13; the box rests only by the rule */
     for (int r = 0; r < 2; r++) {
         memset(&g, 0, sizeof g);
-        rules[RULE_BENCH_REST] = (uint8_t)r;
+        rules[RULE_BENCH_REST] = r ? 150 : 100;
         rules[RULE_BOX_REST] = (uint8_t)r;
         uint8_t *tm = team_struct(0);
         wr16(tm + tmpdst + 0, 0xFFFE);                    /* on the bench */
@@ -243,17 +246,47 @@ static void play_rules(void)
         uint16_t bench = rd16(tm + tmpde), box = rd16(tm + tmpde + 2), ice = rd16(tm + tmpde + 4);
         CHECK(bench == 0x800 + (r ? 13 : 9) && box == (r ? 0x800 + 13 : 0x800) && ice == 0x800);
     }
-    memset(rules, 0, sizeof rules);
+    classic_rules();
     /* streaks: a third of the hot / cold value added to a rating (x 5, at most 30), half of it
      * milder, none off */
     static const int want[3] = { 4 * 5 + 4, 4 * 5 + 2, 4 * 5 };
     for (int r = 0; r < 3; r++) {
-        rules[RULE_STREAKS] = (uint8_t)r;
+        rules[RULE_STREAKS] = (uint8_t)(100 - 50 * r);
         struct SortObj *o = skater();
         team_struct(0)[tmhotcold + o->pnum * 16] = 12;
         CHECK(AttributeCalc(4, o) == want[r]);
     }
-    memset(rules, 0, sizeof rules);
+    classic_rules();
+    /* penalties: all and none draw nothing; 50 % and 25 % draw as the original's one in 2 and 4,
+     * and others near their share */
+    g.seed = 12345;
+    CHECK(rule_chance(100) && !rule_chance(0) && g.seed == 12345);
+    for (int r = 0; r < 2; r++) {
+        uint32_t seed = 0x2468ACE;
+        int same = 1;
+        for (int k = 0; k < 200; k++) {
+            g.seed = seed;
+            int kept = rule_chance(r ? 25 : 50);
+            uint32_t after = g.seed;
+            g.seed = seed;
+            same &= kept == (randomd0(r ? 4 : 2) == 0) && g.seed == after;
+            seed = g.seed;
+        }
+        CHECK(same);
+    }
+    int kept = 0;
+    g.seed = 777;
+    for (int k = 0; k < 10000; k++) kept += rule_chance(70);
+    printf("  penalties: 70 %% kept %d of 10000\n", kept);
+    CHECK(kept > 6800 && kept < 7200);
+    /* the puck's slowing: the original's for 100 %; scaled, and never 0 below zero (the least
+     * there is -1: 0 would become the 1 above zero's, pushing a puck moving back faster) */
+    CHECK(rule_puck_slowing(-1) == -1 && rule_puck_slowing(3) == 3);
+    rules[RULE_PUCK_SLIDE] = 67;
+    CHECK(rule_puck_slowing(-1) == -1 && rule_puck_slowing(-3) == -2 && rule_puck_slowing(1) == 0 && rule_puck_slowing(3) == 2);
+    rules[RULE_PUCK_SLIDE] = 150;
+    CHECK(rule_puck_slowing(-1) == -1 && rule_puck_slowing(-2) == -3 && rule_puck_slowing(2) == 3);
+    classic_rules();
 }
 
 int main(void)

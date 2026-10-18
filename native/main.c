@@ -558,7 +558,8 @@ int main(int argc, char **argv)
         else if (!strncmp(argv[i], "--input", 7) && argv[i][7] >= '2' && argv[i][7] <= '4' && !argv[i][8] && i + 1 < argc) { int pad = argv[i][7] - '1'; input_path[pad] = argv[++i]; }
         else if (!strcmp(argv[i], "--four-way")) four_way = 1;
         else if (!strcmp(argv[i], "--rule") && i + 1 < argc) {
-            if (rules_arg(argv[++i])) { fprintf(stderr, "--rule %s: no such rule or value\n", argv[i]); return 2; }
+            const char *why = rules_arg(argv[++i]);
+            if (why) { fprintf(stderr, "--rule %s: %s\n", argv[i], why); return 2; }
         }
         else if (!strcmp(argv[i], "--state") && i + 1 < argc) state_file = argv[++i];
         else if (!strcmp(argv[i], "--record") && i + 1 < argc) record_dir = argv[++i];

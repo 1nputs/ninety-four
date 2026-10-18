@@ -51,7 +51,7 @@ void rules_next(const int *values, void *user);
 const mdrt_sdl_option *rules_page(int *count);
 void rules_page_use(const int *values, void *user);
 int rules_page_changed(int which, int *values, void *user);
-int rules_arg(const char *arg);
+const char *rules_arg(const char *arg);   /* NULL, or what is wrong */
 int rules_classic(void);                 /* the next game's are all the original's */
 void rules_power_on(void);
 size_t rules_state_save(void *user, uint8_t *out);

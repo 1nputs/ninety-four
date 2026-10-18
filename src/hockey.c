@@ -34,8 +34,7 @@ void restoreteams(void)
 void ResetClock(void)
 {
     uint16_t d0 = GetPeriodTime();
-    static const uint16_t overtimes[3] = { 0x258, 300, 180 };   /* (rules: 10:00 the original's, 5:00, 3:00) */
-    if ((int16_t)g.gsp >= 3 && g.OptPlayMode == 0) d0 = overtimes[rules[RULE_OVERTIME]];   /* overtime is always 10:00 */
+    if ((int16_t)g.gsp >= 3 && g.OptPlayMode == 0) d0 = (uint16_t)(rules[RULE_OVERTIME] * 60);   /* overtime is always 10:00 (rules: its minutes) */
     g.gameclock = d0;
     g.PerTimeTotal = d0;
     g.periodendtime = d0;
