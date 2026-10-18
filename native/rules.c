@@ -114,7 +114,7 @@ const mdrt_sdl_option *rules_page(int *count)
 
 /* the League page (its line, and below it what the league chosen holds) and the Game rules page */
 static mdrt_sdl_page pages[2] = {
-    { "League", "Who plays, for every player and all game", P_LEAGUE, 1 },
+    { "League", "Custom rosters and assets", P_LEAGUE, 1 },
     { "Game rules", "For every player, all game. Classic: the original", P_PRESET, 1 + RULE_COUNT },
 };
 
@@ -123,7 +123,7 @@ const mdrt_sdl_page *rules_pages(int *count)
     static char note[64];
     page_init();
     if (league_unread()) {                                /* (why: on stderr, and --check-league) */
-        snprintf(note, sizeof note, "Who plays. leagues/ has %d that will not read", league_unread());
+        snprintf(note, sizeof note, "Custom rosters and assets. %d will not read", league_unread());
         pages[0].note = note;
     }
     *count = 2;

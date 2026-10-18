@@ -1596,12 +1596,9 @@ static int by_name(const void *a, const void *b) { return strcmp(a, b); }
 
 /* a league as the League page tells of it, kept when the list is made (before the cartridge is
  * loaded, perhaps: the players' overall ratings are reckoned when the page asks, with its weights) */
-enum { ART_LOGOS, ART_BANNERS, ART_ICE, ART_PHOTOS, ART_GAME, ART_KINDS };
-static const char *const art_kinds[ART_KINDS] = { "logos", "banners", "ice", "photos", "game" };
 struct about {
-    int teams, playoff_teams, skaters, goalies, package, art[ART_KINDS];
+    int teams, playoff_teams, package;
     long bytes;                 /* (a package's) */
-    char conf[64];              /* its conferences and their teams */
     struct { char name[LEN_CITY + 1], abbr[LEN_ABBR + 1]; int rating, art; } t[LEAGUE_MAX];
     int players;
     struct { char name[LEN_NAME + 1]; uint8_t team, number, goalie, nib[14]; } pl[LEAGUE_MAX * ROSTER];
@@ -1612,8 +1609,6 @@ static int list_unread;                 /* leagues in leagues/ the list leaves o
 /* the teams and players of a league of n teams (the first playoff of them for the cup) */
 static void about_teams(struct about *A, const struct team *T, int n, int playoff)
 {
-    char names[8][LEN_CONF + 1];
-    int count[8] = { 0 }, confs = 0;
     A->teams = n;
     A->playoff_teams = playoff;
     for (int t = 0; t < n; t++) {
@@ -1631,67 +1626,8 @@ static void about_teams(struct about *A, const struct team *T, int n, int playof
             A->pl[A->players].number = P->number;
             A->pl[A->players].goalie = (uint8_t)goalie;
             memcpy(A->pl[A->players++].nib, P->nib, 14);
-            if (goalie) A->goalies++;
-            else A->skaters++;
         }
-        if (!T[t].conference[0]) continue;
-        int c = 0;
-        while (c < confs && !same_word(names[c], T[t].conference)) c++;
-        if (c == confs && confs < 8) snprintf(names[confs++], sizeof names[0], "%s", T[t].conference);
-        if (c < confs) count[c]++;
     }
-    for (int c = 1; c < confs; c++)                       /* (in order of name) */
-        for (int k = c; k > 0 && strcmp(names[k - 1], names[k]) > 0; k--) {
-            char tn[LEN_CONF + 1];
-            int tc = count[k];
-            memcpy(tn, names[k], sizeof tn); memcpy(names[k], names[k - 1], sizeof tn); memcpy(names[k - 1], tn, sizeof tn);
-            count[k] = count[k - 1]; count[k - 1] = tc;
-        }
-    size_t at = 0;
-    for (int c = 0; c < confs && at < sizeof A->conf; c++) {
-        char name[LEN_CONF + 1];
-        snprintf(name, sizeof name, "%s", names[c]);
-        if (name[0] >= 'a' && name[0] <= 'z') name[0] = (char)(name[0] - 32);
-        at += (size_t)snprintf(A->conf + at, sizeof A->conf - at, "%s%s %d", c ? ", " : "", name, count[c]);
-    }
-}
-
-/* the art of a kind in the league open now (src): its pictures (game: its assets, a picture or the
- * asset's bytes or both) */
-static int art_count(int kind)
-{
-    char prefix[32], seen[128][48];
-    int n = 0;
-    snprintf(prefix, sizeof prefix, "art/%s/", art_kinds[kind]);
-    size_t pl = strlen(prefix);
-    DIR *d = NULL;
-    char path[1200];
-    if (!src.zip) {
-        snprintf(path, sizeof path, "%s/%s", src.path, prefix);
-        if (!(d = opendir(path))) return 0;
-    }
-    for (int i = 0;; i++) {
-        const char *name;
-        struct dirent *e = NULL;
-        if (src.zip) {
-            if (i >= src.z.count) break;
-            name = src.z.entry[i].name;
-            if (strncmp(name, prefix, pl) || strchr(name + pl, '/')) continue;
-            name += pl;
-        } else {
-            if (!(e = readdir(d))) break;
-            name = e->d_name;
-        }
-        size_t len = strlen(name);
-        int png = len > 4 && !strcmp(name + len - 4, ".png"), bin = kind == ART_GAME && len > 4 && !strcmp(name + len - 4, ".bin");
-        if (!png && !bin) continue;
-        if (kind != ART_GAME) { n++; continue; }
-        int k = 0;
-        while (k < n && k < 128 && (strlen(seen[k]) != len - 4 || strncmp(seen[k], name, len - 4))) k++;
-        if (k == n && n < 128) snprintf(seen[n++], sizeof seen[0], "%.*s", (int)(len - 4 < 47 ? len - 4 : 47), name);
-    }
-    if (d) closedir(d);
-    return n;
 }
 
 /* a name in at most n letters: as it is, else its first name's initial and the rest */
@@ -1737,9 +1673,6 @@ void league_about(int i, char *text, size_t size)
     }
     if (!A) { snprintf(text, size, "%s", i == 0 ? "The cartridge's teams: once its ROM is chosen\n" : ""); return; }
 #define LINE(...) do { if (at < size) at += (size_t)snprintf(text + at, size - at, __VA_ARGS__); } while (0)
-    if (A->playoff_teams < A->teams) LINE("Teams\t%d (%d play for the cup), %d players\n", A->teams, A->playoff_teams, A->skaters + A->goalies);
-    else LINE("Teams\t%d (all play for the cup), %d players\n", A->teams, A->skaters + A->goalies);
-    if (A->conf[0]) LINE("Conferences\t%.36s\n", A->conf);
     if (i == 0) LINE("Files\tthe cartridge's own\n");
     else {
         char kb[24];
@@ -1748,11 +1681,7 @@ void league_about(int i, char *text, size_t size)
         short_path(file, path, 49 - 5 - 2 - (int)strlen(kb));
         LINE("Files\t%s%s\n", file, kb);
     }
-    if (i == 0 || !(A->art[ART_LOGOS] | A->art[ART_BANNERS] | A->art[ART_ICE] | A->art[ART_PHOTOS] | A->art[ART_GAME])) LINE("Art\tthe cartridge's\n");
-    else {
-        LINE("Team art\t%d logos, %d banners, %d centre ice\n", A->art[ART_LOGOS], A->art[ART_BANNERS], A->art[ART_ICE]);
-        LINE("Other art\t%d photos, %d of the game's pictures\n", A->art[ART_PHOTOS], A->art[ART_GAME]);
-    }
+    LINE("Teams\t%d (%d cup)\n", A->teams, A->playoff_teams);
     if (!rom_cart) { LINE("Ratings\tonce the cartridge's ROM is chosen\n"); return; }
     /* the best of the teams that play for the cup (not All-Stars), as their cards rate them: the
      * skaters and goalies apart (weighed differently), a player once (an All-Star's copy aside) */
@@ -1775,8 +1704,8 @@ void league_about(int i, char *text, size_t size)
     qsort(tr, (size_t)cup, sizeof tr[0], by_rating);
     int goalie = 0;
     while (goalie < n && !A->pl[r[goalie].i].goalie) goalie++;
-    /* two columns: the best five skaters and two goalies at the left, the best eight teams at the right */
-    for (int row = 0; row < 9; row++) {
+    /* two columns: the best five skaters and five goalies at the left, the best eleven teams at the right */
+    for (int row = 0; row < 12; row++) {
         int t = row - 1, k = row <= 5 ? row - 1 : goalie + row - 7;
         char left[40] = "";
         if (row == 0) snprintf(left, sizeof left, "Best skaters");
@@ -1823,7 +1752,6 @@ int league_list(const char *const **names, const char *const **labels)
         if ((about[n] = calloc(1, sizeof *about[n]))) {   /* (what the League page says of it) */
             struct stat st;
             about_teams(about[n], L->t, L->teams, L->playoff_teams);
-            for (int k = 0; k < ART_KINDS; k++) about[n]->art[k] = art_count(k);
             about[n]->package = src.zip;
             about[n]->bytes = src.zip && stat(dir, &st) == 0 ? (long)st.st_size : 0;
         }

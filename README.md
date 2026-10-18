@@ -93,19 +93,19 @@ The ranges are what the game's motion takes: headless games at both ends of ever
 once, play on with every speed well inside what the game keeps.
 
 **Leagues:** who plays, on the menu's League page: the cartridge's teams, or a league of your own,
-up to 32 teams. Under the choice the page says what the league holds: its teams (and how many play
-for the cup) and players, its conferences, its files (a folder, or a package and its size), the
-art it brings, and its best five skaters, two goalies and eight teams as the game's cards rate
-them. A league in `leagues/` that will not read is left out, and the page says how many
-(`--check-league` says why). Each league keeps its own records (`out/nhl94-NAME.srm`). A league is
-a folder in `leagues/` beside the game, of text files a spreadsheet opens: `teams.csv` (names,
-arenas, conferences, ratings, songs), `goalies.csv` and `players.csv` (every player's numbers and
-ratings), `lines.csv`, `colours.csv`, `pictures.csv`, and `league.ini` (its name, how many teams
-play for the cup). To start one, `nhl94 --export-league leagues/my-league` writes the cartridge's
-league out, to change as you like; `nhl94 --check-league leagues/my-league` says what holds, or
-what is wrong and on which line (the columns are described at the top of `native/league.c`). The
-art is in `art/` as PNGs: each team's logo (`logos/`, in its own 15 colours), banners (`banners/`:
-the playoff tree's and game's on top, the setup screen's below), centre ice (`ice/`, with the rink
+up to 32 teams. Under the choice the page says where the league's files are (a folder, or a
+package and its size), its teams (and how many play for the cup), and its best five skaters, five
+goalies and eleven teams, by the overall and team ratings the game's cards show. A league in
+`leagues/` that will not read is left out, and the page says how many (`--check-league` says why).
+Each league keeps its own records (`out/nhl94-NAME.srm`). A league is a folder in `leagues/`
+beside the game, of text files a spreadsheet opens: `teams.csv` (names, arenas, conferences,
+ratings, songs), `goalies.csv` and `players.csv` (every player's numbers and ratings),
+`lines.csv`, `colours.csv`, `pictures.csv`, and `league.ini` (its name, how many teams play for
+the cup). To start one, `nhl94 --export-league leagues/my-league` writes the cartridge's league
+out, to change as you like; `nhl94 --check-league leagues/my-league` says what holds, or what is
+wrong and on which line (the columns are described at the top of `native/league.c`). The art is in
+`art/` as PNGs: each team's logo (`logos/`, in its own 15 colours), banners (`banners/`: the
+playoff tree's and game's on top, the setup screen's below), centre ice (`ice/`, with the rink
 round it) and the players' photos (`photos/`, 8 shades of grey; any picture is turned into them by
 brightness); and in `game/` the art every team shares: the title screens, setup screens, the
 rinks, scoreboard, fonts, the crowd, the Zamboni, the players' sprites (a sheet of their tiles)
