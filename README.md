@@ -50,12 +50,13 @@ Game controllers work too (the first two are players 1 and 2).
 
 **The menu** (Esc, or a controller's Back button; arrows and Enter, or the d-pad, A and B) has the
 ROM, a reset, states, the video (a pixel-art upscaler: Scale2x, Scale3x or MMPX, which smooth the
-staircases without blurring or adding colours, or xBR, which blends its edges smooth; sharp, integer or fit scaling; square pixels or
-4:3; the colours' levels, standard, full range or the console's own; dithering blended as a
-television blended it; a picture tube's scanlines and its aperture grille, slot mask or shadow
-mask; full screen), captures (below), the sound (volume, and the FM sound core and chip: hear the
-difference as you play), players (see below), options, and every key of the pads and the
-controls: pick one and press the new key (with Shift, Ctrl or Alt if you like).
+staircases without blurring or adding colours, or xBR, which blends its edges smooth; sharp,
+integer or fit scaling; square pixels or 4:3; the colours' levels, standard, full range or the
+console's own; dithering blended as a television blended it; a picture tube's scanlines and its
+aperture grille, slot mask or shadow mask; full screen; vsync, so nothing tears, on unless you
+turn it off), captures (below), the sound (volume, and the FM sound core and chip: hear the
+difference as you play), players (see below), options, and every key of the pads and the controls:
+pick one and press the new key (with Shift, Ctrl or Alt if you like).
 
 **Game rules:** things the cartridge never offered, on the menu's Game rules page, for every
 player and the whole game (set before it starts; a state keeps its game's rules). Classic, the
