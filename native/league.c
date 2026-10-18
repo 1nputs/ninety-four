@@ -1209,8 +1209,18 @@ static void put_banners(struct buf *b, struct lg *L, const uint8_t *c, uint8_t *
     put32(b, SYM_Teamblocksmap + c32(c, SYM_Teamblocksmap) - tb);   /* (its palette: the cartridge's) */
     put32(b, 0);
     for (int t = 0; t < L->teams; t++) own += own_px[t] != NULL;
-    put16(b, (unsigned)(count + 22 * own));               /* (plain: DMA'd as they are) */
-    put(b, cart_tiles, 32u * (uint32_t)count);
+    /* of the cartridge's set, the tiles the teams without banners of their own show (their art
+     * teams' rows'), in order: its whole 501 beside 22 a team of their own run past the room the
+     * playoff screen loads them all into (into its background's map: the hacks' 32 take 704) */
+    static uint8_t needed[2048];
+    static uint16_t remap[2048];
+    int used = 0;
+    memset(needed, 0, sizeof needed);
+    for (int t = 0; t < L->teams; t++)
+        for (int i = 0; !own_px[t] && i < 22; i++) needed[c16(c, map + 4 + 2u * (uint32_t)(L->t[t].art * 22 + i)) & 0x7FF] = 1;
+    for (int i = 0; i < count; i++) remap[i] = needed[i] ? (uint16_t)used++ : 0;
+    put16(b, (unsigned)(used + 22 * own));                /* (plain: DMA'd as they are) */
+    for (int i = 0; i < count; i++) if (needed[i]) put(b, cart_tiles + 32 * i, 32);
     for (int t = 0, k = 0; t < L->teams; t++) {
         lg->block[t] = (uint8_t)L->t[t].art;
         if (!own_px[t]) continue;
@@ -1223,11 +1233,14 @@ static void put_banners(struct buf *b, struct lg *L, const uint8_t *c, uint8_t *
     set32(b, tb + 4, at(b) - tb);
     put16(b, 11);
     put16(b, (unsigned)(2 * (CART_TEAMS + own)));
-    put(b, c + map + 4, 2u * 11 * 2 * CART_TEAMS);
+    for (int i = 0; i < 11 * 2 * CART_TEAMS; i++) {       /* (the cartridge's rows, at their tiles' places now) */
+        uint16_t w = c16(c, map + 4 + 2u * (uint32_t)i);
+        put16(b, (w & 0xF800u) | remap[(w & 0x7FF) < count ? (w & 0x7FF) : 0]);
+    }
     for (int t = 0, k = 0; t < L->teams; t++) {
         if (!own_px[t]) continue;
         for (int i = 0; i < 22; i++)                      /* (its art team's priority, its own lines, no flips) */
-            put16(b, (c16(c, map + 4 + 2u * (uint32_t)(L->t[t].art * 22 + i)) & 0x8000) | cell_line(own_px[t], i) << 13 | (unsigned)(count + 22 * k + i));
+            put16(b, (c16(c, map + 4 + 2u * (uint32_t)(L->t[t].art * 22 + i)) & 0x8000) | cell_line(own_px[t], i) << 13 | (unsigned)(used + 22 * k + i));
         k++;
     }
     dma_align(b, 22u * 32 * (uint32_t)L->teams);

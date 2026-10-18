@@ -208,8 +208,8 @@ static void other(const char *dir)
 }
 
 /* a hack's league (romsrc.c), extracted to dir and built: its teams as the hack has them (what the
- * game reads of each block, byte for byte, but for its palettes, the art team's until its art
- * comes too, and the count of defensemen, which the game counts itself), its ratings and songs,
+ * game reads of each block, byte for byte, but for the count of defensemen, which the game counts
+ * itself), their colours (jerseys, logo, matchups), its ratings and songs,
  * its playoff draws but for the places a team in none was given, and its art (art.c): each
  * logo and its colours, centre ice, both banners and photo the hack's, pixel for pixel */
 static void hack(const char *path, const char *dir)
@@ -229,7 +229,7 @@ static void hack(const char *path, const char *dir)
     if (!league_hash()) return;
     CHECK(league.teams == s.teams && league.playoff_teams == s.playoff_teams && league.playoff_rows == s.rows,
           "the counts: %d %d %d, the hack's %d %d %d", league.teams, league.playoff_teams, league.playoff_rows, s.teams, s.playoff_teams, s.rows);
-    int blocks = 0, moved = 0;
+    int blocks = 0, moved = 0, colours = 0;
     for (int t = 0; t < league.teams && t < s.teams; t++) {
         /* (what the game reads of a block, through its offsets: some of the hack's have bytes of
          * their own between the lines and the players) */
@@ -244,6 +244,14 @@ static void hack(const char *path, const char *dir)
                    && block_size(m, mb) - r16(m, mb + 4) == names && memcmp(m + mn, h + hn, names) == 0;
         CHECK(same, "team %d's block", t);
         blocks += same;
+        /* its colours: the jerseys (the block's home and away palettes), the logo's and the
+         * matchup screens' (TeamLogoPalettes, TeamPalettes) */
+        int jerseys = memcmp(m + mb + r16(m, mb + 2), h + hb + r16(h, hb + 2), 64) == 0;
+        int logo = memcmp(m + LG(TeamLogoPalettes) + 32u * (uint32_t)t, h + s.table[LG_TeamLogoPalettes] + 32u * (uint32_t)t, 32) == 0;
+        int matchup = memcmp(m + LG(TeamPalettes) + 64u * (uint32_t)t, h + s.table[LG_TeamPalettes] + 64u * (uint32_t)t, 64) == 0;
+        CHECK(jerseys && logo && matchup, "team %d's colours: jerseys %s, logo %s, matchup %s", t, jerseys ? "same" : "DIFFER",
+              logo ? "same" : "DIFFER", matchup ? "same" : "DIFFER");
+        colours += jerseys && logo && matchup;
         CHECK(m[LG(TeamRatings) + (uint32_t)t] == rs8(&s, s.table[LG_TeamRatings] + (uint32_t)t), "team %d's rating", t);
         CHECK(memcmp(m + LG(TeamSongs) + 6u * (uint32_t)t, h + s.table[LG_TeamSongs] + 6u * (uint32_t)t, 6) == 0, "team %d's songs", t);
     }
@@ -255,7 +263,8 @@ static void hack(const char *path, const char *dir)
         missing += !seen;
     }
     CHECK(moved == missing, "the draws: %d places changed, for %d teams in none", moved, missing);
-    printf("  %s: %d of %d team blocks the hack's (their palettes aside), %d draw places given to teams in none\n", dir, blocks, s.teams, moved);
+    printf("  %s: %d of %d team blocks the hack's, %d of their colours (jerseys, logo, matchups), %d draw places given to teams in none\n",
+           dir, blocks, s.teams, colours, moved);
     /* its art as the hack's: each logo (and its colours), centre ice, both banners, each photo */
     struct romsrc bs;
     romsrc_cartridge(&bs, rom_image);
@@ -305,6 +314,8 @@ static void hack(const char *path, const char *dir)
         }
         CHECK(!r32(m, la) && !rs32(&s, lb), "team %d's photos: as many as the hack's", t);
     }
+    int set = r16(m, LG(Teamblocksmap) + 8) & 0x7FFF;      /* (the playoff screen loads them all: no more than the hack's 22 a team) */
+    CHECK(set <= 22 * league.teams, "%s: %d banner tiles for %d teams (the playoff screen has room for 22 a team)", dir, set, league.teams);
     printf("  %s: the hack's art: %d logos, %d centre ices, %d teams' banners%s, %d of %d photos\n", dir, logos, ices, banners,
            label ? " (the setup screen's: names, for the template's label)" : "", photos, pics);
     CHECK(!memcmp(league.hiscore_at, s.hiscore_at, sizeof s.hiscore_at) && !s.hiscore_at[0][0] && !s.hiscore_at[1][1],
