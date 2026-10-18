@@ -257,9 +257,9 @@ void HotColdIcon(uint8_t *tm)
     uint32_t icon;
     uint16_t chars;
     if ((home ? g.homehotplayer : g.awayhotplayer) == g.iconplayer) {
-        chars = g.hoticonchars; icon = SYM_HotIconMap;
+        chars = g.hoticonchars; icon = ART(HotIconMap);
     } else if ((home ? g.homecoldplayer : g.awaycoldplayer) == g.iconplayer) {
-        chars = g.coldiconchars; icon = SYM_ColdIconMap;
+        chars = g.coldiconchars; icon = ART(ColdIconMap);
     } else {
         g.printx = g.iconx;
         g.printy = 0x19;
@@ -395,10 +395,10 @@ void HiScoreScreen(void)
     memset(RAM_W(RAM_OFF_palfadenew), 0, 0x80);
     setVram_0();
     printz(str_HiScoreScreen_1, sizeof str_HiScoreScreen_1);
-    struct Picture p = picture(SYM_PlayoffSprite + 0x12E0);
+    struct Picture p = picture(ART(PlayoffSprite) + 0x12E0);
     uint16_t c = dobitmap(p.pal, p.map, p.tiles, 0, 0, p.w, p.h, 0, 0xF);
     printz(str_HiScoreScreen_2, sizeof str_HiScoreScreen_2);
-    p = picture(SYM_HiScoreImg);
+    p = picture(ART(HiScoreImg));
     dobitmap(p.pal, p.map, p.tiles, 0, 0, p.w, p.h, c, 0);
     g.palcount = 0x18;
     cpu_set_sr(0x2500);
@@ -435,26 +435,26 @@ void newTitleScreen(void)
     printz(str_newTitleScreen_2, sizeof str_newTitleScreen_2);
     eraser(0x80, 0x20, 0x7FF);
     printz(str_newTitleScreen_3, sizeof str_newTitleScreen_3);
-    struct Picture p = picture(SYM_TitleScreenImg);
+    struct Picture p = picture(ART(TitleScreenImg));
     g.TempWord1 = dobitmap(p.pal, p.map, p.tiles, 0, 0, p.w, 0x17, 0, 0xF);
     printz(str_newTitleScreen_4, sizeof str_newTitleScreen_4);   /* its last 5 rows on plane B */
     g.sflags6 |= HI(0);
     dobitmap(p.pal, p.map, p.tiles, 0, 0x17, p.w, 5, 0, 0);
     g.sflags6 &= (uint16_t)~HI(0);
     printz(str_newTitleScreen_5, sizeof str_newTitleScreen_5);
-    p = picture(SYM_NHLShieldImg);
+    p = picture(ART(NHLShieldImg));
     uint16_t c = dobitmap(p.pal, p.map, p.tiles, 0, 0, p.w, p.h, g.TempWord1, 8);
     printz(str_newTitleScreen_6, sizeof str_newTitleScreen_6);
-    p = picture(SYM_PAlogoImg);
+    p = picture(ART(PAlogoImg));
     c = dobitmap(p.pal, p.map, p.tiles, 0, 0, p.w, p.h, c, 0);
     printz(str_newTitleScreen_7, sizeof str_newTitleScreen_7);
-    p = picture(SYM_TitleImg);
+    p = picture(ART(TitleImg));
     c = dobitmap(p.pal, p.map, p.tiles, 0, 0, p.w, p.h, c, 8);
     g.palfadenew[0] = 0;
     g.fofdata2[0] = 0;
     wr16(RAM_W(RAM_OFF_fofdata2) + 4, 0);
     g.smallfontchars = c;
-    DecompressGraphicsWithCallback(SYM_SmallFontMap + 8, c, rom_find(SYM_newTitleScreen, SYM_CreditsPrintRow, font, 8));
+    DecompressGraphicsWithCallback(ART(SmallFontMap) + 8, c, rom_find(SYM_newTitleScreen, SYM_CreditsPrintRow, font, 8));
     printz(str_newTitleScreen_8, sizeof str_newTitleScreen_8);
     CreditsPrintRow(SYM_Credits);
     g.Vscroll += 0x20;
@@ -600,7 +600,7 @@ void UnpackPicture(uint32_t pic)
 void DrawPlayoffSprite(void)
 {
     struct Vid v = { NULL, RAM_W(RAM_OFF_Satt), 1 };
-    SetSframe(SYM_PlayoffSprite, (int16_t)g.playoffspritex, (int16_t)g.playoffspritey, 1, (uint16_t)(g.energybarchars | 0x8000), &v);
+    SetSframe(ART(PlayoffSprite), (int16_t)g.playoffspritex, (int16_t)g.playoffspritey, 1, (uint16_t)(g.energybarchars | 0x8000), &v);
     if (v.sat == RAM_W(RAM_OFF_Satt)) { memset(v.sat, 0, 8); v.sat += 8; }
     v.sat[-5] = 0;                                        /* the last sprite's link */
     g.Sattsize = (uint16_t)((uint16_t)(v.sat - RAM_W(RAM_OFF_Satt)) >> 1);

@@ -78,6 +78,7 @@ struct romsrc {
     uint32_t table[LG_TABLES];          /* (league.h's tables; BannerSlotMap none) */
     int teams, playoff_teams, rows;
     uint32_t bitmaps, rink, rink_tiles, photos;   /* TeamBitmaps, Rinktilelist, Rinktiles, PicturePalette */
+    uint32_t asset[ART_ASSETS];         /* the shared art's addresses (league.h's ART_) */
 };
 void romsrc_cartridge(struct romsrc *s, const uint8_t *cart);
 /* rom (size bytes), a hack read against the cartridge cart: 0, else -1 and why */
@@ -98,6 +99,8 @@ int league_extract(const struct romsrc *s, const char *dir, const char *name);
 #define ART_ICE_BYTES (8 + 2 + 24 * 32)
 #define ART_BANNER_W 88
 #define ART_BANNER_H 32
+#define ART_BANNER_SETUP 64             /* (a banners picture's colours: the top's 0-63, the setup screen's from 64) */
+#define ART_BANNER_COLOURS 80
 const char *art_error(void);
 uint32_t art_rgb(uint16_t word);
 uint16_t art_word(uint32_t rgb);
@@ -109,11 +112,25 @@ int art_photo(const struct romsrc *s, uint32_t pic, uint8_t px[ART_LOGO * ART_LO
 int art_photo_make(const uint8_t px[ART_LOGO * ART_LOGO], uint8_t out[ART_PHOTO_BYTES]);
 int art_ice(const struct romsrc *s, int t, uint8_t *px, int *w, int *h, uint16_t pal[16]);
 int art_ice_make(const struct romsrc *s, const uint8_t *px, int w, int h, uint8_t out[ART_ICE_BYTES]);
-int art_banners(const struct romsrc *s, int t, uint8_t px[ART_BANNER_H * ART_BANNER_W], uint16_t pal[32]);
+int art_banners(const struct romsrc *s, int t, uint8_t px[ART_BANNER_H * ART_BANNER_W], uint16_t pal[ART_BANNER_COLOURS]);
 int art_save(const char *path, const uint8_t *px, int w, int h, const uint16_t *pal, int n, int transparent0);
 int art_load(const char *path, mdrt_png *p, int w, int h);
 int art_indexes(const char *path, const mdrt_png *p, int x0, int y0, int w, int h, const uint16_t *pal, int n, int base, uint8_t *out);
 int art_own_palette(const char *path, const mdrt_png *p, uint16_t pal[16], uint8_t *out);
+/* the art every team shares (art.c: league.h's ART_ assets): their names, sizes in a ROM, views
+ * (a picture, sprites' tiles as a sheet, a photo) and the assets again from changed views */
+struct art_view { int w, h, n, own; uint8_t *px; uint16_t pal[64]; };   /* (own: a picture with colours of its own) */
+int art_shared(void);                                   /* how many */
+const char *art_shared_name(int i);
+int art_shared_asset(int i);                            /* its ART_ */
+int art_shared_tiles(int i, int *at);                   /* the ART_ of its tiles' address (at past its own), or -1 */
+uint32_t art_shared_size(const struct romsrc *s, int i, uint32_t a);
+int art_shared_view(const struct romsrc *s, int i, uint32_t a, const uint16_t screen[64], const uint16_t team[16], struct art_view *v);
+int art_shared_read(const char *path, const mdrt_png *p, int i, const struct art_view *base, struct art_view *v);
+int art_view_same(const struct art_view *a, const struct art_view *b);
+void art_view_free(struct art_view *v);
+size_t art_shared_make(const struct romsrc *s, int i, uint32_t a, const struct art_view *v, uint8_t **out);
+size_t art_shared_copy(const struct romsrc *s, int i, uint32_t a, uint8_t **out);
 /* the leagues/ folder's leagues for the menu (the cartridge's first): the count */
 int league_list(const char *const **names, const char *const **labels);
 const char *league_sram(const char *base);   /* the next game's save RAM file (base: the cartridge's) */

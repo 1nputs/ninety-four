@@ -170,9 +170,9 @@ uint16_t MoveMenuFrame(uint16_t d7, int16_t d0)
     }
     uint16_t w, h;
     SetMenuArea(&w, &h);
-    struct { uint32_t pal, map; } m = { SYM_SetupMenuMap + rd32(rom_ptr(SYM_SetupMenuMap)), SYM_SetupMenuMap + rd32(rom_ptr(SYM_SetupMenuMap + 4)) };
+    struct { uint32_t pal, map; } m = { ART(SetupMenuMap) + rd32(rom_ptr(ART(SetupMenuMap))), ART(SetupMenuMap) + rd32(rom_ptr(ART(SetupMenuMap) + 4)) };
     g.sflags6 |= HI(0);                                   /* the map only */
-    dobitmap(m.pal, m.map, SYM_SetupMenuMap + 8, (uint16_t)(g.printx - 1), (uint16_t)(g.printy - 0xE), 0x17, h, g.setupmenuchars, 0);
+    dobitmap(m.pal, m.map, ART(SetupMenuMap) + 8, (uint16_t)(g.printx - 1), (uint16_t)(g.printy - 0xE), 0x17, h, g.setupmenuchars, 0);
     g.sflags6 &= (uint16_t)~HI(0);
     SetFrameRect(d7, &w, &h);
     g.printa = 0x6000;
@@ -406,28 +406,28 @@ void setoptions(void)
     orjoy();
     uint16_t c = LoadSetupTiles();
     g.framercset = c;
-    c = DecompressGraphicsWithCallback(SYM_SetupFramerMap + 8, c, rom_find(SYM_setoptions, SYM_ReadSetupPads, framer, 8));
+    c = DecompressGraphicsWithCallback(ART(SetupFramerMap) + 8, c, rom_find(SYM_setoptions, SYM_ReadSetupPads, framer, 8));
     g.smallfontchars = c;
-    c = DecompressGraphicsWithCallback(SYM_SmallFontMap + 8, c, rom_find(SYM_setoptions, SYM_ReadSetupPads, font, 8));
+    c = DecompressGraphicsWithCallback(ART(SmallFontMap) + 8, c, rom_find(SYM_setoptions, SYM_ReadSetupPads, font, 8));
     g.setupfontchars = c;
-    c = DecompressGraphicsWithCallback(SYM_PrintFont2Map + 8, c, rom_find(SYM_setoptions, SYM_ReadSetupPads, font2, 8));
+    c = DecompressGraphicsWithCallback(ART(PrintFont2Map) + 8, c, rom_find(SYM_setoptions, SYM_ReadSetupPads, font2, 8));
     printz(str_setoptions_1, sizeof str_setoptions_1);
     eraser(0x28, 0x1C, 0x7FF);
     printz(str_setoptions_2, sizeof str_setoptions_2);
-    c = dobitmap(pic_pal(SYM_GameSetUpMap), pic_map(SYM_GameSetUpMap), SYM_GameSetUpMap + 8, 0, 0, 0x28, 0x1C, c, 0xD);
+    c = dobitmap(pic_pal(ART(GameSetUpMap)), pic_map(ART(GameSetUpMap)), ART(GameSetUpMap) + 8, 0, 0, 0x28, 0x1C, c, 0xD);
     g.vispicchars = c;
     c += 0x24;
     printz(str_setoptions_3, sizeof str_setoptions_3);
-    c = dobitmap(pic_pal(SYM_GameSetUpMap2), pic_map(SYM_GameSetUpMap2), SYM_GameSetUpMap2 + 8, 0, 0, 0x28, 4, c, 0);
+    c = dobitmap(pic_pal(ART(GameSetUpMap2)), pic_map(ART(GameSetUpMap2)), ART(GameSetUpMap2) + 8, 0, 0, 0x28, 4, c, 0);
     printz(str_setoptions_4, sizeof str_setoptions_4);
     g.setupmenuchars = c;
-    c = dobitmap(pic_pal(SYM_SetupMenuMap), pic_map(SYM_SetupMenuMap), SYM_SetupMenuMap + 8, 0, 0, 0x26, 0xD, c, 0);
+    c = dobitmap(pic_pal(ART(SetupMenuMap)), pic_map(ART(SetupMenuMap)), ART(SetupMenuMap) + 8, 0, 0, 0x26, 0xD, c, 0);
     g.homepicchars = c;
     c += 0x24;
     g.logobox1chars = c;
-    c = DecompressGraphicsPlain(SYM_LogoBoxMap + 8, c);
+    c = DecompressGraphicsPlain(ART(LogoBoxMap) + 8, c);
     g.logobox2chars = c;
-    c = DecompressGraphicsWithCallback(SYM_LogoBoxMap + 8, c, rom_find(SYM_setoptions, SYM_ReadSetupPads, logobox, 8));
+    c = DecompressGraphicsWithCallback(ART(LogoBoxMap) + 8, c, rom_find(SYM_setoptions, SYM_ReadSetupPads, logobox, 8));
     defaultsprites2(c);
     sortobj(0)->OldXpos = 0x28;
     sortobj(6)->OldXpos = 0x28;
@@ -542,9 +542,9 @@ uint32_t SetupTilesRemap(void)
  * (teambitmapchars) -> d4 = the char after them. */
 uint16_t LoadSetupTiles(void)
 {
-    uint16_t c = DecompressGraphicsPlain(SYM_TeamBitmaps + 8, 2);
+    uint16_t c = DecompressGraphicsPlain(ART(TeamBitmaps) + 8, 2);
     g.teambitmapchars = c;
-    return DecompressGraphicsWithCallback(SYM_TeamBitmaps + 8, c, SetupTilesRemap());
+    return DecompressGraphicsWithCallback(ART(TeamBitmaps) + 8, c, SetupTilesRemap());
 }
 
 /* optsetup94.asm:UpdateRosterPlayers. Empty. */
@@ -660,6 +660,6 @@ void DrawLogoBox(uint16_t chars)
     g.printa = 0;
     g.printy = 5;
     g.sflags6 |= HI(0);
-    dobitmap(pic_pal(SYM_LogoBoxMap), pic_map(SYM_LogoBoxMap), SYM_LogoBoxMap + 8, 0, 0, 8, 8, chars, 0);
+    dobitmap(pic_pal(ART(LogoBoxMap)), pic_map(ART(LogoBoxMap)), ART(LogoBoxMap) + 8, 0, 0, 8, 8, chars, 0);
     g.sflags6 &= (uint16_t)~HI(0);
 }

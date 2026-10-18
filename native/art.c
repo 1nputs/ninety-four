@@ -5,9 +5,9 @@
  *
  *   logo      48 x 48: TeamLogoBitmaps (a picture: 6 x 6 map words, tiles), in the team's own
  *             16 colours (TeamLogoPalettes), which a logo's PNG brings along
- *   banners   88 x 32: on top the playoff tree's and the game's top bar's (Teamblocksmap), below
- *             the setup screen's (TeamBitmaps), in their screens' colours (line 1; the setup
- *             screen's 1 to 4 the team's own, from TeamPalettes)
+ *   banners   88 x 32: on top the playoff tree's and the game's top bar's (Teamblocksmap: colours
+ *             0-63, a cell's line x 16 + its colour), below the setup screen's (TeamBitmaps:
+ *             64 + its colour, line 1, whose 1 to 4 are the team's own, from TeamPalettes)
  *   ice       the rink's centre, the 24 tiles the home team's TeamGfxList puts in place of the
  *             rink's last 24, where the rink's map has them (the rest of the picture shows the
  *             rink round them, and is not read back), in the colours of their line in a game
@@ -40,6 +40,16 @@ static int fail(const char *fmt, ...)
     return -1;
 }
 
+/* the same for a length: 0 */
+static size_t fail_size(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(err, sizeof err, fmt, ap);
+    va_end(ap);
+    return 0;
+}
+
 /* ---- colours ------------------------------------------------------------------------------------ */
 
 /* a Genesis colour word (0BGR, 3 bits a channel) as the screen shows it, and back (the nearest level) */
@@ -63,20 +73,22 @@ uint16_t art_word(uint32_t rgb)
 /* ---- the game's tiles out of a ROM --------------------------------------------------------------- */
 
 /* the tiles at a (DecompressGraphics: a count word, bit 15 packed by DecompressBytecode's code,
- * then the data) into out, room for max tiles: their count, -1 when they do not read */
-int art_tiles(const struct romsrc *s, uint32_t a, uint8_t *out, int max)
+ * then the data) into out (NULL: only measured), room for max tiles: their count, -1 when they do
+ * not read; *end the address after their data */
+static int tiles_at(const struct romsrc *s, uint32_t a, uint8_t *out, int max, uint32_t *end)
 {
     uint16_t n = rs16(s, a);
     int count = n & 0x7FFF;
     if (count > max) return -1;
     size_t want = (size_t)count * 32, got = 0;
     if (!(n & 0x8000)) {
-        for (size_t i = 0; i < want; i++) out[i] = rs8(s, a + 2 + (uint32_t)i);
-        return a + 2 + want <= s->size ? count : -1;
+        for (size_t i = 0; out && i < want; i++) out[i] = rs8(s, a + 2 + (uint32_t)i);
+        *end = a + 2 + (uint32_t)want;
+        return *end <= s->size ? count : -1;
     }
-    uint8_t ring[256], idx = 0;
+    uint8_t ring[256] = { 0 }, idx = 0;
     uint32_t src = a + 2;
-#define PUT(v) do { ring[idx] = (v); if (++idx == 0) { for (int q = 0; q < 256 && got < want; q++) out[got++] = ring[q]; } } while (0)
+#define PUT(v) do { ring[idx] = (v); if (++idx == 0) { for (int q = 0; q < 256 && got < want; q++, got++) if (out) out[got] = ring[q]; } } while (0)
     for (int guard = 0; guard < 1 << 22; guard++) {
         if (src + 2 >= s->size) return -1;
         uint8_t op = rs8(s, src++);
@@ -96,7 +108,8 @@ int art_tiles(const struct romsrc *s, uint32_t a, uint8_t *out, int max)
             dist = rs8(s, src++);
             step = -1;
             if (!dist) {                                  /* the end code */
-                for (int q = 0; q < idx && got < want; q++) out[got++] = ring[q];
+                for (int q = 0; q < idx && got < want; q++, got++) if (out) out[got] = ring[q];
+                *end = src;
                 return got == want ? count : -1;
             }
             break;
@@ -107,6 +120,12 @@ int art_tiles(const struct romsrc *s, uint32_t a, uint8_t *out, int max)
     }
 #undef PUT
     return -1;
+}
+
+int art_tiles(const struct romsrc *s, uint32_t a, uint8_t *out, int max)
+{
+    uint32_t end;
+    return tiles_at(s, a, out, max, &end);
 }
 
 /* pixel (x, y) of a cell drawn with map word w over tiles (count of them; first: the char of tile
@@ -172,18 +191,20 @@ size_t art_logo_make(const uint8_t px[ART_LOGO * ART_LOGO], uint8_t *out)
 /* the photos' colours: PicturePalette's line 1 (colours 5 to 12 the shades a photo has) */
 void art_photo_palette(const struct romsrc *s, uint16_t pal[16])
 {
+    static const uint16_t greys[8] = { 0xEEE, 0x000, 0xCCC, 0xAAA, 0x888, 0x666, 0x444, 0x222 };
     uint32_t pp = s->photos + rs32(s, s->photos) + 32;
-    for (int k = 0; k < 16; k++) pal[k] = rs16(s, pp + 2u * (uint32_t)k);
+    for (int k = 0; k < 16; k++) pal[k] = pp + 32 <= s->size ? rs16(s, pp + 2u * (uint32_t)k) : k >= 5 && k <= 12 ? greys[k - 5] : 0;   /* (out of reach: the cartridge's shades) */
 }
 
 int art_photo(const struct romsrc *s, uint32_t pic, uint8_t px[ART_LOGO * ART_LOGO])
 {
     uint32_t map = rs32(s, pic + 4) ? pic + rs32(s, pic + 4) : s->photos + rs32(s, s->photos + 4);
-    int n = rs16(s, pic + 8);                             /* (a card with a map of its own may have fewer) */
-    if (n < 1 || n > 36 || pic + 10 + (uint32_t)n * 24 > s->size || rs16(s, map) != 6 || rs16(s, map + 2) != 6) return -1;
+    int n = rs16(s, pic + 8), own = rs32(s, pic + 4) != 0; /* (a card with a map of its own may have fewer) */
+    if (!own && (rs16(s, map) != 6 || rs16(s, map + 2) != 6)) map = 0;   /* (the photos' map out of reach: theirs, the 36 in order) */
+    if (n < 1 || n > 36 || pic + 10 + (uint32_t)n * 24 > s->size || (map && (rs16(s, map) != 6 || rs16(s, map + 2) != 6))) return -1;
     for (int y = 0; y < ART_LOGO; y++)
         for (int x = 0; x < ART_LOGO; x++) {
-            int ch = rs16(s, map + 4 + 2u * (uint32_t)(y / 8 * 6 + x / 8)) & 0x7FF;
+            int ch = map ? rs16(s, map + 4 + 2u * (uint32_t)(y / 8 * 6 + x / 8)) & 0x7FF : y / 8 * 6 + x / 8;
             if (ch >= n) return -1;
             uint32_t row = pic + 10 + (uint32_t)(ch * 8 + y % 8) * 3, b = (uint32_t)rs8(s, row) << 16 | (uint32_t)rs8(s, row + 1) << 8 | rs8(s, row + 2);
             px[y * ART_LOGO + x] = (uint8_t)(5 + (b >> (21 - 3 * (x % 8)) & 7));   /* (UnpackPicture: 3 bits a pixel, + 5) */
@@ -298,8 +319,9 @@ int art_ice_make(const struct romsrc *s, const uint8_t *px, int w, int h, uint8_
 /* ---- banners ------------------------------------------------------------------------------------ */
 
 /* team t's two banners (s's Teamblocksmap and TeamBitmaps) as one picture, 88 x 32: the first's
- * colours 0-15, the second's 16-31; their lines' colours in pal */
-int art_banners(const struct romsrc *s, int t, uint8_t px[ART_BANNER_H * ART_BANNER_W], uint16_t pal[32])
+ * each pixel its line x 16 + its colour (0-63: its cells may be of any line), the second's 64 + its
+ * colour (line 1); their colours in pal */
+int art_banners(const struct romsrc *s, int t, uint8_t px[ART_BANNER_H * ART_BANNER_W], uint16_t pal[ART_BANNER_COLOURS])
 {
     static uint8_t tiles[2048 * 32];               /* (a league's: the cartridge's 501, 22 more a team) */
     for (int set = 0; set < 2; set++) {
@@ -307,16 +329,19 @@ int art_banners(const struct romsrc *s, int t, uint8_t px[ART_BANNER_H * ART_BAN
         int n = art_tiles(s, base + 8, tiles, 2048);
         if (n < 0 || rs16(s, map) != 11 || map + 4 + 2u * 22 * (uint32_t)(t + 1) > s->size) return -1;   /* (the game reads a team's rows whatever height the map says) */
         for (int y = 0; y < 16; y++)
-            for (int x = 0; x < ART_BANNER_W; x++)
-                px[(set * 16 + y) * ART_BANNER_W + x] = (uint8_t)(16 * set + cell_pixel(tiles, n, 0, rs16(s, map + 4 + 2u * (uint32_t)((2 * t + y / 8) * 11 + x / 8)), x % 8, y % 8));
-        for (int k = 0; k < 16; k++) pal[16 * set + k] = rs16(s, pp + 32 + 2u * (uint32_t)k);   /* (line 1) */
+            for (int x = 0; x < ART_BANNER_W; x++) {
+                uint16_t w = rs16(s, map + 4 + 2u * (uint32_t)((2 * t + y / 8) * 11 + x / 8));
+                px[(set * 16 + y) * ART_BANNER_W + x] = (uint8_t)((set ? ART_BANNER_SETUP : (w >> 13 & 3) * 16) + cell_pixel(tiles, n, 0, w, x % 8, y % 8));
+            }
+        if (set) for (int k = 0; k < 16; k++) pal[ART_BANNER_SETUP + k] = rs16(s, pp + 32 + 2u * (uint32_t)k);   /* (line 1) */
+        else for (int k = 0; k < 64; k++) pal[k] = rs16(s, pp + 2u * (uint32_t)k);
     }
     uint32_t tp = s->table[LG_TeamPalettes] + 64u * (uint32_t)t;   /* (the setup screen's colours 1 to 4: the team's, DrawTeamBitmap's) */
-    pal[17] = rs16(s, tp + 2);
-    pal[18] = rs16(s, tp + 4);
-    pal[19] = rs16(s, tp + 0x26);                         /* (as the visitors: 1 and 2 shown as 3 and 4) */
-    pal[20] = rs16(s, tp + 0x28);
-    pal[21] = 0xEEE;                                      /* (DrawMatchupBitmaps' white) */
+    pal[ART_BANNER_SETUP + 1] = rs16(s, tp + 2);
+    pal[ART_BANNER_SETUP + 2] = rs16(s, tp + 4);
+    pal[ART_BANNER_SETUP + 3] = rs16(s, tp + 0x26);       /* (as the visitors: 1 and 2 shown as 3 and 4) */
+    pal[ART_BANNER_SETUP + 4] = rs16(s, tp + 0x28);
+    pal[ART_BANNER_SETUP + 5] = 0xEEE;                    /* (DrawMatchupBitmaps' white) */
     return 0;
 }
 
@@ -429,4 +454,317 @@ int art_own_palette(const char *path, const mdrt_png *p, uint16_t pal[16], uint8
         out[i] = (uint8_t)k;
     }
     return 0;
+}
+
+/* ---- the art every team shares (league.h's ART_ assets) ------------------------------------------ */
+
+/* how each is made: a picture (palette offset or none, map offset, tiles: the title screens,
+ * setup screens, fonts, the rinks, whose header is followed by their tiles), sprites (palette,
+ * frames, tiles: shown as a sheet of their tiles in order), a stock photo. tiles: where the
+ * tiles another address names are (Rinktiles, Spritetiles: of the asset before them); sub: a
+ * picture inside it at that offset (title.c draws PlayoffSprite's at +$12E0) */
+enum { PICTURE, SPRITES, PHOTO };
+static const struct shared { int art; const char *name; int kind; int tiles_art, tiles_at; uint32_t sub; } shared[] = {
+    { ART_TitleScreenImg, "TitleScreenImg", PICTURE, -1, 0, 0 }, { ART_TitleImg, "TitleImg", PICTURE, -1, 0, 0 },
+    { ART_NHLShieldImg, "NHLShieldImg", PICTURE, -1, 0, 0 }, { ART_PAlogoImg, "PAlogoImg", PICTURE, -1, 0, 0 },
+    { ART_EASportsMap, "EASportsMap", PICTURE, -1, 0, 0 }, { ART_HiScoreImg, "HiScoreImg", PICTURE, -1, 0, 0 },
+    { ART_GameSetUpMap, "GameSetUpMap", PICTURE, -1, 0, 0 }, { ART_GameSetUpMap2, "GameSetUpMap2", PICTURE, -1, 0, 0 },
+    { ART_SetupMenuMap, "SetupMenuMap", PICTURE, -1, 0, 0 }, { ART_SetupFramerMap, "SetupFramerMap", PICTURE, -1, 0, 0 },
+    { ART_LogoBoxMap, "LogoBoxMap", PICTURE, -1, 0, 0 }, { ART_ScoutMap, "ScoutMap", PICTURE, -1, 0, 0 },
+    { ART_RonBarrMap, "RonBarrMap", PICTURE, -1, 0, 0 }, { ART_PlayerCardsScreenPic, "PlayerCardsScreenPic", PICTURE, -1, 0, 0 },
+    { ART_PicturePalette, "PicturePalette", PICTURE, -1, 0, 0 }, { ART_ReplayMap, "ReplayMap", PICTURE, -1, 0, 0 },
+    { ART_Rinktilelist, "Rinktilelist", PICTURE, ART_Rinktiles, 8, 0 },
+    { ART_RevRinkTilelist, "RevRinkTilelist", PICTURE, ART_RevRinkTiles, 8, 0 },
+    { ART_HorRinkMap, "HorRinkMap", PICTURE, ART_HorRinkTiles, 8, 0 },
+    { ART_ArenaGfxBank, "ArenaGfxBank", PICTURE, -1, 0, 0 }, { ART_CornerLogoMap, "CornerLogoMap", PICTURE, -1, 0, 0 },
+    { ART_ScoresMap, "ScoresMap", PICTURE, -1, 0, 0 }, { ART_EASNmap, "EASNmap", PICTURE, -1, 0, 0 },
+    { ART_EnergyBarMap, "EnergyBarMap", PICTURE, -1, 0, 0 }, { ART_FaceOffMap, "FaceOffMap", PICTURE, -1, 0, 0 },
+    { ART_FramerMap, "FramerMap", PICTURE, -1, 0, 0 }, { ART_Arrowsmap, "Arrowsmap", PICTURE, -1, 0, 0 },
+    { ART_RefsMap, "RefsMap", PICTURE, -1, 0, 0 }, { ART_RefMap2, "RefMap2", PICTURE, -1, 0, 0 },
+    { ART_HotIconMap, "HotIconMap", PICTURE, -1, 0, 0 }, { ART_ColdIconMap, "ColdIconMap", PICTURE, -1, 0, 0 },
+    { ART_BigFontMap, "BigFontMap", PICTURE, -1, 0, 0 }, { ART_SmallFontMap, "SmallFontMap", PICTURE, -1, 0, 0 },
+    { ART_PrintFont2Map, "PrintFont2Map", PICTURE, -1, 0, 0 },
+    { ART_Sprites, "Sprites", SPRITES, ART_Spritetiles, 10, 0 }, { ART_CrowdFrameList, "CrowdFrameList", SPRITES, -1, 0, 0 },
+    { ART_ZamFrameList, "ZamFrameList", SPRITES, -1, 0, 0 }, { ART_FaceOffSprites, "FaceOffSprites", SPRITES, -1, 0, 0 },
+    { ART_PlayoffSprite, "PlayoffSprite", SPRITES, -1, 0, 0x12E0 },
+    { ART_NoPicSkater1, "NoPicSkater1", PHOTO, -1, 0, 0 }, { ART_NoPicSkater2, "NoPicSkater2", PHOTO, -1, 0, 0 },
+    { ART_NoPicGoalie1, "NoPicGoalie1", PHOTO, -1, 0, 0 }, { ART_NoPicGoalie2, "NoPicGoalie2", PHOTO, -1, 0, 0 },
+};
+#define SHARED ((int)(sizeof shared / sizeof shared[0]))
+#define SHARED_MAX 0x60000u     /* (the biggest, the players' sprites: 264 KB and their frames) */
+#define TILES_MAX 9000
+
+int art_shared(void) { return SHARED; }
+const char *art_shared_name(int i) { return shared[i].name; }
+int art_shared_asset(int i) { return shared[i].art; }
+int art_shared_tiles(int i, int *at) { *at = shared[i].tiles_at; return shared[i].tiles_art; }
+
+static uint32_t max_u32(uint32_t a, uint32_t b) { return a > b ? a : b; }
+
+/* a picture at a: the length to the end of its tiles, palette (4 lines) and map; 0 when it does
+ * not read */
+static uint32_t picture_size(const struct romsrc *s, uint32_t a)
+{
+    uint32_t pal = rs32(s, a), map = rs32(s, a + 4), end;
+    if (map >= s->size || (pal != 0xFFFFFFFFu && pal >= s->size) || tiles_at(s, a + 8, NULL, TILES_MAX, &end) < 0) return 0;
+    uint32_t n = end - a, w = rs16(s, a + map), h = rs16(s, a + map + 2);
+    if (!w || !h || w > 128 || h > 256) return 0;
+    n = max_u32(n, map + 4 + 2 * w * h);
+    if (pal != 0xFFFFFFFFu) n = max_u32(n, pal + 128);
+    return a + n <= s->size ? n : 0;
+}
+
+/* sprites at a: to the end of their tiles, palette and frames (a table of offsets from itself,
+ * a frame's pieces from its offset to the next, 8 bytes each: the first offset none, the second
+ * the table's length, the last the end of the last frame) */
+static uint32_t sprites_size(const struct romsrc *s, uint32_t a)
+{
+    uint32_t pal = rs32(s, a), frames = rs32(s, a + 4), end;
+    if (frames >= s->size || (pal != 0xFFFFFFFFu && pal >= s->size) || tiles_at(s, a + 8, NULL, TILES_MAX, &end) < 0) return 0;
+    uint32_t n = end - a, table = a + frames, first = rs16(s, table + 2);
+    if (first < 4 || first & 1) return 0;
+    n = max_u32(n, frames + rs16(s, table + first - 2));
+    if (pal != 0xFFFFFFFFu) n = max_u32(n, pal + 128);
+    return a + n <= s->size ? n : 0;
+}
+
+uint32_t art_shared_size(const struct romsrc *s, int i, uint32_t a)
+{
+    uint32_t n;
+    switch (shared[i].kind) {
+    case PICTURE: return picture_size(s, a);
+    case SPRITES:
+        n = sprites_size(s, a);
+        if (n && shared[i].sub) {
+            uint32_t sub = picture_size(s, a + shared[i].sub);
+            n = sub ? max_u32(n, shared[i].sub + sub) : 0;
+        }
+        return n;
+    default: {
+        int t = rs16(s, a + 8);
+        n = 10 + 24u * (uint32_t)t;
+        return t >= 1 && t <= 36 && a + n <= s->size ? n : 0;
+    }
+    }
+}
+
+void art_view_free(struct art_view *v) { free(v->px); v->px = NULL; }
+
+static void put_be32(uint8_t *p, uint32_t v) { p[0] = (uint8_t)(v >> 24); p[1] = (uint8_t)(v >> 16); p[2] = (uint8_t)(v >> 8); p[3] = (uint8_t)v; }
+
+/* where a's parts are, wherever they are (a hack may move a palette or frames far from the rest) */
+static uint32_t span(const struct romsrc *s, uint32_t a, uint32_t off, uint32_t len) { return off == 0xFFFFFFFFu ? 0 : (a + off + len <= s->size ? len : 0); }
+
+/* asset i at a in s, its parts gathered into one (malloc'd) as the game reads them: the header,
+ * the tiles as they are, the palette (4 lines) when it has one, then the map or the frames, the
+ * offsets made to fit. PlayoffSprite, with a picture inside where the game knows it, as it is.
+ * Its length, 0 when it does not read */
+size_t art_shared_copy(const struct romsrc *s, int i, uint32_t a, uint8_t **out)
+{
+    uint32_t n = art_shared_size(s, i, a), end;
+    *out = NULL;
+    if (shared[i].kind == PHOTO || shared[i].sub || (n && n <= SHARED_MAX)) {
+        if (!n || !(*out = malloc(n))) return 0;
+        for (uint32_t k = 0; k < n; k++) (*out)[k] = rs8(s, a + k);
+        return n;
+    }
+    /* (spread out: gathered) */
+    if (tiles_at(s, a + 8, NULL, TILES_MAX, &end) < 0) return 0;
+    uint32_t pal = rs32(s, a), rest = rs32(s, a + 4), tiles_len = end - a - 8, pal_len = span(s, a, pal, 128), rest_len;
+    if (shared[i].kind == PICTURE) rest_len = 4 + 2u * rs16(s, a + rest) * rs16(s, a + rest + 2);
+    else rest_len = rs16(s, a + rest + rs16(s, a + rest + 2) - 2);
+    if ((pal != 0xFFFFFFFFu && !pal_len) || !span(s, a, rest, rest_len) || rest_len < 4) return 0;
+    n = 8 + tiles_len + pal_len + rest_len;
+    uint8_t *b = malloc(n);
+    if (!b) return 0;
+    put_be32(b, pal_len ? 8 + tiles_len : 0xFFFFFFFFu);
+    put_be32(b + 4, 8 + tiles_len + pal_len);
+    for (uint32_t k = 0; k < tiles_len; k++) b[8 + k] = rs8(s, a + 8 + k);
+    for (uint32_t k = 0; k < pal_len; k++) b[8 + tiles_len + k] = rs8(s, a + pal + k);
+    for (uint32_t k = 0; k < rest_len; k++) b[8 + tiles_len + pal_len + k] = rs8(s, a + rest + k);
+    *out = b;
+    return n;
+}
+
+/* asset i at a in s as a picture: a picture's map drawn (each pixel its line x 16 + its colour;
+ * its own 4 lines of colours, else screen's: those of the rink, which shows the pictures that
+ * have none), sprites' tiles in order 16 a row (their own first line of colours, else team: a
+ * team's home jersey), a photo (art_photo). 0, -1 */
+int art_shared_view(const struct romsrc *s, int i, uint32_t a, const uint16_t screen[64], const uint16_t team[16], struct art_view *v)
+{
+    static uint8_t tiles[TILES_MAX * 32];
+    memset(v, 0, sizeof *v);
+    if (!art_shared_size(s, i, a)) return -1;
+    if (shared[i].kind == PHOTO) {
+        v->w = v->h = ART_LOGO;
+        v->n = 16;
+        if (!(v->px = malloc(ART_LOGO * ART_LOGO))) return -1;
+        art_photo_palette(s, v->pal);
+        if (art_photo(s, a, v->px) < 0) { art_view_free(v); return -1; }
+        return 0;
+    }
+    uint32_t pal = rs32(s, a), end;
+    int n = tiles_at(s, a + 8, tiles, TILES_MAX, &end);
+    if (n < 0) return -1;
+    if (shared[i].kind == SPRITES) {
+        v->w = 128;
+        v->h = (n + 15) / 16 * 8;
+        v->n = 16;
+        for (int k = 0; k < 16; k++) v->pal[k] = (pal != 0xFFFFFFFFu ? rs16(s, a + pal + 2u * (uint32_t)k) : team[k]) & 0x0EEE;
+        if (!(v->px = calloc((size_t)v->w * (size_t)(v->h ? v->h : 1), 1))) return -1;
+        for (int t = 0; t < n; t++)                       /* (tile t as it is: no map word to say more) */
+            for (int y = 0; y < 8; y++)
+                for (int x = 0; x < 8; x++) v->px[(t / 16 * 8 + y) * 128 + t % 16 * 8 + x] = (uint8_t)(tiles[t * 32 + y * 4 + x / 2] >> (x & 1 ? 0 : 4) & 15);
+        return 0;
+    }
+    uint32_t map = a + rs32(s, a + 4);
+    int mw = rs16(s, map), mh = rs16(s, map + 2);
+    v->w = mw * 8;
+    v->h = mh * 8;
+    v->n = 64;
+    v->own = pal != 0xFFFFFFFFu;                          /* (the colours' bits the VDP has: a palette may be other bytes, unused) */
+    for (int k = 0; k < 64; k++) v->pal[k] = (v->own ? rs16(s, a + pal + 2u * (uint32_t)k) : screen[k]) & 0x0EEE;
+    if (!(v->px = malloc((size_t)v->w * (size_t)v->h))) return -1;
+    for (int y = 0; y < v->h; y++)
+        for (int x = 0; x < v->w; x++) {
+            uint16_t w = rs16(s, map + 4 + 2u * (uint32_t)((y / 8) * mw + x / 8));
+            v->px[y * v->w + x] = (uint8_t)((w >> 13 & 3) * 16 + cell_pixel(tiles, n, 0, w, x % 8, y % 8));
+        }
+    return 0;
+}
+
+/* the PNG p as a view like base (its size, kind and lines): an indexed PNG's indexes (a
+ * picture's 0-63, sprites' and a photo's the low 4 bits), else each colour among those of the
+ * line base has there; a picture with colours of its own takes an indexed PNG's 64 colours.
+ * 0, -1 (art_error) */
+int art_shared_read(const char *path, const mdrt_png *p, int i, const struct art_view *base, struct art_view *v)
+{
+    *v = *base;
+    v->px = NULL;
+    if (p->width != base->w || p->height != base->h) return fail("%s: %d x %d pixels; it must be %d x %d", path, p->width, p->height, base->w, base->h);
+    if (!(v->px = malloc((size_t)v->w * (size_t)v->h))) return fail("out of memory");
+    int kind = shared[i].kind;
+    if (kind == PICTURE && base->own && p->index && p->colours >= 64)
+        for (int k = 0; k < 64; k++) v->pal[k] = art_word(p->palette[k] & 0xFFFFFF);
+    for (int at = 0; at < v->w * v->h; at++) {
+        int line = kind == PICTURE ? base->px[at] / 16 : 0;
+        if (kind == PHOTO) {                              /* (a photo's 8 shades, by index or brightness) */
+            if (p->index && p->index[at] >= 5 && p->index[at] <= 12) { v->px[at] = p->index[at]; continue; }
+            uint32_t c = p->rgba[at];
+            long lum = (long)(c >> 16 & 0xFF) * 299 + (long)(c >> 8 & 0xFF) * 587 + (long)(c & 0xFF) * 114, best = -1;
+            for (int k = 5; k <= 12; k++) {
+                uint32_t q = art_rgb(base->pal[k]);
+                long d = labs((long)(q >> 16 & 0xFF) * 299 + (long)(q >> 8 & 0xFF) * 587 + (long)(q & 0xFF) * 114 - lum);
+                if (best < 0 || d < best) { best = d; v->px[at] = (uint8_t)k; }
+            }
+            continue;
+        }
+        if (p->index) {
+            int k = p->index[at];
+            if (kind == PICTURE ? k >= 64 : 0) return fail("%s: the pixel at %d, %d is colour %d (a picture has 64)", path, at % v->w, at / v->w, k);
+            v->px[at] = (uint8_t)(kind == PICTURE ? k : k & 15);
+            continue;
+        }
+        uint32_t c = p->rgba[at];
+        int k = 0;
+        if (c >> 24 >= 0x80) {
+            uint16_t want = art_word(c & 0xFFFFFF);
+            for (k = 1; k < 16 && v->pal[line * 16 + k] != want; k++) {}
+            if (k == 16 && v->pal[line * 16] != want)
+                return fail("%s: the colour #%06X at %d, %d is none of its line's (the PNG as written has them)", path, (unsigned)(c & 0xFFFFFF), at % v->w, at / v->w);
+            if (k == 16) k = 0;
+        }
+        v->px[at] = (uint8_t)(line * 16 + k);
+    }
+    return 0;
+}
+
+int art_view_same(const struct art_view *a, const struct art_view *b)
+{
+    return a->w == b->w && a->h == b->h && a->n == b->n && !memcmp(a->pal, b->pal, sizeof a->pal) && !memcmp(a->px, b->px, (size_t)a->w * (size_t)a->h);
+}
+
+
+/* asset i at a in s again, with the pixels (and a picture's colours) of v, a view of it: each
+ * tile from where the map (a picture's) or the sheet (sprites') has it, the same wherever the
+ * map shows it twice; the rest as it is (its map, frames, the order of its tiles). Tiles kept as
+ * they were (plain) keep everything where it was; packed ones become plain, the rest after them.
+ * Into *out (malloc'd): its length, 0 (art_error) */
+size_t art_shared_make(const struct romsrc *s, int i, uint32_t a, const struct art_view *v, uint8_t **out)
+{
+    static uint8_t tiles[TILES_MAX * 32];
+    static uint8_t got[TILES_MAX];
+    uint32_t size = art_shared_size(s, i, a), end;
+    *out = NULL;
+    if (!size) return fail_size("%s cannot be read", shared[i].name);
+    if (shared[i].kind == PHOTO) {
+        uint8_t *b = malloc(ART_PHOTO_BYTES);
+        if (!b) return fail_size("out of memory");
+        if (art_photo_make(v->px, b) < 0) { free(b); return fail_size("%s: a photo has 8 shades, colours 5 to 12 of its palette", shared[i].name); }
+        *out = b;
+        return ART_PHOTO_BYTES;
+    }
+    int n = tiles_at(s, a + 8, tiles, TILES_MAX, &end);
+    if (n < 0) return fail_size("%s cannot be read", shared[i].name);
+    memset(got, 0, (size_t)n);
+    uint32_t pal = rs32(s, a), map = a + rs32(s, a + 4);
+    if (shared[i].kind == SPRITES) {
+        for (int t = 0; t < n; t++) {
+            memset(tiles + 32 * t, 0, 32);
+            for (int y = 0; y < 8; y++)
+                for (int x = 0; x < 8; x++) tiles[32 * t + y * 4 + x / 2] |= (uint8_t)((v->px[(t / 16 * 8 + y) * 128 + t % 16 * 8 + x] & 15) << (x & 1 ? 0 : 4));
+        }
+    } else {
+        int mw = rs16(s, map), mh = rs16(s, map + 2);
+        for (int cy = 0; cy < mh; cy++)
+            for (int cx = 0; cx < mw; cx++) {
+                uint16_t w = rs16(s, map + 4 + 2u * (uint32_t)(cy * mw + cx));
+                int k = w & 0x7FF, line = w >> 13 & 3;
+                if (k >= n) continue;                     /* (a tile of another's) */
+                uint8_t t[32] = { 0 };
+                for (int y = 0; y < 8; y++)
+                    for (int x = 0; x < 8; x++) {
+                        int c = v->px[(cy * 8 + y) * v->w + cx * 8 + x] - line * 16, sx = w & 0x800 ? 7 - x : x, sy = w & 0x1000 ? 7 - y : y;
+                        if (c < 0 || c > 15) return fail_size("%s: the pixel at %d, %d is not one of its line's colours (%d to %d)", shared[i].name, cx * 8 + x, cy * 8 + y, line * 16, line * 16 + 15);
+                        t[sy * 4 + sx / 2] |= (uint8_t)(c << (sx & 1 ? 0 : 4));
+                    }
+                if (got[k] && memcmp(tiles + 32 * k, t, 32))
+                    return fail_size("%s: the picture differs at %d, %d from another place the same tile shows", shared[i].name, cx * 8, cy * 8);
+                memcpy(tiles + 32 * k, t, 32);
+                got[k] = 1;
+            }
+    }
+    int packed = rs16(s, a + 8) & 0x8000;
+    if (packed && shared[i].sub) return fail_size("%s: its tiles are packed and a picture inside it is where the game knows it: it is taken as it is", shared[i].name);
+    if (!packed) {                                        /* (in place: the same length, everything where it was) */
+        uint8_t *b = malloc(size);
+        if (!b) return fail_size("out of memory");
+        for (uint32_t k = 0; k < size; k++) b[k] = rs8(s, a + k);
+        memcpy(b + 10, tiles, 32u * (uint32_t)n);
+        if (shared[i].kind == PICTURE && pal != 0xFFFFFFFFu)  /* (the colours changed, and only they: the rest as it was) */
+            for (uint32_t k = 0; k < 64 && pal + 2 * k + 2 <= size; k++)
+                if (v->pal[k] != ((b[pal + 2 * k] << 8 | b[pal + 2 * k + 1]) & 0x0EEE)) { b[pal + 2 * k] = (uint8_t)(v->pal[k] >> 8); b[pal + 2 * k + 1] = (uint8_t)v->pal[k]; }
+        *out = b;
+        return size;
+    }
+    /* packed: the header, the tiles plain, the palette, then the map (a picture's) or the frames */
+    uint32_t tiles_len = 10 + 32u * (uint32_t)n, pal_len = pal != 0xFFFFFFFFu ? 128 : 0, rest_at, rest_len;
+    if (shared[i].kind == PICTURE) { rest_at = map; rest_len = 4 + 2u * rs16(s, map) * rs16(s, map + 2); }
+    else { rest_at = a + rs32(s, a + 4); rest_len = rs16(s, rest_at + rs16(s, rest_at + 2) - 2); }
+    uint8_t *b = calloc(tiles_len + pal_len + rest_len, 1);
+    if (!b) return fail_size("out of memory");
+    put_be32(b, pal_len ? tiles_len : 0xFFFFFFFFu);
+    put_be32(b + 4, tiles_len + pal_len);
+    b[8] = (uint8_t)(n >> 8);
+    b[9] = (uint8_t)n;
+    memcpy(b + 10, tiles, 32u * (uint32_t)n);
+    for (uint32_t k = 0; k < pal_len / 2; k++) {
+        uint16_t c = rs16(s, a + pal + 2 * k);
+        if (shared[i].kind == PICTURE && v->pal[k] != (c & 0x0EEE)) c = v->pal[k];
+        b[tiles_len + 2 * k] = (uint8_t)(c >> 8);
+        b[tiles_len + 2 * k + 1] = (uint8_t)c;
+    }
+    for (uint32_t k = 0; k < rest_len; k++) b[tiles_len + pal_len + k] = rs8(s, rest_at + k);
+    *out = b;
+    return tiles_len + pal_len + rest_len;
 }

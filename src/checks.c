@@ -1273,7 +1273,7 @@ void puckpenshot(uint8_t *tm, struct SortObj *o)
         g.crowdlevel = 0x258;
         g.CwdExciteLvl += 0x14;
     }
-    DecompressGraphicsPlain(SYM_RefsMap + 8, g.ExtraChars);
+    DecompressGraphicsPlain(ART(RefsMap) + 8, g.ExtraChars);
     g.disflags |= HI(dfclock);
     g.sflags &= (uint16_t)~HI(sfpz);
     g.sflags3 &= (uint8_t)~1;
@@ -1741,9 +1741,9 @@ void puckfaceoff2(uint8_t *tm, struct SortObj *o)
     }
     SprSort();
     ResetAndSelectPlayers(o);
-    uint16_t d4 = DecompressGraphicsPlain(SYM_FaceOffMap + 8, g.ExtraChars);
+    uint16_t d4 = DecompressGraphicsPlain(ART(FaceOffMap) + 8, g.ExtraChars);
     g.faceoffvrcset = d4;
-    DecompressGraphicsPlain(SYM_FaceOffSprites + 8, d4);
+    DecompressGraphicsPlain(ART(FaceOffSprites) + 8, d4);
     g.arenaanim = 0xFFFF;
     if ((g.sflags7 & 1) && (int16_t)g.faceoffanim[0] >= 0)
         StartArenaAnim(g.faceoffanim[0]);
@@ -1756,10 +1756,10 @@ void puckfaceoff2(uint8_t *tm, struct SortObj *o)
     g.fodropy = (uint16_t)d0;
     g.printy = (uint16_t)((int16_t)(d0 - 0x44) >> 3);
     {
-        const uint8_t *map = rom_ptr(SYM_FaceOffMap);
-        uint32_t pal = SYM_FaceOffMap + rd32(map), mp = SYM_FaceOffMap + rd32(map + 4);
+        const uint8_t *map = rom_ptr(ART(FaceOffMap));
+        uint32_t pal = ART(FaceOffMap) + rd32(map), mp = ART(FaceOffMap) + rd32(map + 4);
         g.sflags6 |= HI(0);
-        dobitmap(pal, mp, SYM_FaceOffMap + 8, 0, 0, 0xC, 0xA, g.ExtraChars, 0);
+        dobitmap(pal, mp, ART(FaceOffMap) + 8, 0, 0, 0xC, 0xA, g.ExtraChars, 0);
         g.sflags6 &= (uint16_t)~HI(0);
     }
     if (g.OptLine == 0) {                                 /* the two lines on the ice */
@@ -1860,7 +1860,7 @@ void Endfaceoff(struct SortObj *puck)
     sfx(SYM_SFXpuckice + 3);
     g.sflags2 &= (uint16_t)~HI(sf2faceoff);
     g.holdreset = 0x3C;
-    DecompressGraphicsPlain(SYM_RefsMap + 8, g.ExtraChars);
+    DecompressGraphicsPlain(ART(RefsMap) + 8, g.ExtraChars);
     g.sflags2 &= (uint16_t)~HI(sf2drec);
     g.gmode &= (uint8_t)~(1 << gmclock);
     puck->pflags2 &= (uint8_t)~(1 << pf2fight);

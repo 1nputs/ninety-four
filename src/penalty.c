@@ -127,7 +127,7 @@ cont:
     forceblack();
     g.vcount = vc;
     SetHor();
-    DecompressGraphicsPlain(SYM_RefMap2 + 8, g.ExtraChars);   /* the horizontal ref tiles */
+    DecompressGraphicsPlain(ART(RefMap2) + 8, g.ExtraChars);   /* the horizontal ref tiles */
     const uint8_t *gs = NULL;
     int16_t d3 = NewTicker(&gs);
     NewTicker3(d3, gs);
@@ -452,7 +452,7 @@ void PushRef(uint16_t frame)
         prefmes(-1);
         return;
     }
-    const uint8_t *a0 = rom_ptr((g.sflags & HI(sfhor)) ? SYM_RefMap2 : SYM_RefsMap);
+    const uint8_t *a0 = rom_ptr((g.sflags & HI(sfhor)) ? ART(RefMap2) : ART(RefsMap));
     a0 += rd32(a0 + 4);
     a0 += 4;
     a0 += (int16_t)(uint16_t)(frame * 0x70);
@@ -717,7 +717,7 @@ void ClrHor(void)
 {
     g.sflags &= (uint16_t)~HI(sfhor);
     g.Oldrow = 0x3E8;
-    uint16_t d4 = DecompressGraphicsPlain(SYM_Rinktiles, g.rinkvrcset);
+    uint16_t d4 = DecompressGraphicsPlain(ART(Rinktiles), g.rinkvrcset);
     LoadHomeTeamGfx(d4);
     SprSort();
     if (g.sflags & HI(sfpz)) return;
@@ -736,8 +736,8 @@ void SetHor(void)
     SprSort();
     if (view_shift()) DoFill(0x800, g.VmMap2, 0x7FF);     /* (and nothing beside it) */
     printz(str_SetHor_1, sizeof str_SetHor_1);
-    uint32_t a1 = SYM_HorRinkMap + rd32(rom_ptr(SYM_HorRinkMap) + 4);
-    dobitmap(0, a1, SYM_HorRinkTiles, 0, 0, 0x20, 0x1C, g.rinkvrcset, 0);   /* a0 (the palette) is not set */
+    uint32_t a1 = ART(HorRinkMap) + rd32(rom_ptr(ART(HorRinkMap)) + 4);
+    dobitmap(0, a1, ART(HorRinkTiles), 0, 0, 0x20, 0x1C, g.rinkvrcset, 0);   /* a0 (the palette) is not set */
     USBoard();
     if (g.sflags & HI(sfpz)) return;
     DoFill(0x800, g.VmMap1, 0x7FF);
@@ -818,7 +818,7 @@ void EASNLogo(void)
 {
     if (g.sflags2 & HI(sf2pwrplay)) return;
     printz(str_EASNLogo_1, sizeof str_EASNLogo_1);
-    uint32_t a1 = SYM_EASNmap + rd32(rom_ptr(SYM_EASNmap) + 4);
+    uint32_t a1 = ART(EASNmap) + rd32(rom_ptr(ART(EASNmap)) + 4);
     const uint8_t *m = rom_ptr(a1);
     dobitmap(0, a1, SYM_NoTiles, 0, 0, rd16(m), rd16(m + 2), g.EASNcset, 0);
 }
@@ -883,7 +883,7 @@ void linebar(uint16_t line, uint8_t *tm)
     uint16_t d0 = (uint16_t)m68k_divu((uint32_t)(int32_t)(int16_t)e, 0x100);
     if (d0 > 0xF) d0 = 0xF;
     uint16_t d1 = (uint16_t)(0xF - d0);                   /* bar frame, 15 = empty */
-    uint32_t a1 = SYM_EnergyBarMap + rd32(rom_ptr(SYM_EnergyBarMap) + 4);
+    uint32_t a1 = ART(EnergyBarMap) + rd32(rom_ptr(ART(EnergyBarMap)) + 4);
     dobitmap(0, a1, SYM_NoTiles, 0, d1, rd16(rom_ptr(a1)), 1, g.energybarchars, 0);
     g.printa = saved;
 }
@@ -1271,7 +1271,7 @@ void StartHL2(uint8_t *gs, int16_t game)
         ClrHor();
         vdp_ctrl16(SYM_VDPR_WINX);
         vdp_ctrl16(SYM_VDPR_WINY);
-        DecompressGraphicsPlain(SYM_RefsMap + 8, g.ExtraChars);   /* the ref cam */
+        DecompressGraphicsPlain(ART(RefsMap) + 8, g.ExtraChars);   /* the ref cam */
         g.Vpos = 0;
         g.Hpos = 0;
         ResetBench();
@@ -1366,7 +1366,7 @@ void Intermission(void)
     }
     SetupTeamForIntermission();
     for (int i = 0; i < 0x10; i++) sortobj(i)->Xpos = 0;
-    DecompressGraphicsPlain(SYM_ZamFrameList + 8, g.ExtraChars);
+    DecompressGraphicsPlain(ART(ZamFrameList) + 8, g.ExtraChars);
     g.zamx = 0x140;
     uint16_t list = g.gsp;
     if (g.OptPlayMode != 0) list += 5;

@@ -68,23 +68,23 @@ void NameEntryScreen(void)
     cpu_set_sr(0x2500);
     orjoy();
     g.framercset = d4;
-    d4 = DecompressGraphicsWithCallback(SYM_FramerMap + 8, d4, rom_find(SYM_NameEntryScreen, SYM_NameLetterGrid, frame1, 8));
+    d4 = DecompressGraphicsWithCallback(ART(FramerMap) + 8, d4, rom_find(SYM_NameEntryScreen, SYM_NameLetterGrid, frame1, 8));
     g.nameframechars = d4;
-    d4 = DecompressGraphicsWithCallback(SYM_FramerMap + 8, d4, rom_find(SYM_NameEntryScreen, SYM_NameLetterGrid, frame2, 8));
+    d4 = DecompressGraphicsWithCallback(ART(FramerMap) + 8, d4, rom_find(SYM_NameEntryScreen, SYM_NameLetterGrid, frame2, 8));
     g.smallfontchars = d4;
     d4 = AddSmallFont(d4);
     PRINTZ(str_NameEntryScreen_1);
     eraser(0x28, 0x1C, 0x7FF);
     setupIceRinkPal();
     PRINTZ(str_NameEntryScreen_2);
-    uint32_t img = SYM_ScoutMap;
+    uint32_t img = ART(ScoutMap);
     d4 = dobitmap(img + rd32(rom_ptr(img)), img + rd32(rom_ptr(img + 4)), img + 8, 0, 0, 0x28, 0x1C, d4, 0xD);
     g.homepicchars = d4;
     d4 += 0x24;
     g.logobox1chars = d4;
-    d4 = DecompressGraphicsPlain(SYM_LogoBoxMap + 8, d4);
+    d4 = DecompressGraphicsPlain(ART(LogoBoxMap) + 8, d4);
     g.BigFontChars = d4;
-    DecompressGraphicsWithCallback(SYM_BigFontMap + 8, d4, rom_find(SYM_NameEntryScreen, SYM_NameLetterGrid, bigfont, 8));
+    DecompressGraphicsWithCallback(ART(BigFontMap) + 8, d4, rom_find(SYM_NameEntryScreen, SYM_NameLetterGrid, bigfont, 8));
     PRINTZ(str_NameEntryScreen_3);                        /* the team's city, centred on x $1F */
     uint16_t team = g.nameentryvis ? g.VisTeam : g.HomeTeam;
     uint32_t blk = rd32(rom_ptr(LG(TeamList) + (uint32_t)(int16_t)(uint16_t)(team << 2)));
@@ -495,10 +495,10 @@ void RecordHoldersScreen(void)
 {
     uint16_t c = SetupScreen(0, 0x1A);
     PRINTZ(str_RecordHoldersScreen_1);
-    uint32_t pic = SYM_CornerLogoMap;
+    uint32_t pic = ART(CornerLogoMap);
     c = dobitmap(pic + rd32(rom_ptr(pic)), pic + rd32(rom_ptr(pic + 4)), pic + 8, 0, 0, 6, 6, c, 8);
     PRINTZ(str_RecordHoldersScreen_2);
-    pic = SYM_ArenaGfxBank;
+    pic = ART(ArenaGfxBank);
     dobitmap(pic + rd32(rom_ptr(pic)), pic + rd32(rom_ptr(pic + 4)), pic + 8, 0, 0, 6, 6, c, 0);
     PRINTZ(str_RecordHoldersScreen_3);
     Framer(0x12, 7);

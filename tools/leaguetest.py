@@ -133,7 +133,7 @@ def png_poke(path, x, y, index):
 
 # the art the 32-team league draws its own: HOU a logo in plain RGB (a corner transparent, red,
 # white), KC a photo in colours (a ramp of greys: the shades by brightness), BOS its logo with one
-# pixel changed
+# pixel changed, the players' sprites with one pixel changed
 def own_art(dst):
     png_rgb(os.path.join(dst, 'art', 'logos', 'HOU.png'), 48, 48,
             lambda x, y: (0, 0, 0, 0) if x < 8 and y < 8 else (255, 0, 0, 255) if x < 24 else (255, 255, 255, 255))
@@ -141,6 +141,40 @@ def own_art(dst):
     with open(os.path.join(dst, 'pictures.csv'), 'a') as f:
         f.write('KC,%s,KCScout\n' % read(os.path.join(dst, 'players.csv'))[1:][[r[0] for r in read(os.path.join(dst, 'players.csv'))[1:]].index('KC')][2])
     png_poke(os.path.join(dst, 'art', 'logos', 'BOS.png'), 0, 0, 1)
+    png_poke(os.path.join(dst, 'art', 'game', 'Sprites.png'), 0, 0, 3)
+
+
+def rink_twice(d):
+    """the rink's picture changed at one place a tile it shows twice is (the cartridge's rink map, read
+    off the ROM): the first pixel of the tile's second place"""
+    rom = open(ROM, 'rb').read()
+    w16 = lambda a: struct.unpack('>H', rom[a:a + 2])[0]
+    w32 = lambda a: struct.unpack('>I', rom[a:a + 4])[0]
+    base = 0x5605A                                          # (Rinktilelist)
+    m = base + w32(base + 4)
+    w, h = w16(m), w16(m + 2)
+    seen = {}
+    for c in range(w * h):
+        word = w16(m + 4 + 2 * c)
+        k = word & 0x7FF
+        if k in seen and not word & 0x1800:                # (a second place, not flipped)
+            x, y = c % w * 8, c // w * 8
+            path = os.path.join(d, 'art', 'game', 'Rinktilelist.png')
+            png_poke(path, x, y, (word >> 13 & 3) * 16 + (5 if png_peek(path, x, y) % 16 != 5 else 6))
+            return
+        seen[k] = c
+
+
+def png_peek(path, x, y):
+    d = open(path, 'rb').read()
+    o, w = 8, 0
+    while o < len(d):
+        n = struct.unpack('>I', d[o:o + 4])[0]
+        if d[o + 4:o + 8] == b'IHDR':
+            w = struct.unpack('>I', d[o + 8:o + 12])[0]
+        if d[o + 4:o + 8] == b'IDAT':
+            return zlib.decompress(d[o + 8:o + 8 + n])[y * (w + 1) + 1 + x]
+        o += 12 + n
 
 
 # broken leagues: (name, the change to the cartridge's files, what the refusal must say)
@@ -180,6 +214,9 @@ BROKEN = [
     ('a banner\'s colour', lambda d: png_rgb(os.path.join(d, 'art', 'banners', 'CGY.png'), 88, 32, lambda x, y: (1, 200, 3, 255)),
      'art/banners/CGY.png: the colour #01C803 at 0, 0 is none of its palette\'s'),
     ('not a PNG', lambda d: open(os.path.join(d, 'art', 'ice', 'CHI.png'), 'wb').write(b'GIF89a not a PNG'), 'art/ice/CHI.png: not a PNG'),
+    ('a shared picture\'s size', lambda d: png_rgb(os.path.join(d, 'art', 'game', 'TitleScreenImg.png'), 10, 10, lambda x, y: (0, 0, 0, 255)),
+     'art/game/TitleScreenImg.png: 10 x 10 pixels; it must be 256 x 224'),
+    ('a tile two ways', rink_twice, 'Rinktilelist: the picture differs at'),
     ('a photo missing', edit('pictures.csv', lambda t: cell(t, 1, 'picture', 'CardNoSuchPlayer')),
      'pictures.csv, line 2: picture: "CardNoSuchPlayer" is neither a photo of the folder\'s'),
 ]
@@ -222,7 +259,7 @@ def play_hacks(hacks):
     end. True when one does not"""
     bad = False
     for path, d in hacks:
-        sram = os.path.join(HACKS, 'game.srm')
+        sram = os.path.join(ROOT, 'out', 'leaguetest-game.srm')
         if os.path.exists(sram):
             os.remove(sram)
         r = subprocess.run([NHL94, '--rom', ROM, '--headless', '--frames', '16000', '--league', d, '--sram', sram,

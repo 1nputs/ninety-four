@@ -104,7 +104,7 @@ void ShowThreeStars(void)
     PRINTZ(str_ShowThreeStars_1);
     Framer(0x1C, 9);
     PRINTZ(str_ShowThreeStars_2);
-    uint32_t map = SYM_Rinktilelist + rd32(rom_ptr(SYM_Rinktilelist + 4));
+    uint32_t map = ART(Rinktilelist) + rd32(rom_ptr(ART(Rinktilelist) + 4));
     dobitmap(0, map, SYM_NoTiles, 0xD, 0x5B, 6, 4, g.rinkvrcset, 0);
     CalcStarScores(6);                                   /* d2 still 6 from dobitmap */
     g.printy = 0x12;

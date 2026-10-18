@@ -66,9 +66,9 @@ void ReloadRinkGraphics(void)
     g.disflags = saved;
     g.disflags |= HI(df32c);
     view_rink_mode();                                     /* (the wide view's 40 columns) */
-    uint16_t c = DecompressGraphicsPlain(g.sflags4 & HI(4) ? SYM_RevRinkTiles : SYM_Rinktiles, g.rinkvrcset);
+    uint16_t c = DecompressGraphicsPlain(g.sflags4 & HI(4) ? ART(RevRinkTiles) : ART(Rinktiles), g.rinkvrcset);
     LoadHomeTeamGfx(c);
-    DecompressGraphicsWithCallback(SYM_SmallFontMap + 8, g.smallfontchars,
+    DecompressGraphicsWithCallback(ART(SmallFontMap) + 8, g.smallfontchars,
                                    rom_find(SYM_ReloadRinkGraphics, SYM_ReloadRinkGraphics + 0x80, table, 8));
     AddFramer(g.framercset);
     setupEASNmap();
@@ -98,18 +98,18 @@ uint16_t SetupScreen(uint16_t row, uint16_t rows)
     vdp_data32(0);
     g.disflags = saved;
     g.disflags &= (uint16_t)~HI(df32c);
-    DecompressGraphicsWithCallback(SYM_FramerMap + 8, g.framercset, rom_find(SYM_SetupScreen, SYM_SetupScreen + 0x100, framer, 8));
+    DecompressGraphicsWithCallback(ART(FramerMap) + 8, g.framercset, rom_find(SYM_SetupScreen, SYM_SetupScreen + 0x100, framer, 8));
     AddSmallFont(g.smallfontchars);
     printz(str_SetupScreen_1, sizeof str_SetupScreen_1);
-    uint32_t map = SYM_ScoutMap + rd32(rom_ptr(SYM_ScoutMap + 4));
+    uint32_t map = ART(ScoutMap) + rd32(rom_ptr(ART(ScoutMap) + 4));
     const uint8_t *m = rom_ptr(map);
     uint16_t c = dobitmap(0, map, SYM_NoTiles, 0, 0, rd16(m), rd16(m + 2), 1, 0);
     printz(str_SetupScreen_2, sizeof str_SetupScreen_2);
     g.printy += row;
-    uint32_t pal = SYM_ScoutMap + rd32(rom_ptr(SYM_ScoutMap));
-    c = dobitmap(pal, map, SYM_ScoutMap + 8, 0, row, 0x28, (uint16_t)(rows - row), c, 0xD);
+    uint32_t pal = ART(ScoutMap) + rd32(rom_ptr(ART(ScoutMap)));
+    c = dobitmap(pal, map, ART(ScoutMap) + 8, 0, row, 0x28, (uint16_t)(rows - row), c, 0xD);
     g.smallfont2chars = c;
-    c = DecompressGraphicsWithCallback(SYM_SmallFontMap + 8, c, rom_find(SYM_SetupScreen, SYM_SetupScreen + 0x100, font2, 8));
+    c = DecompressGraphicsWithCallback(ART(SmallFontMap) + 8, c, rom_find(SYM_SetupScreen, SYM_SetupScreen + 0x100, font2, 8));
     printz(str_SetupScreen_3, sizeof str_SetupScreen_3);
     eraser(0x40, 0x20, 0x7FF);
     g.palcount = 0x18;
@@ -431,8 +431,8 @@ void ShowScores(void)
     printz(str_ShowScores_1, sizeof str_ShowScores_1);
     Framer(0x1E, 6);
     printbigz(str_ShowScores_2, sizeof str_ShowScores_2);
-    uint32_t map = SYM_ScoresMap + rd32(rom_ptr(SYM_ScoresMap + 4));
-    dobitmap(0, map, SYM_ScoresMap + 8, 0, 0, rd16(rom_ptr(map)), rd16(rom_ptr(map) + 2), c, 0);   /* (d4 as SetupScreen left it) */
+    uint32_t map = ART(ScoresMap) + rd32(rom_ptr(ART(ScoresMap) + 4));
+    dobitmap(0, map, ART(ScoresMap) + 8, 0, 0, rd16(rom_ptr(map)), rd16(rom_ptr(map) + 2), c, 0);   /* (d4 as SetupScreen left it) */
     printsmallz(str_ShowScores_3, sizeof str_ShowScores_3);
     g.VertLineScrolling = 0;
     UpdateVertScrollReg();
@@ -748,7 +748,7 @@ void DrawTeamScreen(uint8_t *tm)
 {
     ClearLineEditorTop();
     printz(str_DrawTeamScreen_1, sizeof str_DrawTeamScreen_1);
-    uint32_t map = SYM_ScoutMap + rd32(rom_ptr(SYM_ScoutMap + 4));
+    uint32_t map = ART(ScoutMap) + rd32(rom_ptr(ART(ScoutMap) + 4));
     dobitmap(0, map, SYM_NoTiles, 0, 0, rd16(rom_ptr(map)), rd16(rom_ptr(map) + 2), 1, 0);
     printz(str_DrawTeamScreen_2, sizeof str_DrawTeamScreen_2);
     Framer(0x1A, 6);

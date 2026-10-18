@@ -271,7 +271,7 @@ void ShootersBackground(uint8_t *tm)
 {
     ClearShooterScreen();
     printz(str_ShootersBackground_1, sizeof str_ShootersBackground_1);
-    uint32_t map = SYM_ScoutMap + rd32(rom_ptr(SYM_ScoutMap + 4));
+    uint32_t map = ART(ScoutMap) + rd32(rom_ptr(ART(ScoutMap) + 4));
     const uint8_t *m = rom_ptr(map);
     dobitmap(0, map, SYM_NoTiles, 0, 0, rd16(m), rd16(m + 2), 1, 0);
     printz(str_ShootersBackground_2, sizeof str_ShootersBackground_2);

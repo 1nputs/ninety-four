@@ -87,21 +87,21 @@ void SprSort(void)
 uint16_t setupEASNmap(void)
 {
     static const uint8_t table[8] = { 0x71, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
-    return DecompressGraphicsWithCallback(SYM_EASNmap + 8, g.EASNcset, inline_table(SYM_setupEASNmap, SYM_setupEASNmap + 0x20, table));
+    return DecompressGraphicsWithCallback(ART(EASNmap) + 8, g.EASNcset, inline_table(SYM_setupEASNmap, SYM_setupEASNmap + 0x20, table));
 }
 
 /* setup94.asm:setupIceRinkPal. The ice rink palettes 0 and 1 (Rinktilelist) to palfadenew. */
 void setupIceRinkPal(void)
 {
-    uint32_t pal = SYM_Rinktilelist + rd32(rom_ptr(SYM_Rinktilelist));
+    uint32_t pal = ART(Rinktilelist) + rd32(rom_ptr(ART(Rinktilelist)));
     for (int i = 0; i < 0x40; i++) RAM_W(RAM_OFF_palfadenew)[i] = rom_ptr(pal)[i];
 }
 
 /* setup94.asm:ReloadEnergyBarTiles. -> d4 = the char after them */
-uint16_t ReloadEnergyBarTiles(void) { return DecompressGraphicsPlain(SYM_EnergyBarMap + 8, g.energybarchars); }
+uint16_t ReloadEnergyBarTiles(void) { return DecompressGraphicsPlain(ART(EnergyBarMap) + 8, g.energybarchars); }
 
 /* setup94.asm:ReloadCrowdTiles. -> d4 = the char after them */
-uint16_t ReloadCrowdTiles(void) { return DecompressGraphicsPlain(SYM_CrowdFrameList + 8, g.animchars); }
+uint16_t ReloadCrowdTiles(void) { return DecompressGraphicsPlain(ART(CrowdFrameList) + 8, g.animchars); }
 
 /* setup94.asm:setplayercolors. Each team's colours (team data + its palette offset) to
  * palfadenew palettes 2 (home) and 3 (visitors). */
@@ -135,7 +135,7 @@ void IntermissionStart(void)
 }
 
 /* setup94.asm:ReloadRefHorTiles. The horizontal referee tiles at ExtraChars -> d4. */
-uint16_t ReloadRefHorTiles(void) { return DecompressGraphicsPlain(SYM_RefMap2 + 8, g.ExtraChars); }
+uint16_t ReloadRefHorTiles(void) { return DecompressGraphicsPlain(ART(RefMap2) + 8, g.ExtraChars); }
 
 /* setup94.asm:defaultsprites. d4 = first char: the 4 screen objects (sso, 0x14 bytes) and the 7
  * objects tied to the rink scrolling (pads, 0x1C bytes) from their tables, each given its
@@ -293,14 +293,14 @@ void setupice(void)
     ST_W(g.zamx);
     DoFill(0x800, g.VmMap1, 0x7FF);
     g.rinkvrcset = 0;
-    uint16_t c = DecompressGraphicsPlain(g.sflags4 & HI(4) ? SYM_RevRinkTiles : SYM_Rinktiles, 0);
+    uint16_t c = DecompressGraphicsPlain(g.sflags4 & HI(4) ? ART(RevRinkTiles) : ART(Rinktiles), 0);
     c = LoadHomeTeamGfx(c);
     g.EASNcset = c;
     c = setupEASNmap();
     g.energybarchars = c;
-    c = DecompressGraphicsPlain(SYM_EnergyBarMap + 8, c);
+    c = DecompressGraphicsPlain(ART(EnergyBarMap) + 8, c);
     g.animchars = c;
-    c = DecompressGraphicsPlain(SYM_CrowdFrameList + 8, c);
+    c = DecompressGraphicsPlain(ART(CrowdFrameList) + 8, c);
     g.arenaanimchars = c;
     c += 0x32;
     g.spritechars = c;
@@ -308,9 +308,9 @@ void setupice(void)
     setupIceRinkPal();
     c = AddFramer(c);
     g.smallfontchars = c;
-    c = DecompressGraphicsWithCallback(SYM_SmallFontMap + 8, c, inline_table(SYM_setupice, SYM_setupice + 0x200, small));
+    c = DecompressGraphicsWithCallback(ART(SmallFontMap) + 8, c, inline_table(SYM_setupice, SYM_setupice + 0x200, small));
     g.BigFontChars = c;
-    c = DecompressGraphicsWithCallback(SYM_BigFontMap + 8, c, inline_table(SYM_setupice + 1, SYM_setupice + 0x200, big));
+    c = DecompressGraphicsWithCallback(ART(BigFontMap) + 8, c, inline_table(SYM_setupice + 1, SYM_setupice + 0x200, big));
     c = setupTeamBlocksMap(c);
     if (view_wide()) DoFill(0x80, g.VmMap1, 0x7FF);       /* (its unpacking ran over plane A's first two rows: the wide view shows their other half) */
     g.ExtraChars = c;
@@ -388,11 +388,11 @@ void clearTeamStats(void)
 }
 
 /* setup94.asm:ReloadRefTiles. The referee tiles (RefsMap) at ExtraChars -> d4. */
-uint16_t ReloadRefTiles(void) { return DecompressGraphicsPlain(SYM_RefsMap + 8, g.ExtraChars); }
+uint16_t ReloadRefTiles(void) { return DecompressGraphicsPlain(ART(RefsMap) + 8, g.ExtraChars); }
 /* setup94.asm:ReloadFaceOffTiles. The faceoff sprite tiles at faceoffvrcset -> d4. */
-uint16_t ReloadFaceOffTiles(void) { return DecompressGraphicsPlain(SYM_FaceOffSprites + 8, g.faceoffvrcset); }
+uint16_t ReloadFaceOffTiles(void) { return DecompressGraphicsPlain(ART(FaceOffSprites) + 8, g.faceoffvrcset); }
 /* setup94.asm:ReloadFaceOffMap. The faceoff map tiles at ExtraChars -> d4. */
-uint16_t ReloadFaceOffMap(void) { return DecompressGraphicsPlain(SYM_FaceOffMap + 8, g.ExtraChars); }
+uint16_t ReloadFaceOffMap(void) { return DecompressGraphicsPlain(ART(FaceOffMap) + 8, g.ExtraChars); }
 
 /* setup94.asm:setupice_highlight. Rebuild the rink objects for a highlight without reloading
  * the tiles (the sprite chars setupice kept in spritechars), then the game vblank and a fade
@@ -505,11 +505,11 @@ void PlayoffScreen(void)
     eraser(0x28, 2, 0x7FF);
     uint16_t c = AddSmallFont(AddTeamBlock());
     g.ExtraChars = c;
-    c = DecompressGraphicsPlain(SYM_Arrowsmap + 8, c);
+    c = DecompressGraphicsPlain(ART(Arrowsmap) + 8, c);
     printz(str_PlayoffScreen_3, sizeof str_PlayoffScreen_3);
-    uint32_t img = SYM_ScoutMap, map = img + rd32(rom_ptr(img + 4));
+    uint32_t img = ART(ScoutMap), map = img + rd32(rom_ptr(img + 4));
     c = dobitmap(img + rd32(rom_ptr(img)), map, img + 8, 0, 0, rd16(rom_ptr(map)), rd16(rom_ptr(map) + 2), c, 3);
-    const uint8_t *sp = rom_ptr(SYM_PlayoffSprite + rd32(rom_ptr(SYM_PlayoffSprite)));   /* its palette */
+    const uint8_t *sp = rom_ptr(ART(PlayoffSprite) + rd32(rom_ptr(ART(PlayoffSprite))));   /* its palette */
     uint8_t *pal = RAM_W(RAM_OFF_palfadenew + 0x40);
     for (int i = 0; i < 8; i++, pal += 4, sp += 4) {     /* palette 0 to 3, the sprite's to 0, 1 to 2 */
         memcpy(pal + 0x20, pal - 0x40, 4);
@@ -517,7 +517,7 @@ void PlayoffScreen(void)
         memcpy(pal, pal - 0x20, 4);
     }
     g.energybarchars = c;
-    DecompressGraphicsPlain(SYM_PlayoffSprite + 8, c);
+    DecompressGraphicsPlain(ART(PlayoffSprite) + 8, c);
     g.clampcounter = 0x104;
     g.playoffspritey = 0xA0;
     vdp_ctrl16(SYM_VDPR_WINY + 2);
@@ -624,7 +624,7 @@ void PrintSeriesScore(const uint8_t *gs)
  * printy. */
 void DrawTreeArrow(uint16_t col)
 {
-    uint32_t img = SYM_Arrowsmap;
+    uint32_t img = ART(Arrowsmap);
     dobitmap(img + rd32(rom_ptr(img)), img + rd32(rom_ptr(img + 4)), SYM_NoTiles, col, 0, 2, 0x17, g.ExtraChars, 0);
 }
 

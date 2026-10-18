@@ -11,6 +11,17 @@ enum { LG_TeamList, LG_TeamPalettes, LG_TeamLogoBitmaps, LG_TeamGfxList, LG_Team
        LG_TeamLogoPalettes, LG_FeaturedPictures, LG_playoffseats, LG_PlayerRecordOffsets, LG_Teamblocksmap,
        LG_BannerSlotMap, LG_TABLES };
 #define LEAGUE_MAX 32                                   /* (a team is a byte in the playoff tree and 5 bits elsewhere) */
+/* the game's art every team shares (titles, setup screens, the rink, the sprites, the fonts,
+ * the stock photos ...), read through asset[] (ART()): the cartridge's own, or a league's (art/game) */
+enum { ART_GameSetUpMap, ART_GameSetUpMap2, ART_TitleScreenImg, ART_NHLShieldImg, ART_PAlogoImg,
+       ART_TitleImg, ART_ScoutMap, ART_FramerMap, ART_FaceOffMap, ART_Rinktilelist, ART_Rinktiles,
+       ART_RefsMap, ART_RefMap2, ART_Sprites, ART_Spritetiles, ART_CrowdFrameList, ART_FaceOffSprites,
+       ART_ZamFrameList, ART_BigFontMap, ART_SmallFontMap, ART_EnergyBarMap, ART_EASNmap, ART_Arrowsmap,
+       ART_RonBarrMap, ART_ScoresMap, ART_EASportsMap, ART_RevRinkTilelist, ART_RevRinkTiles, ART_ReplayMap,
+       ART_HorRinkMap, ART_HorRinkTiles, ART_PrintFont2Map, ART_SetupMenuMap, ART_SetupFramerMap,
+       ART_LogoBoxMap, ART_PicturePalette, ART_NoPicSkater1, ART_NoPicSkater2, ART_NoPicGoalie1,
+       ART_NoPicGoalie2, ART_PlayerCardsScreenPic, ART_CornerLogoMap, ART_ArenaGfxBank, ART_PlayoffSprite,
+       ART_HiScoreImg, ART_HotIconMap, ART_ColdIconMap, ART_TeamBitmaps, ART_ASSETS };
 
 struct league {
     uint32_t table[LG_TABLES];  /* each table's ROM address */
@@ -24,9 +35,12 @@ struct league {
      * tiles), drawn into the first 22 chars of its set (BannerSlotMap) */
     uint8_t block[LEAGUE_MAX];
     uint32_t block_tiles[LEAGUE_MAX], banner_tiles[LEAGUE_MAX];
+    uint32_t asset[ART_ASSETS]; /* each shared asset's ROM address */
 };
 extern struct league league;
+extern const struct league league_cartridge;
 #define LG(name) (league.table[LG_##name])
+#define ART(name) (league.asset[ART_##name])
 
 void league_retail(void);       /* the cartridge's */
 static inline uint16_t league_art(uint16_t team) { return team < LEAGUE_MAX ? league.art[team] : team; }

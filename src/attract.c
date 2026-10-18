@@ -27,7 +27,7 @@ void EASportsScreen(void)
     CopyPaletteToCRAM();
     setVram_0();
     printz(str_EASportsScreen_1, sizeof str_EASportsScreen_1);
-    uint32_t img = SYM_EASportsMap, map = img + rd32(rom_ptr(img + 4));
+    uint32_t img = ART(EASportsMap), map = img + rd32(rom_ptr(img + 4));
     dobitmap(img + rd32(rom_ptr(img)), map, img + 8, 0, 0, rd16(rom_ptr(map)), rd16(rom_ptr(map) + 2), 0, 0xF);
     g.palfadenew[0] = 0xEEE;
     g.palfadenew[7] = 0;
@@ -80,7 +80,7 @@ void DrawMatchupBitmaps(void)
  * visitors' remapped, as LoadSetupTiles loads theirs): one banner of a set shows at a time. */
 uint16_t DrawTeamBitmap(uint16_t team, uint16_t chars)
 {
-    uint32_t img = SYM_TeamBitmaps, map = img + rd32(rom_ptr(img + 4));
+    uint32_t img = ART(TeamBitmaps), map = img + rd32(rom_ptr(img + 4));
     if (team < LEAGUE_MAX && league.banner_tiles[team]) {
         if (chars == 2) DoDMApro(league.banner_tiles[team], 0x16 * 16, (uint16_t)(chars << 5));
         else remap(league.banner_tiles[team], SetupTilesRemap(), 0x16 * 16, (uint16_t)(chars << 5));

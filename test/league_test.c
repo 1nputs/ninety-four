@@ -145,7 +145,19 @@ static void other(const char *dir)
     uint32_t list = r32(m, LG(FeaturedPictures) + 4u * (uint32_t)kc), pic = 0;
     for (; r32(m, list); list += 6) pic = r32(m, list);
     CHECK(pic >= ROM_SIZE && art_photo(&bs, pic, px) == 0 && px[0] == 6 && px[47] == 5, "KC's photo its own, its shades by brightness");
-    printf("  %s: art of its own: a logo drawn, a logo changed, a photo in colours\n", dir);
+    /* the players' sprites with a pixel of their first tile changed (tools/leaguetest.py): their own,
+     * the rest of them the cartridge's, their tiles where the game looks (Spritetiles) */
+    int sp = -1;
+    for (int i = 0; i < art_shared(); i++) if (art_shared_asset(i) == ART_Sprites) sp = i;
+    uint8_t *mine = NULL, *theirs = NULL;
+    size_t mn = art_shared_copy(&bs, sp, ART(Sprites), &mine), cn = art_shared_copy(&cs, sp, SYM_Sprites, &theirs);
+    int changed = 0;
+    for (size_t k = 0; mn == cn && k < mn; k++) changed += mine[k] != theirs[k];
+    CHECK(ART(Sprites) >= ROM_SIZE && ART(Spritetiles) == ART(Sprites) + 10 && mn == cn && changed == 1 && mine[10] != theirs[10],
+          "the sprites' first pixel changed (%d bytes changed)", changed);
+    free(mine);
+    free(theirs);
+    printf("  %s: art of its own: a logo drawn, a logo changed, a photo in colours, a sprite's pixel\n", dir);
     league_next(NULL);
     league_power_on();
 }
@@ -208,7 +220,7 @@ static void hack(const char *path, const char *dir)
     int logos = 0, ices = 0, banners = 0, photos = 0, pics = 0;
     static uint8_t a[64 * 64 * 4], b[64 * 64 * 4];
     for (int t = 0; t < league.teams && t < s.teams; t++) {
-        uint16_t pa[32], pb[32];
+        uint16_t pa[ART_BANNER_COLOURS], pb[ART_BANNER_COLOURS];
         int same = art_logo(&bs, t, a, pa) == 0 && art_logo(&s, t, b, pb) == 0 && !memcmp(a, b, ART_LOGO * ART_LOGO) && !memcmp(pa, pb, 32);
         CHECK(same, "team %d's logo", t);
         logos += same;
@@ -221,7 +233,7 @@ static void hack(const char *path, const char *dir)
         same = art_banners(&s, t, b, pb) == 0 && art_banners(&bs, league_block((uint16_t)t), a, pa) == 0 && !memcmp(a, b, 16 * ART_BANNER_W);
         for (int i = 0; same && i < 22 * 64; i++) {
             int x = i % 88, y = i / 88, tile = (y / 8) * 11 + x / 8, v = rom_image[league.banner_tiles[t] + (uint32_t)(tile * 32 + (y % 8) * 4 + (x % 8) / 2)];
-            same = league.banner_tiles[t] && (x % 2 ? v & 15 : v >> 4) == b[(16 + y) * ART_BANNER_W + x] - 16;
+            same = league.banner_tiles[t] && (x % 2 ? v & 15 : v >> 4) == b[(16 + y) * ART_BANNER_W + x] - ART_BANNER_SETUP;
         }
         CHECK(same, "team %d's banners", t);
         banners += same;
@@ -235,6 +247,26 @@ static void hack(const char *path, const char *dir)
         CHECK(!r32(m, la) && !rs32(&s, lb), "team %d's photos: as many as the hack's", t);
     }
     printf("  %s: the hack's art: %d logos, %d centre ices, %d teams' banners, %d of %d photos\n", dir, logos, ices, banners, photos, pics);
+    /* its shared art: each of the hack's own (not the cartridge's) as the hack's, gathered; the rest the cartridge's */
+    struct romsrc cs;
+    romsrc_cartridge(&cs, rom_cart);
+    int own = 0, kept = 0;
+    for (int i = 0; i < art_shared(); i++) {
+        int k = art_shared_asset(i), off, tk = art_shared_tiles(i, &off);
+        uint8_t *hb = NULL, *cb = NULL, *mb = NULL;
+        size_t hn = art_shared_copy(&s, i, s.asset[k], &hb), cn = art_shared_copy(&cs, i, cs.asset[k], &cb);
+        int mine = hn && (hn != cn || memcmp(hb, cb, hn)), same;
+        if (mine) {
+            size_t mn = art_shared_copy(&bs, i, league.asset[k], &mb);
+            same = league.asset[k] >= ROM_SIZE && mn == hn && !memcmp(mb, hb, hn);
+        } else same = league.asset[k] == cs.asset[k];
+        if (tk >= 0) same &= league.asset[tk] == league.asset[k] + (uint32_t)off;
+        CHECK(same, "the shared %s (%s)", art_shared_name(i), mine ? "the hack's" : "the cartridge's");
+        own += mine && same;
+        kept += !mine && same;
+        free(hb); free(cb); free(mb);
+    }
+    printf("  %s: its shared art: %d of its own as the hack's, %d the cartridge's\n", dir, own, kept);
     league_next(NULL);
     league_power_on();
 }

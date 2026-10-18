@@ -53,14 +53,14 @@ void ScoutingReport(void)
     g.vispicchars = c;
     c += 0x24;
     g.BigFontChars = c;
-    c = DecompressGraphicsWithCallback(SYM_BigFontMap + 8, c, rom_find(SYM_ScoutingReport, SYM_PageMatchup, bigfont, 8));
+    c = DecompressGraphicsWithCallback(ART(BigFontMap) + 8, c, rom_find(SYM_ScoutingReport, SYM_PageMatchup, bigfont, 8));
     c = AddSmallFont(c);
     g.smallfont2chars = c;
-    c = DecompressGraphicsWithCallback(SYM_SmallFontMap + 8, c, rom_find(SYM_ScoutingReport, SYM_PageMatchup, smallfont, 8));
+    c = DecompressGraphicsWithCallback(ART(SmallFontMap) + 8, c, rom_find(SYM_ScoutingReport, SYM_PageMatchup, smallfont, 8));
     g.framercset = c;
-    c = DecompressGraphicsWithCallback(SYM_FramerMap + 8, c, rom_find(SYM_ScoutingReport, SYM_PageMatchup, framer, 8));
+    c = DecompressGraphicsWithCallback(ART(FramerMap) + 8, c, rom_find(SYM_ScoutingReport, SYM_PageMatchup, framer, 8));
     PRINTZ(str_ScoutingReport_1);
-    uint32_t img = SYM_ScoutMap;
+    uint32_t img = ART(ScoutMap);
     c = dobitmap(img + rd32(rom_ptr(img)), img + rd32(rom_ptr(img + 4)), img + 8, 0, 0, 0x28, 0x1C, c, 3);
     printbigz(str_ScoutingReport_2, sizeof str_ScoutingReport_2);
     g.printfontset = 0;
@@ -72,13 +72,13 @@ void ScoutingReport(void)
     PRINTZ(str_ScoutingReport_6);
     Framer(8, 8);                                         /* the home picture */
     PRINTZ(str_ScoutingReport_7);
-    img = SYM_RonBarrMap;
+    img = ART(RonBarrMap);
     uint32_t map = img + rd32(rom_ptr(img + 4));
     c = dobitmap(img + rd32(rom_ptr(img)), map, img + 8, 0, 0, rd16(rom_ptr(map)), rd16(rom_ptr(map) + 2), c, 0xC);
     g.hoticonchars = c;
-    c = DecompressGraphicsPlain(SYM_HotIconMap + 8, c);
+    c = DecompressGraphicsPlain(ART(HotIconMap) + 8, c);
     g.coldiconchars = c;
-    DecompressGraphicsPlain(SYM_ColdIconMap + 8, c);
+    DecompressGraphicsPlain(ART(ColdIconMap) + 8, c);
     g.matchup = 0;
     g.scoutunused = 0;
     g.matchuptimer = 0x10D;
@@ -210,8 +210,8 @@ void DrawMatchupPictures(void)
  * PicturePalette palette (and its map when the picture has none). */
 void DrawMatchupPicture(uint32_t pic, uint16_t chars, uint16_t palbits)
 {
-    uint32_t pal = SYM_PicturePalette + rd32(rom_ptr(SYM_PicturePalette)), map;
-    if (rd32(rom_ptr(pic + 4)) == 0) map = SYM_PicturePalette + rd32(rom_ptr(SYM_PicturePalette + 4));
+    uint32_t pal = ART(PicturePalette) + rd32(rom_ptr(ART(PicturePalette))), map;
+    if (rd32(rom_ptr(pic + 4)) == 0) map = ART(PicturePalette) + rd32(rom_ptr(ART(PicturePalette) + 4));
     else map = pic + rd32(rom_ptr(pic + 4));
     UnpackPicture(pic + 8);
     DrawMatchupBitmap(pal, map, RAM_BASE + RAM_OFF_picturebuf, chars, palbits);

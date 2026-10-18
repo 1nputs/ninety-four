@@ -802,7 +802,7 @@ void Framer(uint16_t w, uint16_t h)
     uint16_t saved = g.disflags;
     g.disflags |= HI(dfng);
     uint16_t base = (uint16_t)(g.printa + g.framercset);
-    const uint8_t *map = rom_ptr(SYM_FramerMap);
+    const uint8_t *map = rom_ptr(ART(FramerMap));
     map += rd32(map + 4) + 4;
     uint16_t col = 0;
     frame_row(map, &col, base, w);
@@ -819,7 +819,7 @@ void Framer(uint16_t w, uint16_t h)
 /* the font map a printed character comes from: setup font when sflags6 bit 3 */
 static uint16_t font_char(uint8_t c)
 {
-    const uint8_t *map = rom_ptr(g.sflags6 & HI(3) ? SYM_PrintFont2Map : SYM_SmallFontMap);
+    const uint8_t *map = rom_ptr(g.sflags6 & HI(3) ? ART(PrintFont2Map) : ART(SmallFontMap));
     map += rd32(map + 4);
     return rd16(map + 4 + 2 * c);
 }
@@ -1080,7 +1080,7 @@ void PrintBigChar(uint8_t c, struct BigPen *pen)
     int cols = 2;
     if (col < 0) { col = (int8_t)-col; cols = 1; }
     uint16_t off = (uint16_t)(col << 1);
-    const uint8_t *map = rom_ptr(SYM_BigFontMap);
+    const uint8_t *map = rom_ptr(ART(BigFontMap));
     map += rd32(map + 4);
     while (cols--) {
         PutBigTile(rd16(map + 4 + off), pen);
@@ -1106,14 +1106,14 @@ void PutBigTile(uint16_t tile, const struct BigPen *pen)
 uint16_t AddSmallFont(uint16_t start)
 {
     g.smallfontchars = start;
-    return DecompressGraphicsPlain(SYM_SmallFontMap + 8, start);
+    return DecompressGraphicsPlain(ART(SmallFontMap) + 8, start);
 }
 
 /* video94.asm:AddFramer. d4 = first char: load the framer tiles there -> d4 = next. */
 uint16_t AddFramer(uint16_t start)
 {
     g.framercset = start;
-    return DecompressGraphicsPlain(SYM_FramerMap + 8, start);
+    return DecompressGraphicsPlain(ART(FramerMap) + 8, start);
 }
 
 /* video94.asm:AddTeamBlock. Load the team block tiles at char 2 -> d4 = next char (the league's:

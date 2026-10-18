@@ -190,7 +190,7 @@ void updatescroll(struct Vid *v)
     d1 = (int16_t)(d1 >> 3);
     g.Oldrow = (uint16_t)d1;
     if (d1 == d4) return;                                 /* the same row as last frame */
-    uint32_t map = (g.sflags4 & HI(4)) ? SYM_RevRinkTilelist : SYM_Rinktilelist;
+    uint32_t map = (g.sflags4 & HI(4)) ? ART(RevRinkTilelist) : ART(Rinktilelist);
     map += rd32(rom_ptr(map) + 4);                        /* the map header: chars per row, then the rows */
     uint16_t perrow = rd16(rom_ptr(map));
     int up = d1 < d4;
@@ -235,7 +235,7 @@ void checkfo(struct Vid *v)
     for (int i = 0; i < 3; i++) {                         /* a3 only advances past a drawn entry */
         int16_t d4 = (int16_t)rd16(a3);
         if (d4 <= 0) continue;
-        const uint8_t *a2 = rom_ptr(SYM_FaceOffSprites + rd32(rom_ptr(SYM_FaceOffSprites) + 4));
+        const uint8_t *a2 = rom_ptr(ART(FaceOffSprites) + rd32(rom_ptr(ART(FaceOffSprites)) + 4));
         unsigned idx = (unsigned)d4 * 2;
         int16_t d5 = (int16_t)(((rd16(a2 + idx + 2) - rd16(a2 + idx)) >> 3) - 1);
         a2 += rd16(a2 + idx);
@@ -266,18 +266,18 @@ void showzam(struct Vid *v)
     d0 = (int16_t)((uint16_t)d0 >> 2);
     int16_t d1 = 0x12A;
     uint16_t d3 = g.ExtraChars;
-    SetSframe(SYM_ZamFrameList, d0, d1, 1, d3, v);
+    SetSframe(ART(ZamFrameList), d0, d1, 1, d3, v);
     uint16_t d2 = (uint16_t)(m68k_divu((uint32_t)(uint16_t)(d0 >> 1), 3) >> 16);   /* (x/2) mod 3 */
     d2 += 2;
-    SetSframe(SYM_ZamFrameList, d0, d1, d2, d3, v);
+    SetSframe(ART(ZamFrameList), d0, d1, d2, d3, v);
     d2 = 5;
-    if (!(g.HmGoals[0] > g.AwGoals[0])) { SetSframe(SYM_ZamFrameList, d0, d1, d2, d3, v); return; }
+    if (!(g.HmGoals[0] > g.AwGoals[0])) { SetSframe(ART(ZamFrameList), d0, d1, d2, d3, v); return; }
     int16_t t = (int16_t)(d0 - 0xDA);
     if (t < 0) t = 0;
     t = (int16_t)((uint16_t)t >> 2);
     t = (int16_t)(t + t);
     if (!(t < 0x1A)) t = 0x18;
-    SetSframe(SYM_ZamFrameList, d0, d1, zam_ftab[t / 2], d3, v);
+    SetSframe(ART(ZamFrameList), d0, d1, zam_ftab[t / 2], d3, v);
 }
 
 /* display94.asm:SetSframe. Draw one sprite frame: a0 = frame list, d0 / d1 = x / y, d2 = the
@@ -323,7 +323,7 @@ static void crowd_frame(int16_t d0, const uint8_t *a1, int16_t d4, int16_t d5, s
 void showcrowd(struct Vid *v)
 {
     if (g.sflags4 & HI(4)) return;
-    const uint8_t *a1 = rom_ptr(SYM_CrowdFrameList + rd32(rom_ptr(SYM_CrowdFrameList) + 4));
+    const uint8_t *a1 = rom_ptr(ART(CrowdFrameList) + rd32(rom_ptr(ART(CrowdFrameList)) + 4));
     int16_t d4 = (int16_t)g.Hpos, d5 = (int16_t)g.Vpos;
     if (g.sflags & HI(sfhor)) { d4 = -0x40; d5 = 0x100; }
     uint8_t pb = (uint8_t)(g.PBnum >> 8);
@@ -395,7 +395,7 @@ void showclock(struct Vid *v)
     if (g.sflags2 & HI(sf2replay)) return;
     if (g.gsp == 4) return;
     uint8_t *a0 = ram_ptr(RAM_BASE + RAM_OFF_clockram + 6);   /* 5 words, written backward */
-    const uint8_t *font = rom_ptr(SYM_SmallFontMap + rd32(rom_ptr(SYM_SmallFontMap) + 4));
+    const uint8_t *font = rom_ptr(ART(SmallFontMap) + rd32(rom_ptr(ART(SmallFontMap)) + 4));
     uint16_t colon = (uint16_t)((rd16(font + 0x78) + g.smallfontchars) | 0x8000);
     g.clockram[0] = colon;
     uint32_t d0 = (g.gmode2 & HI(1)) ? g.shootoutclock : g.gameclock;
@@ -564,9 +564,9 @@ void QueuePadLabel(uint16_t code, uint8_t *pad, struct Vid *v)
  * character, d0 = the char slot. */
 void RenderSmallFontChar(uint16_t ch, uint16_t slot, uint8_t *pad, struct Vid *v)
 {
-    const uint8_t *map = rom_ptr(SYM_SmallFontMap + rd32(rom_ptr(SYM_SmallFontMap) + 4));
+    const uint8_t *map = rom_ptr(ART(SmallFontMap) + rd32(rom_ptr(ART(SmallFontMap)) + 4));
     uint16_t tile = (uint16_t)(rd16(map + 4 + (int16_t)(ch << 1)) & 0x7FF);
-    uint32_t src = SYM_SmallFontMap + 0xA + (int16_t)(tile << 5);
+    uint32_t src = ART(SmallFontMap) + 0xA + (int16_t)(tile << 5);
     uint16_t dest = (uint16_t)((slot + rd16(pad + 0x12)) << 5);
     dma_entry(v, src, 0x10, dest);
 }
@@ -590,7 +590,7 @@ void addframe2(int16_t x, int16_t y, struct SortObj *o, struct Vid *v)
     if (d4 <= 0) return;
     o->attribute ^= (uint16_t)(d4 & 0xF800);
     uint16_t fr = (uint16_t)(o->frame & 0x7FF);
-    const uint8_t *a2 = rom_ptr(SYM_Sprites + rd32(rom_ptr(SYM_Sprites) + 4));
+    const uint8_t *a2 = rom_ptr(ART(Sprites) + rd32(rom_ptr(ART(Sprites)) + 4));
     unsigned idx = fr * 2;
     if (!((int16_t)idx < (int16_t)rd16(a2 + 2))) { o->attribute = attr_saved; return; }
     int16_t d5 = (int16_t)(((rd16(a2 + idx + 2) - rd16(a2 + idx)) >> 3) - 1);
@@ -608,7 +608,7 @@ void addframe2(int16_t x, int16_t y, struct SortObj *o, struct Vid *v)
             }
             if (!dup) {
                 d3 = (uint16_t)(d3 + prev_count);
-                uint32_t src = SYM_Spritetiles + ((int32_t)(int16_t)tile << 5);
+                uint32_t src = ART(Spritetiles) + ((int32_t)(int16_t)tile << 5);
                 dma_entry(v, src, (uint16_t)(count << 4), (uint16_t)((d3 + o->VRchar) << 5));
             }
             prev_tile = tile;

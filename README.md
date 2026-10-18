@@ -81,23 +81,28 @@ says what holds, or what is wrong and on which line (the columns are described a
 `native/league.c`). The art is in `art/` as PNGs: each team's logo (`logos/`, in its own 15
 colours), banners (`banners/`: the playoff tree's and game's on top, the setup screen's below),
 centre ice (`ice/`, with the rink round it) and the players' photos (`photos/`, 8 shades of
-grey; any picture is turned into them by brightness). Draw over them in any editor: an indexed
-PNG keeps its colours' places, a plain one is matched to the colours the screen has (the
-`--check-league` message says which colour and where, when one is not). A team with no picture
-shows its art team's (its `art` column), and a new city gets its own name on the banners, drawn
-in the cartridge's own lettering. Each league keeps its own records (`out/nhl94-my-league.srm`),
+grey; any picture is turned into them by brightness); and in `game/` the art every team shares:
+the title screens, setup screens, the rinks, scoreboard, fonts, the crowd, the Zamboni, the
+players' sprites (a sheet of their tiles) and the rest, by the names the game knows them by.
+Draw over them in any editor: an indexed PNG keeps its colours' places, a plain one is matched to
+the colours the screen has (the `--check-league` message says which colour and where, when one
+is not). A shared picture is taken back through its own map, so a tile it shows in two places
+must look the same in both (the message says where it does not); its order and the sprites'
+frames stay as they were. A team with no picture shows its art team's (its `art` column), and a
+new city gets its own name on the banners, drawn in the cartridge's own lettering. Each league keeps its own records (`out/nhl94-my-league.srm`),
 and a saved state plays on with the league it was saved in. The cartridge's own league, exported
 and built again, plays the original frame for frame.
 
 A league can also come from a community hack made on the 32-team template (NHL 94 2025, NHL 2026
 94 Edition, the 30th Anniversary Championship Teams and the like): `nhl94 --extract-rom
-"HACK.bin" leagues/2026` writes its teams, players, ratings, lines, playoff draws, team colours,
-logos, banners, centre ice and photos out the same way. The hack is only read, never run, and
-stays yours: nothing from it goes anywhere but that folder. Its jerseys and its other art (title
-screens, rink, player sprites) are still to come: its jersey colours belong to its own player
-sprites, so until then its teams wear their art team's. Two players may share a number (the
-lines then name them); names up to 24 letters are taken, though the roster screen has room for
-about 19.
+"HACK.bin" leagues/2026` writes its teams, players, ratings, lines, playoff draws, colours
+(jerseys too, with its player sprites) and all its art out the same way: the shared art it has
+of its own goes in `art/game` as the game reads it (NAME.bin, gathered from wherever the hack put
+it) beside its picture to draw over. The hack is only read, never run, and stays yours: nothing
+from it goes anywhere but that folder. Its code is not taken, so what it changed there (its
+gameplay, the photo carousel's order) is not either. Two players may share a number (the lines
+then name them); names up to 24 letters are taken, though the roster screen has room for about
+19.
 
 **Captures:** the last 20 seconds are always kept; F10 (or the menu's Capture page) saves them,
 and F11 records until you press it again. They go to `videos/` as GIFs (exact colours, 30 frames
@@ -230,8 +235,8 @@ From the least ambitious to the most.
 - [x] Save slots with thumbnails; quick resume on quit and start (states during play)
 - [x] Game rules, the host's for every player (Classic: the original): period lengths, overtime, the weight bug fix, the second assist fix, plus/minus and checks, skating, burst, shots, puck, energy, penalties, streaks, presets, the rink view
 - [x] Leagues of your own, up to 32 teams: teams, players, lines, colours and pictures in files, name banners drawn for new teams (logos borrowed from the cartridge's teams for now)
-- [x] Leagues extracted from hacks on the 32-team template (teams, players, ratings, lines, draws, logos, banners, centre ice, photos; jerseys and the rest of their art still to come)
-- [x] League art as PNGs to draw over: logos, banners, centre ice, photos
+- [x] Leagues extracted from hacks on the 32-team template (teams, players, ratings, lines, draws, colours and all their art)
+- [x] League art as PNGs to draw over: logos, banners, centre ice, photos, and the art every team shares (title screens, rinks, sprites, fonts ...)
 - [ ] Skip the EA screen, boot straight into a game
 - [x] Colour options; scanlines, CRT mask, composite dither blending
 - [ ] IPS and BPS patches, soft-patching, the ROM check as a toggle for data hacks

@@ -35,7 +35,7 @@ void ShowReplayIcon(void)
 {
     g.replayicontimer = 0xF0;
     printz(str_ShowReplayIcon_1, sizeof str_ShowReplayIcon_1);
-    uint32_t map = (g.sflags4 & HI(4)) ? SYM_RevRinkTilelist : SYM_Rinktilelist;
+    uint32_t map = (g.sflags4 & HI(4)) ? ART(RevRinkTilelist) : ART(Rinktilelist);
     map += rd32(rom_ptr(map) + 4);
     dobitmap(0, map, SYM_NoTiles, 0x20, 0x55, 8, 4, g.rinkvrcset, 0);
 }
@@ -52,7 +52,7 @@ void ShowReplayBanner(void)
 {
     ST_W(g.replayicontimer);
     printz(str_ShowReplayBanner_1, sizeof str_ShowReplayBanner_1);
-    dobitmap(0, SYM_ReplayMap + rd32(rom_ptr(SYM_ReplayMap) + 4), SYM_NoTiles, 0, 0, 0x10, 0xB, g.ExtraChars, 0);
+    dobitmap(0, ART(ReplayMap) + rd32(rom_ptr(ART(ReplayMap)) + 4), SYM_NoTiles, 0, 0, 0x10, 0xB, g.ExtraChars, 0);
 }
 
 /* replay94.asm:EraseReplayBanner. Erase the 16 x 11 area ShowReplayBanner drew. */
@@ -637,7 +637,7 @@ void ReplayMode(void)
     g.sflags4 &= (uint16_t)~HI(4);
     ClrHor();
     DoFill(0x400, g.VmMap3, 0x7FF);
-    DecompressGraphicsPlain(SYM_ReplayMap + 8, g.ExtraChars);
+    DecompressGraphicsPlain(ART(ReplayMap) + 8, g.ExtraChars);
     ShowReplayIcon();
     g.sflags &= (uint16_t)~HI(sfscrl);
     g.sflags3 &= (uint8_t)~0x20;

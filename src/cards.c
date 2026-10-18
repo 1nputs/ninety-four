@@ -258,8 +258,8 @@ void PlayerCardScreen(void)
     uint32_t list = rd32(rom_ptr(LG(FeaturedPictures) + (uint32_t)(int16_t)(uint16_t)(team << 2)));
     g.cardroster = rd16(rom_ptr(list + (int16_t)d3 + 4));
     uint32_t pic = rd32(rom_ptr(list + (int16_t)d3));
-    uint32_t pal = SYM_PicturePalette + rd32(rom_ptr(SYM_PicturePalette)), map;
-    if (rd32(rom_ptr(pic + 4)) == 0) map = SYM_PicturePalette + rd32(rom_ptr(SYM_PicturePalette + 4));   /* no map: the common one */
+    uint32_t pal = ART(PicturePalette) + rd32(rom_ptr(ART(PicturePalette))), map;
+    if (rd32(rom_ptr(pic + 4)) == 0) map = ART(PicturePalette) + rd32(rom_ptr(ART(PicturePalette) + 4));   /* no map: the common one */
     else map = pic + rd32(rom_ptr(pic + 4));
     UnpackPicture(pic + 8);
     uint16_t v = g.vcount;
@@ -496,8 +496,8 @@ uint32_t DrawPlayerPicture(uint16_t player, uint16_t team)
     uint16_t odds = rd16(rom_ptr(data + (int16_t)rd16(rom_ptr(data + 0xA)))), goalies = 0;
     do { goalies++; odds = (uint16_t)(odds << 4); } while (odds != 0);
     int pic1 = rom_ptr(a6)[4] & 1;
-    if ((int16_t)player < (int16_t)goalies) return pic1 ? SYM_NoPicGoalie1 : SYM_NoPicGoalie2;
-    return pic1 ? SYM_NoPicSkater2 : SYM_NoPicSkater1;
+    if ((int16_t)player < (int16_t)goalies) return pic1 ? ART(NoPicGoalie1) : ART(NoPicGoalie2);
+    return pic1 ? ART(NoPicSkater2) : ART(NoPicSkater1);
 }
 
 /* cards94.asm:CalcAttrib. The rating of player d0 of team a2 for the attributes set in the high
@@ -587,9 +587,9 @@ void PlayerCards(void)
     g.disflags &= (uint16_t)~HI(df32c);
     CountGoalies();
     CountPlayers();
-    DecompressGraphicsWithCallback(SYM_SmallFontMap + 8, g.smallfontchars, rom_find(SYM_PlayerCards, SYM_PlayerCards + 0x100, remap, 8));
+    DecompressGraphicsWithCallback(ART(SmallFontMap) + 8, g.smallfontchars, rom_find(SYM_PlayerCards, SYM_PlayerCards + 0x100, remap, 8));
     printz(str_PlayerCards_1, sizeof str_PlayerCards_1);
-    uint32_t pic = SYM_PlayerCardsScreenPic;
+    uint32_t pic = ART(PlayerCardsScreenPic);
     uint16_t c = dobitmap(pic + rd32(rom_ptr(pic)), pic + rd32(rom_ptr(pic + 4)), pic + 8, 0, 0, 0x28, 0x1C, 1, 0xD);
     g.cardlogochars1 = c;
     c = (uint16_t)(c + 0x24);
@@ -598,10 +598,10 @@ void PlayerCards(void)
     printz(str_PlayerCards_2, sizeof str_PlayerCards_2);
     eraser(0x40, 0x20, 0x7FF);
     printz(str_PlayerCards_3, sizeof str_PlayerCards_3);
-    pic = SYM_CornerLogoMap;
+    pic = ART(CornerLogoMap);
     c = dobitmap(pic + rd32(rom_ptr(pic)), pic + rd32(rom_ptr(pic + 4)), pic + 8, 0, 0, 6, 6, c, 8);
     printz(str_PlayerCards_4, sizeof str_PlayerCards_4);
-    pic = SYM_ArenaGfxBank;
+    pic = ART(ArenaGfxBank);
     dobitmap(pic + rd32(rom_ptr(pic)), pic + rd32(rom_ptr(pic + 4)), pic + 8, 0, 0, 6, 6, c, 0);
     BuildCardPlayerLists();
     g.palcount = 0x18;
@@ -976,8 +976,8 @@ void DrawPictureBox(void)
     uint16_t player = GetCardPlayer();
     uint32_t pic = DrawPlayerPicture(player, card_team());
     printz(str_DrawPictureBox_1, sizeof str_DrawPictureBox_1);
-    uint32_t pal = SYM_PicturePalette + rd32(rom_ptr(SYM_PicturePalette)), map;
-    if (rd32(rom_ptr(pic + 4)) == 0) map = SYM_PicturePalette + rd32(rom_ptr(SYM_PicturePalette + 4));
+    uint32_t pal = ART(PicturePalette) + rd32(rom_ptr(ART(PicturePalette))), map;
+    if (rd32(rom_ptr(pic + 4)) == 0) map = ART(PicturePalette) + rd32(rom_ptr(ART(PicturePalette) + 4));
     else map = pic + rd32(rom_ptr(pic + 4));
     UnpackPicture(pic + 8);
     memcpy(RAM_W(RAM_OFF_palfadenew + 0x40), rom_ptr(pal + 0x20), 0x20);

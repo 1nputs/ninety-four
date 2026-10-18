@@ -31,9 +31,12 @@
  *                 them, at most 32); else made from the conferences.
  *   art/          optional PNGs (art.c has their sizes and colours): logos/ABBR.png (a team's
  *                 logo, in its own colours: its logo palette), banners/ABBR.png (its banners,
- *                 over its name's), ice/ABBR.png (its centre ice), photos/NAME.png. A team with
- *                 none shows its art team's; a picture the same as the cartridge's is the
- *                 cartridge's own.
+ *                 over its name's), ice/ABBR.png (its centre ice), photos/NAME.png; and game/
+ *                 the art all the teams share (league.h's ART_: TitleScreenImg.png, Sprites.png
+ *                 ...), each NAME.bin the asset as the game reads it, when it is not the
+ *                 cartridge's (a hack's), NAME.png its picture to draw over (taken back
+ *                 through its map). A team with none shows its art team's; a picture the same
+ *                 as the cartridge's is the cartridge's own.
  *
  * Columns go in any order, named by the first row; others are ignored, and so are empty rows and
  * rows starting with #. Text is plain ASCII, \xNN for another byte. A league has 18 to 32 teams
@@ -76,7 +79,9 @@
 #define LEN_PHOTO 40
 #define ICE_MAX (16 * 8 * 16 * 8)  /* (a centre ice picture: the rink round its 24 tiles) */
 #define PHOTOS_MAX (LEAGUE_MAX * PICTURES)
-#define IMAGE_MAX 0x800000u     /* a league built: the cartridge and all that comes past it */
+#define IMAGE_MAX 0xA00000u     /* a league built: the cartridge and all that comes past it (to the Z80's and I/O's addresses) */
+#define SRAM_START 0x200000u    /* (the save RAM's addresses on the bus: nothing the VDP takes by DMA there) */
+#define SRAM_END 0x400000u
 
 static const char *const cart_abbr[CART_TEAMS] = {
     "ANH", "BOS", "BUF", "CGY", "CHI", "DAL", "DET", "EDM", "FLA", "HFD", "LA", "MTL", "NJ", "NYI",
@@ -113,7 +118,7 @@ struct team {
 };
 struct photo { char name[LEN_PHOTO + 1]; uint8_t px[ART_LOGO * ART_LOGO]; };
 struct lg {
-    char name[64];
+    char name[64], dir[512];
     int teams, playoff_teams, rows;
     uint8_t seats[ROWS_MAX][16];
     struct team t[LEAGUE_MAX];
@@ -546,6 +551,15 @@ static const struct romsrc *cart_src(void)
     return &s;
 }
 
+/* the colours a view of shared art shows in when it has none of its own (the rink's), and
+ * sprites' (the first team's home jersey), in s */
+static void shared_colours(const struct romsrc *s, uint16_t screen[64], uint16_t team[16])
+{
+    uint32_t rink = s->asset[ART_Rinktilelist], pal = rs32(s, rink), b = rs32(s, s->table[LG_TeamList]);
+    for (int k = 0; k < 64; k++) screen[k] = rs16(s, rink + pal + 2u * (uint32_t)k);
+    for (int k = 0; k < 16; k++) team[k] = rs16(s, b + rs16(s, b + 2) + 2u * (uint32_t)k);
+}
+
 /* art/KIND/NAME.png, read into p (w x h): 1, 0 none, -1 (league_error) */
 static int art_png(const char *dir, const char *kind, const char *name, mdrt_png *p, int w, int h)
 {
@@ -639,7 +653,7 @@ static int read_pictures(char *t, struct lg *L, const char *dir)
 static int read_art(const char *dir, struct lg *L)
 {
     const struct romsrc *cs = cart_src();
-    uint16_t pal[32], ice_pal[16];
+    uint16_t pal[ART_BANNER_COLOURS], ice_pal[16];
     uint8_t px[ICE_MAX];
     int iw = 0, ih = 0;
     if (art_banners(cs, 0, px, pal) < 0 || art_ice(cs, 0, px, &iw, &ih, ice_pal) < 0) return fail("the cartridge's art cannot be read");
@@ -661,10 +675,18 @@ static int read_art(const char *dir, struct lg *L)
         if ((r = art_png(dir, "banners", T->abbr, &p, ART_BANNER_W, ART_BANNER_H)) < 0) return -1;
         if (r) {
             snprintf(path, sizeof path, "%s/art/banners/%s.png", dir, T->abbr);
-            r = art_indexes(path, &p, 0, 0, ART_BANNER_W, 16, pal, 16, 0, T->banners) < 0
-                || art_indexes(path, &p, 0, 16, ART_BANNER_W, 16, pal + 16, 16, 16, T->banners + 16 * ART_BANNER_W) < 0 ? -1 : 0;
+            r = art_indexes(path, &p, 0, 0, ART_BANNER_W, 16, pal, 64, 0, T->banners) < 0
+                || art_indexes(path, &p, 0, 16, ART_BANNER_W, 16, pal + ART_BANNER_SETUP, 16, ART_BANNER_SETUP, T->banners + 16 * ART_BANNER_W) < 0 ? -1 : 0;
             mdrt_png_free(&p);
             if (r < 0) return fail("%s", art_error());
+            for (int c = 0; c < 22; c++) {                /* (a cell of the top: the colours of one line) */
+                int line = -1;
+                for (int i = 0; i < 64; i++) {
+                    int v = T->banners[(c / 11 * 8 + i / 8) * ART_BANNER_W + c % 11 * 8 + i % 8];
+                    if (v % 16 && line >= 0 && v / 16 != line) return fail("%s: the cell at %d, %d has colours of two lines (%d and %d)", path, c % 11 * 8, c / 11 * 8, line * 16, v / 16 * 16);
+                    if (v % 16) line = v / 16;
+                }
+            }
             T->has_banners = 1;
         }
         if ((r = art_png(dir, "ice", T->abbr, &p, iw, ih)) < 0) return -1;
@@ -794,6 +816,7 @@ static int read_league(const char *folder, struct lg **out)
     err_file = NULL;
     err_line = 0;
     if (!L) return fail("out of memory");
+    snprintf(L->dir, sizeof L->dir, "%s", dir);
     const char *base = strrchr(dir, '/');
     snprintf(L->name, sizeof L->name, "%.63s", base && base[1] ? base + 1 : dir);
     if (read_ini(dir, L) < 0) goto done;
@@ -1037,9 +1060,22 @@ static uint64_t fnv64(uint64_t h, const void *p, size_t n)
     return h;
 }
 
-/* pad so the next size bytes do not cross a 128 KB boundary: the VDP's DMA does not cross one */
+/* past the save RAM's addresses when the next size bytes would reach them: the VDP's DMA reads
+ * the bus, where $200000-$3FFFFF is the save RAM (the game's own reads go anywhere) */
+static void room(struct buf *b, uint32_t size)
+{
+    uint32_t a = at(b);
+    if (a < SRAM_END && a + size > SRAM_START) {
+        need(b, SRAM_END - a);
+        if (!b->bad) { memset(b->b + b->n, 0, SRAM_END - a); b->n = SRAM_END; }
+    }
+}
+
+/* pad so the next size bytes do not cross a 128 KB boundary (the VDP's DMA does not cross one),
+ * nor reach the save RAM's addresses */
 static void dma_align(struct buf *b, uint32_t size)
 {
+    room(b, size);
     uint32_t a = at(b);
     if ((a >> 17) != ((a + size - 1) >> 17))
         while (at(b) & 0x1FFFF && !b->bad) put8(b, 0);
@@ -1049,7 +1085,20 @@ static void dma_align(struct buf *b, uint32_t size)
 static void half(const uint8_t *own, int set, uint8_t px[16][88])
 {
     for (int y = 0; y < 16; y++)
-        for (int x = 0; x < 88; x++) px[y][x] = (uint8_t)(own[(16 * set + y) * ART_BANNER_W + x] - 16 * set);
+        for (int x = 0; x < 88; x++) {
+            int v = own[(16 * set + y) * ART_BANNER_W + x];
+            px[y][x] = (uint8_t)(set ? v - ART_BANNER_SETUP : v % 16);
+        }
+}
+
+/* the line of the top banner's cell c (its colours': 1 when they are all 0) */
+static unsigned cell_line(const uint8_t *own, int c)
+{
+    for (int i = 0; i < 64; i++) {
+        int v = own[(c / 11 * 8 + i / 8) * ART_BANNER_W + c % 11 * 8 + i % 8];
+        if (v % 16) return (unsigned)(v / 16);
+    }
+    return own[(c / 11 * 8) * ART_BANNER_W + c % 11 * 8] / 16;
 }
 
 /* the team name banners, when a team has its own (own[t]: both, 88 x 32): Teamblocksmap again
@@ -1086,8 +1135,8 @@ static void put_banners(struct buf *b, struct lg *L, const uint8_t *c, uint8_t *
     put(b, c + map + 4, 2u * 11 * 2 * CART_TEAMS);
     for (int t = 0, k = 0; t < L->teams; t++) {
         if (!own_px[t]) continue;
-        for (int i = 0; i < 22; i++)                      /* (its art team's priority and palette, no flips) */
-            put16(b, (c16(c, map + 4 + 2u * (uint32_t)(L->t[t].art * 22 + i)) & 0xE000) | (unsigned)(count + 22 * k + i));
+        for (int i = 0; i < 22; i++)                      /* (its art team's priority, its own lines, no flips) */
+            put16(b, (c16(c, map + 4 + 2u * (uint32_t)(L->t[t].art * 22 + i)) & 0x8000) | cell_line(own_px[t], i) << 13 | (unsigned)(count + 22 * k + i));
         k++;
     }
     dma_align(b, 22u * 32 * (uint32_t)L->teams);
@@ -1103,6 +1152,87 @@ static void put_banners(struct buf *b, struct lg *L, const uint8_t *c, uint8_t *
     put16(b, 11);
     put16(b, 2);
     for (int i = 0; i < 22; i++) put16(b, (c16(c, map + 4 + 2u * (uint32_t)i) & 0xE000) | (unsigned)i);
+}
+
+/* the folder's file name (whole, malloc'd; at most max bytes) into *out: its length, 0 when there
+ * is none, -1 */
+static long slurp_file(const char *path, uint8_t **out, size_t max)
+{
+    FILE *f = fopen(path, "rb");
+    *out = NULL;
+    if (!f) return 0;
+    uint8_t *b = malloc(max + 1);
+    size_t n = b ? fread(b, 1, max + 1, f) : 0;
+    fclose(f);
+    if (!b) return fail("out of memory");
+    if (n > max) { free(b); return fail("%s: too big", path); }
+    *out = b;
+    return (long)n;
+}
+
+/* the shared art of the folder (art/game): each asset's bytes from NAME.bin (a hack's: the
+ * cartridge's otherwise), made again from NAME.png when that is not the same picture; past the
+ * cartridge when they are not its own, read through league.asset (ART()). Their tiles go where
+ * the VDP's DMA takes them whole (none across 128 KB; the players' sprites, taken a frame at a
+ * time, where they are in their bank) */
+static int shared_build(struct buf *b, struct lg *L, struct league *lg)
+{
+    const struct romsrc *cs = cart_src();
+    uint16_t screen[64], team[16];
+    shared_colours(cs, screen, team);
+    for (int i = 0; i < art_shared(); i++) {
+        int k = art_shared_asset(i), tiles_off, tk = art_shared_tiles(i, &tiles_off);
+        char path[1200];
+        uint8_t *blob, *made = NULL;
+        struct romsrc bs = *cs;
+        uint32_t a = cs->asset[k];
+        snprintf(path, sizeof path, "%s/art/game/%s.bin", L->dir, art_shared_name(i));
+        long n = slurp_file(path, &blob, 0x80000);
+        if (n < 0) return -1;
+        if (n) {
+            bs.b = blob;
+            bs.size = (uint32_t)n;
+            a = 0;
+            if (!art_shared_size(&bs, i, 0)) { free(blob); return fail("art/game/%s.bin is not the game's %s", art_shared_name(i), art_shared_name(i)); }
+        }
+        if (k == ART_Rinktilelist)                        /* (the rink's colours: those of the pictures after it with none) */
+            for (int c = 0; c < 64; c++) screen[c] = rs16(&bs, a + rs32(&bs, a) + 2u * (uint32_t)c);
+        const uint8_t *bytes = n ? blob : NULL;
+        size_t size = n ? (size_t)n : 0;
+        mdrt_png p;
+        snprintf(path, sizeof path, "%s/art/game/%s.png", L->dir, art_shared_name(i));
+        int r = art_load(path, &p, 0, 0);
+        if (r < 0) { free(blob); return fail("%s", art_error()); }
+        if (r) {
+            struct art_view base, v;
+            memcpy(team, L->t[0].pal[PAL_HOME], sizeof team);
+            if (art_shared_view(&bs, i, a, screen, team, &base) < 0) { mdrt_png_free(&p); free(blob); return fail("%s cannot be drawn", art_shared_name(i)); }
+            r = art_shared_read(path, &p, i, &base, &v);
+            mdrt_png_free(&p);
+            if (r == 0 && !art_view_same(&base, &v)) {
+                size = art_shared_make(&bs, i, a, &v, &made);
+                if (!size) r = -1;
+                bytes = made;
+            }
+            art_view_free(&base);
+            art_view_free(&v);
+            if (r < 0) { free(blob); free(made); return fail("%s", art_error()); }
+        }
+        if (bytes) {
+            if (k == ART_Sprites) {                       /* (where they are in their 128 KB bank) */
+                room(b, (uint32_t)size + 0x20000);
+                while ((at(b) & 0x1FFFF) != (SYM_Sprites & 0x1FFFF) && !b->bad) put8(b, 0);
+            }
+            else dma_align(b, (uint32_t)size);
+            lg->asset[k] = at(b);
+            put(b, bytes, size);
+            even(b);
+            if (tk >= 0) lg->asset[tk] = lg->asset[k] + (uint32_t)tiles_off;
+        }
+        free(blob);
+        free(made);
+    }
+    return 0;
 }
 
 /* L built on the cartridge c: the art team's for what the folder leaves out */
@@ -1123,7 +1253,7 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
         char why[200];
         int picture = 0;
         if (T->has_banners) {
-            uint16_t pal[32];
+            uint16_t pal[ART_BANNER_COLOURS];
             if (art_banners(cs, T->art, made[t], pal) < 0) return fail("the cartridge's team banners cannot be read");
             picture = memcmp(made[t], T->banners, sizeof made[t]) != 0;
         }
@@ -1138,10 +1268,15 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
         } else if (T->banner[0]) {
             if (banner_check(T->banner, why, sizeof why) < 0) { err_file = "teams.csv"; err_line = 0; return fail("%s: %s", T->abbr, why); }
             uint8_t px[16][88];
+            uint16_t pal[ART_BANNER_COLOURS];
+            if (art_banners(cs, T->art, made[t], pal) < 0) return fail("the cartridge's team banners cannot be read");   /* (its cells' lines) */
             for (int set = 0; set < 2; set++) {
                 banner_pixels(set ? BANNER_BITMAPS : BANNER_BLOCKS, T->art, T->banner, px);
                 for (int y = 0; y < 16; y++)
-                    for (int x = 0; x < 88; x++) made[t][(16 * set + y) * ART_BANNER_W + x] = (uint8_t)(px[y][x] + 16 * set);
+                    for (int x = 0; x < 88; x++) {
+                        uint8_t *v = &made[t][(16 * set + y) * ART_BANNER_W + x];
+                        *v = (uint8_t)(set ? ART_BANNER_SETUP + px[y][x] : *v / 16 * 16 + px[y][x]);
+                    }
             }
             own_px[t] = made[t];
             own++;
@@ -1155,6 +1290,7 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
     }
     put(&b, c, ROM_SIZE);
     struct league *lg = &B->league;
+    memcpy(lg->asset, league_cartridge.asset, sizeof lg->asset);   /* (the shared art: the cartridge's, unless the league has its own) */
     uint32_t list = at(&b);
     lg->table[LG_TeamList] = list;
     for (int t = 0; t < L->teams; t++) put32(&b, 0);
@@ -1193,6 +1329,7 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
             }
         }
     }
+    if (shared_build(&b, L, lg) < 0) { free(photo_at); free(b.b); return -1; }
     for (int k = 0; k < L->photos; k++) {
         uint8_t px[ART_LOGO * ART_LOGO], asset[ART_PHOTO_BYTES];
         uint32_t pic = picture_named(L->photo[k].name);
@@ -1243,7 +1380,7 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
     if (own) put_banners(&b, L, c, own_px, lg);
     free(photo_at);
     if (b.bad) { free(b.b); return fail("out of memory"); }
-    if (at(&b) > IMAGE_MAX) { free(b.b); return fail("%u KB past the cartridge: a league holds %u KB at most", (unsigned)((at(&b) - ROM_SIZE) >> 10), (IMAGE_MAX - ROM_SIZE) >> 10); }
+    if (at(&b) > IMAGE_MAX) { free(b.b); return fail("%u KB past the cartridge: a league holds %u KB at most", (unsigned)((at(&b) - ROM_SIZE - (at(&b) > SRAM_END ? SRAM_END - SRAM_START : 0)) >> 10), (IMAGE_MAX - ROM_SIZE - (SRAM_END - SRAM_START)) >> 10); }
     lg->teams = (uint16_t)L->teams;
     lg->playoff_teams = (uint16_t)L->playoff_teams;
     lg->playoff_rows = (uint16_t)L->rows;
@@ -1472,6 +1609,41 @@ static int src_draws(const struct romsrc *s, const struct team *T, uint8_t seats
     return 0;
 }
 
+/* the shared art (art.c) into art/game: a PNG of each; and, from a hack, each that is not the
+ * cartridge's as its bytes too (NAME.bin: what the game reads, the picture drawn over it) */
+static int shared_extract(const struct romsrc *s, const char *dir)
+{
+    const struct romsrc *cs = cart_src();
+    uint16_t screen[64], team[16];
+    shared_colours(s, screen, team);
+    for (int i = 0; i < art_shared(); i++) {
+        int k = art_shared_asset(i);
+        uint8_t *mine = NULL, *cart = NULL;
+        size_t n = art_shared_copy(s, i, s->asset[k], &mine), cn = art_shared_copy(cs, i, cs->asset[k], &cart);
+        char path[1200];
+        if (!cn) { free(mine); return fail("the cartridge's %s cannot be read", art_shared_name(i)); }
+        if (!n && s->hack) printf("  art/game: the hack's %s does not read: the cartridge's\n", art_shared_name(i));
+        int own = s->hack && n && (n != cn || memcmp(mine, cart, n));
+        if (own) {
+            snprintf(path, sizeof path, "%.900s/art/game/%s.bin", dir, art_shared_name(i));
+            FILE *f = fopen(path, "wb");
+            int ok = f && fwrite(mine, 1, n, f) == n;
+            if (f && fclose(f)) ok = 0;
+            if (!ok) { free(mine); free(cart); return fail("cannot write %s", path); }
+        }
+        struct art_view v;                                /* (drawn where it is: the same picture as its copy) */
+        int drawn = art_shared_view(own ? s : cs, i, own ? s->asset[k] : cs->asset[k], screen, team, &v);
+        free(mine);
+        free(cart);
+        if (drawn < 0) return fail("%s cannot be drawn", art_shared_name(i));
+        snprintf(path, sizeof path, "%.900s/art/game/%s.png", dir, art_shared_name(i));
+        int r = art_save(path, v.px, v.w, v.h, v.pal, v.n, 0);
+        art_view_free(&v);
+        if (r < 0) return fail("%s", art_error());
+    }
+    return 0;
+}
+
 int league_export(const char *dir)
 {
     struct romsrc s;
@@ -1504,9 +1676,8 @@ int league_extract(const struct romsrc *s, const char *dir, const char *name)
     if (!(f = create(dir, "league.ini"))) return -1;
     if (s->hack)
         fprintf(f, "# %s's league, from the hack: the files beside this one are its teams, players, lines,\n"
-                   "# colours and art (art/: logos, banners, centre ice, photos), to change as you like (README.md,\n"
-                   "# \"Leagues\"). Its jerseys' colours are for its own player sprites, still to come: until then its\n"
-                   "# teams wear their art team's (teams.csv)\n", name);
+                   "# colours and art (art/: logos, banners, centre ice, photos, and in art/game the title screens,\n"
+                   "# rinks, sprites and the rest it has of its own), to change as you like (README.md, \"Leagues\")\n", name);
     else
         fprintf(f, "# NHL '94's league, from the cartridge: the files beside this one are its teams, players,\n"
                    "# lines, colours, pictures and art (art/: logos, banners, centre ice, photos), to change as you\n"
@@ -1554,11 +1725,20 @@ int league_extract(const struct romsrc *s, const char *dir, const char *name)
             fputc('\n', f);
         }
     fclose(f);
+    int own_sprites = 0;                                  /* (a hack's player sprites its own: its jerseys' colours are for them) */
+    for (int i = 0; s->hack && i < art_shared(); i++)
+        if (art_shared_asset(i) == ART_Sprites) {
+            uint8_t *mine, *theirs;
+            size_t n = art_shared_copy(s, i, s->asset[ART_Sprites], &mine), cn = art_shared_copy(cart_src(), i, SYM_Sprites, &theirs);
+            own_sprites = n && (n != cn || memcmp(mine, theirs, n));
+            free(mine);
+            free(theirs);
+        }
     if (!(f = create(dir, "colours.csv"))) return -1;
     fputs("team,palette,colours\n", f);
     for (int t = 0; t < s->teams; t++)
         for (int p = 0; p < PALS; p++) {
-            if (s->hack && p != PAL_MATCHUP && p != PAL_MATCHUP2) continue;   /* (a hack's jerseys go with its sprites; a logo's colours are its PNG's) */
+            if (s->hack && (p == PAL_LOGO || (p <= PAL_AWAY && !own_sprites))) continue;   /* (a logo's colours are its PNG's; jerseys go with their sprites) */
             field(f, T[t].abbr, 0);
             fprintf(f, "%s,", pal_names[p]);
             for (int k = 0; k < 16; k++) fprintf(f, "%04X%c", T[t].pal[p][k], k < 15 ? ' ' : '\n');
@@ -1602,14 +1782,14 @@ int league_extract(const struct romsrc *s, const char *dir, const char *name)
     fclose(f);
     /* the art: each team's logo, banners and centre ice, each picture's photo (art/) */
     char sub[1100];
-    static const char *const kinds[4] = { "logos", "banners", "ice", "photos" };
-    for (int k = 0; k < 4; k++) {
+    static const char *const kinds[5] = { "logos", "banners", "ice", "photos", "game" };
+    for (int k = 0; k < 5; k++) {
         snprintf(sub, sizeof sub, "%.900s/art/%s", dir, kinds[k]);
         if (make_dirs(sub) < 0) return -1;
     }
     for (int t = 0; t < s->teams; t++) {
         static uint8_t px[ICE_MAX];
-        uint16_t pal[32];
+        uint16_t pal[ART_BANNER_COLOURS];
         int w, h;
         char path[1200];
         snprintf(path, sizeof path, "%.900s/art/logos/%.3s.png", dir, T[t].abbr);
@@ -1617,11 +1797,12 @@ int league_extract(const struct romsrc *s, const char *dir, const char *name)
         if (art_save(path, px, ART_LOGO, ART_LOGO, pal, 16, 1) < 0) return fail("%s", art_error());
         snprintf(path, sizeof path, "%.900s/art/banners/%.3s.png", dir, T[t].abbr);
         if (art_banners(s, t, px, pal) < 0) return fail("%s's banners cannot be read", T[t].abbr);
-        if (art_save(path, px, ART_BANNER_W, ART_BANNER_H, pal, 32, 0) < 0) return fail("%s", art_error());
+        if (art_save(path, px, ART_BANNER_W, ART_BANNER_H, pal, ART_BANNER_COLOURS, 0) < 0) return fail("%s", art_error());
         snprintf(path, sizeof path, "%.900s/art/ice/%.3s.png", dir, T[t].abbr);
         if (art_ice(s, t, px, &w, &h, pal) < 0) return fail("%s's centre ice cannot be read", T[t].abbr);
         if (art_save(path, px, w, h, pal, 16, 0) < 0) return fail("%s", art_error());
     }
+    if (shared_extract(s, dir) < 0) return -1;
     for (int k = 0; k < nnamed; k++) {
         uint8_t px[ART_LOGO * ART_LOGO];
         uint16_t pal[16];

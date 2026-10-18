@@ -31,6 +31,7 @@ void romsrc_cartridge(struct romsrc *s, const uint8_t *cart)
     s->rink = SYM_Rinktilelist;
     s->rink_tiles = SYM_Rinktiles;
     s->photos = SYM_PicturePalette;
+    memcpy(s->asset, league_cartridge.asset, sizeof s->asset);
 }
 
 /* "movea.l #address,An" or "lea address,An": the instructions the cartridge's code reads its
@@ -126,6 +127,10 @@ int romsrc_hack(struct romsrc *s, const uint8_t *rom, uint32_t size, const uint8
         uint32_t a = moved(s, cart, art[k].addr);
         if (!a || a & 1 || a >= size) a = art[k].addr;
         memcpy((char *)s + art[k].at, &a, sizeof a);
+    }
+    for (int k = 0; k < ART_ASSETS; k++) {                /* (its shared art: where its code reads each, else in place) */
+        uint32_t a = moved(s, cart, league_cartridge.asset[k]);
+        s->asset[k] = a && !(a & 1) && a < size ? a : league_cartridge.asset[k];
     }
     /* the counts: its teams, as many blocks as read well; its playoff teams and draws, from the
      * playoff code (NewPO: moveq #PlayoffRows,d0 ... cmp.w #NumPlayoffTeams-1,d2) */
