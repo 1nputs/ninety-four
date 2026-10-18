@@ -329,6 +329,33 @@ static void listed(const char *dir, const char *name)
     printf("  %s/leagues: %d listed with no cartridge loaded, %s among them\n", dir, n, name);
 }
 
+/* what the League page says of each league in dir/leagues and of the cartridge's (the cartridge
+ * loaded): printed, and its lines checked */
+static void about(const char *dir)
+{
+    char here[1024], text[4096];
+    const char *const *names, *const *labels;
+    if (!getcwd(here, sizeof here) || chdir(dir) != 0) { CHECK(0, "cannot go to %s", dir); return; }
+    int n = league_list(&names, &labels);
+    CHECK(league_unread() == 1, "%s/leagues: %d left out of the list, not its one broken league", dir, league_unread());
+    for (int i = 0; i < n; i++) {
+        league_about(i, text, sizeof text);
+        printf("  the League page, %s:\n", labels[i]);
+        int lines = 0, best = 0, width = 1;
+        for (char *l = text, *e; *l; l = e + 1) {
+            if (!(e = strchr(l, '\n'))) break;
+            *e = 0;
+            char *tab = strchr(l, '\t');
+            width &= (int)strlen(l) + 1 <= 49;            /* (the menu's room: label, two spaces, the right) */
+            printf("    %-24s %s\n", tab ? (*tab = 0, l) : l, tab ? tab + 1 : "");
+            best += !strcmp(l, "Best skaters");
+            lines++;
+        }
+        CHECK(lines >= 7 && lines <= 14 && best == 1 && width, "%s: the League page's lines (%d)", labels[i], lines);
+    }
+    if (chdir(here) != 0) CHECK(0, "cannot go back to %s", here);
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 3) { fprintf(stderr, "usage: %s ROM CARTRIDGE_DIR [OTHER_DIR] [--hack HACK DIR ...] [--listed DIR NAME]\n", argv[0]); return 2; }
@@ -341,6 +368,8 @@ int main(int argc, char **argv)
     printf("  banners: %d letters; %d of %d cartridge banners drawn again from their letters as they are\n", letters, same, banners);
     CHECK(letters == 25 + 14 && same == banners, "the banners' letters");
     round_trip(argv[2]);
+    for (int i = 3; i + 2 < argc; i++)
+        if (!strcmp(argv[i], "--listed")) about(argv[i + 1]);
     for (int i = 3; i < argc; i++) {
         if (!strcmp(argv[i], "--hack") && i + 2 < argc) { hack(argv[i + 1], argv[i + 2]); i += 2; }
         else if (!strcmp(argv[i], "--listed") && i + 2 < argc) i += 2;

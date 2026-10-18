@@ -92,27 +92,32 @@ name or any number in the rule's range, and the page shows one that is none of i
 The ranges are what the game's motion takes: headless games at both ends of every one, all at
 once, play on with every speed well inside what the game keeps.
 
-**Leagues:** who plays, on the same page: the cartridge's teams, or a league of your own, up to
-32 teams. A league is a folder in `leagues/` beside the game, of text files a spreadsheet opens:
-`teams.csv` (names, arenas, conferences, ratings, songs), `goalies.csv` and `players.csv` (every
-player's numbers and ratings), `lines.csv`, `colours.csv`, `pictures.csv`, and `league.ini` (its
-name, how many teams play for the cup). To start one, `nhl94 --export-league leagues/my-league`
-writes the cartridge's league out, to change as you like; `nhl94 --check-league leagues/my-league`
-says what holds, or what is wrong and on which line (the columns are described at the top of
-`native/league.c`). The art is in `art/` as PNGs: each team's logo (`logos/`, in its own 15
-colours), banners (`banners/`: the playoff tree's and game's on top, the setup screen's below),
-centre ice (`ice/`, with the rink round it) and the players' photos (`photos/`, 8 shades of
-grey; any picture is turned into them by brightness); and in `game/` the art every team shares:
-the title screens, setup screens, the rinks, scoreboard, fonts, the crowd, the Zamboni, the
-players' sprites (a sheet of their tiles) and the rest, by the names the game knows them by.
-Draw over them in any editor: an indexed PNG keeps its colours' places, a plain one is matched to
-the colours the screen has (the `--check-league` message says which colour and where, when one
-is not). A shared picture is taken back through its own map, so a tile it shows in two places
-must look the same in both (the message says where it does not); its order and the sprites'
-frames stay as they were. A team with no picture shows its art team's (its `art` column), and a
-new city gets its own name on the banners, drawn in the cartridge's own lettering. Each league keeps its own records (`out/nhl94-my-league.srm`),
-and a saved state plays on with the league it was saved in. The cartridge's own league, exported
-and built again, plays the original frame for frame.
+**Leagues:** who plays, on the menu's League page: the cartridge's teams, or a league of your own,
+up to 32 teams. Under the choice the page says what the league holds: its teams (and how many play
+for the cup) and players, its conferences, its files (a folder, or a package and its size), the
+art it brings, and its best five skaters, two goalies and eight teams as the game's cards rate
+them. A league in `leagues/` that will not read is left out, and the page says how many
+(`--check-league` says why). Each league keeps its own records (`out/nhl94-NAME.srm`). A league is
+a folder in `leagues/` beside the game, of text files a spreadsheet opens: `teams.csv` (names,
+arenas, conferences, ratings, songs), `goalies.csv` and `players.csv` (every player's numbers and
+ratings), `lines.csv`, `colours.csv`, `pictures.csv`, and `league.ini` (its name, how many teams
+play for the cup). To start one, `nhl94 --export-league leagues/my-league` writes the cartridge's
+league out, to change as you like; `nhl94 --check-league leagues/my-league` says what holds, or
+what is wrong and on which line (the columns are described at the top of `native/league.c`). The
+art is in `art/` as PNGs: each team's logo (`logos/`, in its own 15 colours), banners (`banners/`:
+the playoff tree's and game's on top, the setup screen's below), centre ice (`ice/`, with the rink
+round it) and the players' photos (`photos/`, 8 shades of grey; any picture is turned into them by
+brightness); and in `game/` the art every team shares: the title screens, setup screens, the
+rinks, scoreboard, fonts, the crowd, the Zamboni, the players' sprites (a sheet of their tiles)
+and the rest, by the names the game knows them by. Draw over them in any editor: an indexed PNG
+keeps its colours' places, a plain one is matched to the colours the screen has (the
+`--check-league` message says which colour and where, when one is not). A shared picture is taken
+back through its own map, so a tile it shows in two places must look the same in both (the message
+says where it does not); its order and the sprites' frames stay as they were. A team with no
+picture shows its art team's (its `art` column), and a new city gets its own name on the banners,
+drawn in the cartridge's own lettering. Each league keeps its own records
+(`out/nhl94-my-league.srm`), and a saved state plays on with the league it was saved in. The
+cartridge's own league, exported and built again, plays the original frame for frame.
 
 A league can also come from a community hack made on the 32-team template (NHL 94 2025, NHL 2026
 94 Edition, the 30th Anniversary Championship Teams and the like): `nhl94 --extract-rom

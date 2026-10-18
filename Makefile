@@ -27,17 +27,17 @@ build/captest: $(SRC) $(HDR) $(TESTSRC) test/replay.h test/ports.h
 	$(CC) $(CFLAGS) -Isrc -Itest -o $@ $(SRC) $(TESTSRC)
 
 # the game rules on the game's routines, RAM set up by hand (test/rules_test.c)
-build/rulestest: $(SRC) $(HDR) test/rules_test.c test/hal_null.c
+build/rulestest: $(SRC) $(HDR) test/rules_test.c test/hal_null.c native/ratings.c
 	@mkdir -p build
-	$(CC) $(CFLAGS) -Isrc -Itest -o $@ $(SRC) test/rules_test.c test/hal_null.c
+	$(CC) $(CFLAGS) -Isrc -Itest -Inative -I$(MDRT)/include -o $@ $(SRC) test/rules_test.c test/hal_null.c native/ratings.c
 rulestest: build/rulestest
 	./build/rulestest
 
 # leagues: the cartridge's exported and built again (byte for byte), a 32-team one, broken ones
 # (tools/leaguetest.py; the ROM as for make nhl94)
-build/leaguetest: native/league.c native/banner.c native/romsrc.c native/art.c src/league.c src/rom.c src/league.h src/rom.h native/native.h test/league_test.c mdrt
+build/leaguetest: native/league.c native/banner.c native/romsrc.c native/art.c native/ratings.c src/league.c src/rom.c src/league.h src/rom.h native/native.h test/league_test.c mdrt
 	@mkdir -p build
-	$(CC) $(CFLAGS) -Isrc -Inative -I$(MDRT)/include -o $@ native/league.c native/banner.c native/romsrc.c native/art.c src/league.c src/rom.c \
+	$(CC) $(CFLAGS) -Isrc -Inative -I$(MDRT)/include -o $@ native/league.c native/banner.c native/romsrc.c native/art.c native/ratings.c src/league.c src/rom.c \
 	    test/league_test.c $(MDRT)/$(MDRTB)/libmdrt.a -lm $(CXXLIB)
 leaguetest: build/leaguetest build/nhl94$(EXE)
 	$(PY) tools/leaguetest.py

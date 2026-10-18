@@ -1,6 +1,6 @@
-/* Game rules on the native side (src/rules.h): the catalogue the menu's Game rules page and the
- * command line work from, the rules of the next game, and the state part that keeps a game's
- * session (its rules, and its league: league.c). */
+/* Game rules on the native side (src/rules.h): the catalogue the menu's League and Game rules
+ * pages and the command line work from, the rules of the next game, and the state part that keeps
+ * a game's session (its rules, and its league: league.c). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -110,6 +110,31 @@ const mdrt_sdl_option *rules_page(int *count)
     page_init();
     *count = P_RULES + RULE_COUNT;
     return rule_page;
+}
+
+/* the League page (its line, and below it what the league chosen holds) and the Game rules page */
+static mdrt_sdl_page pages[2] = {
+    { "League", "Who plays, for every player and all game", P_LEAGUE, 1 },
+    { "Game rules", "For every player, all game. Classic: the original", P_PRESET, 1 + RULE_COUNT },
+};
+
+const mdrt_sdl_page *rules_pages(int *count)
+{
+    static char note[64];
+    page_init();
+    if (league_unread()) {                                /* (why: on stderr, and --check-league) */
+        snprintf(note, sizeof note, "Who plays. leagues/ has %d that will not read", league_unread());
+        pages[0].note = note;
+    }
+    *count = 2;
+    return pages;
+}
+
+void rules_page_text(int page, const int *values, char *text, size_t size, void *user)
+{
+    (void)user;
+    text[0] = 0;
+    if (page == 0) league_about(values[P_LEAGUE], text, size);
 }
 
 /* a preset chosen sets every rule but the view (a matter of taste); a rule changed, or the rules

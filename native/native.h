@@ -49,6 +49,9 @@ extern const mdrt_sdl_option rule_options[];
 void rules_next(const int *values, void *user);
 /* the menu's page: a preset, then the rules (its options_use and options_changed) */
 const mdrt_sdl_option *rules_page(int *count);
+/* the menu's pages of them: League (who plays, and what the league chosen holds), Game rules */
+const mdrt_sdl_page *rules_pages(int *count);
+void rules_page_text(int page, const int *values, char *text, size_t size, void *user);
 void rules_page_use(const int *values, void *user);
 int rules_page_changed(int which, int *values, void *user);
 const char *rules_arg(const char *arg);   /* NULL, or what is wrong */
@@ -136,6 +139,13 @@ size_t art_shared_make(const struct romsrc *s, int i, uint32_t a, const struct a
 size_t art_shared_copy(const struct romsrc *s, int i, uint32_t a, uint8_t **out);
 /* the leagues/ folder's leagues for the menu (the cartridge's first): the count */
 int league_list(const char *const **names, const char *const **labels);
+/* what the League page says of league i of the list (0 the cartridge's): lines, a tab before each
+ * one's right */
+void league_about(int i, char *text, size_t size);
+int league_unread(void);                /* the leagues in leagues/ the list left out (why: on stderr) */
+/* a player's overall rating as his card shows it, from his 14 ratings and number (ratings.c);
+ * *sum (NULL: not wanted) the sum it comes from, past 99 */
+int rating_overall(const uint8_t *cart, const uint8_t nib[14], int number, int goalie, int *sum);
 const char *league_sram(const char *base);   /* the next game's save RAM file (base: the cartridge's) */
 
 /* team name banners (banner.c): the cartridge's two sets (Teamblocksmap, TeamBitmaps), 88 x 16

@@ -35,8 +35,8 @@
  * (tools/golden.py checks that it goes as a fresh run). --four-way puts EA's 4 Way Play in the
  * ports (the game finds it at power on: four players); --input2 to --input4 script pads 2-4. --watch prints work RAM words (hex addresses,
  * e.g. FFC472) at frame 1 and whenever they change. --rule and --league (headless; the window
- * takes them from its menu's Game rules page) set the game's rules (rules.c) and its league, a
- * folder of teams (league.c: DIR, or a folder of leagues/), whose save RAM is its own
+ * takes them from its menu's Game rules and League pages) set the game's rules (rules.c) and its
+ * league, a folder of teams (league.c: DIR, or a folder of leagues/), whose save RAM is its own
  * (out/nhl94-NAME.srm). --export-league DIR writes the cartridge's league into DIR, to change;
  * --extract-rom HACK DIR a hack's, one made on the community's 32-team template (read as data,
  * never run); --check-league DIR builds one and says what is wrong with it, or what it holds;
@@ -596,7 +596,7 @@ int main(int argc, char **argv)
         return 0;
     }
     if (league_arg) {
-        if (!headless) fprintf(stderr, "--league: the window plays the league its menu's Game rules page names\n");
+        if (!headless) fprintf(stderr, "--league: the window plays the league its menu's League page names\n");
         else if (league_check(league_arg, 0) < 0) {
             fprintf(stderr, "--league %s: %s\n", league_arg, league_error());
             return 1;
@@ -629,10 +629,11 @@ int main(int argc, char **argv)
         mdrt_sdl_options o = { .title = "NHL '94", .scale = scale, .aspect = aspect, .sram_path = sram, .app = "ninety-four",
                                .rom_path = rom_given, .rom_default = rom, .rom_hint = "NHL '94: the 1 MB cartridge (US/Europe)",
                                .rom_check = rom_check, .rom_use = rom_use,
-                               .options_title = "Game rules", .options_note = "For every player, all game. Classic: the original",
-                               .options_use = rules_page_use, .options_changed = rules_page_changed, .sram_file = sram_for };
+                               .options_use = rules_page_use, .options_changed = rules_page_changed, .options_text = rules_page_text,
+                               .sram_file = sram_for };
         sram_base = sram;
         o.options = rules_page(&o.noptions);
+        o.pages = rules_pages(&o.npages);
         return mdrt_sdl_run(&c, &o, native_game, NULL);
     }
     if (wav_path && !(wav = fopen(wav_path, "wb"))) { fprintf(stderr, "cannot write %s\n", wav_path); return 1; }

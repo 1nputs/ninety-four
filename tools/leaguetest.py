@@ -363,6 +363,11 @@ def main():
     if os.path.exists(listing):
         shutil.rmtree(listing)
     shutil.copytree(THIRTY_TWO, os.path.join(listing, 'leagues', 'thirty-two'))
+    for z in [THIRTY_TWO + '.zip'] + [h[1] + '.zip' for h in hacks]:     # (packages, as the window lists them)
+        if os.path.exists(z):
+            shutil.copy(z, os.path.join(listing, 'leagues', 'packed-' + os.path.basename(z)))
+    os.makedirs(os.path.join(listing, 'leagues', 'broken'))              # (one that will not read: left out, and said)
+    open(os.path.join(listing, 'leagues', 'broken', 'teams.csv'), 'w').write('team\n')
     args += ['--listed', os.path.relpath(listing, ROOT), 'thirty-two']
     for path, d in hacks:
         args += ['--hack', path, os.path.relpath(d, ROOT)]

@@ -8,6 +8,7 @@
 #include "rom.h"
 #include "rules.h"
 #include "symbols_gen.h"
+#include "native.h"
 
 static int checks, fails;
 #define CHECK(c) do { checks++; if (!(c)) { fails++; printf("  FAIL %s:%d: %s\n", __FILE__, __LINE__, #c); } } while (0)
@@ -289,6 +290,36 @@ static void play_rules(void)
     classic_rules();
 }
 
+/* the League page's overall ratings (native/ratings.c, reckoned without the game's RAM) as the
+ * cards show them (CalcAttrib with the overall weights, no streak, x 100 / its divisor,
+ * AttribAdjust): every player of the cartridge */
+static void overall_ratings(void)
+{
+    int players = 0, same = 0;
+    for (int t = 0; t < (int)SYM_NumTeams; t++) {
+        memset(&g, 0, sizeof g);
+        uint8_t *tm = team_struct(0);
+        memset(tm + tmhotcold, 0, 26 * 16);               /* (no streaks) */
+        wr32(tm + tmdata, rd32(rom_ptr(SYM_TeamList + 4u * (uint32_t)t)));
+        uint16_t count = GetPlayerCount(tm), goalies = GetGoalieCount(tm);
+        uint32_t a0 = rd32(tm + tmdata);
+        a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0));       /* (as CalcAttrib walks to a player: past his name and 8 bytes) */
+        for (uint16_t p = 0; p < count; p++) {
+            a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0)) + 8;
+            const uint8_t *b = rom_ptr(a0) - 8;           /* his number, then his 14 ratings */
+            uint8_t nib[14];
+            for (int k = 0; k < 14; k++) nib[k] = (uint8_t)(b[1 + k / 2] >> (k & 1 ? 0 : 4) & 15);
+            int goalie = p < goalies, number = (b[0] >> 4) * 10 + (b[0] & 15);
+            uint16_t div, v = CalcAttrib(p, tm, rd32(rom_ptr(goalie ? SYM_GAttribOverallMask : SYM_PAttribOverallMask)), &div);
+            int want = AttribAdjust((uint16_t)m68k_divu((uint32_t)v * 100u, div));
+            players++;
+            same += rating_overall(rom_cart, nib, number, goalie, NULL) == want;
+        }
+    }
+    printf("  overall ratings: %d of %d players as their cards'\n", same, players);
+    CHECK(players > 600 && same == players);
+}
+
 int main(void)
 {
     const char *rom = getenv("NHL94_ROM");
@@ -300,6 +331,7 @@ int main(void)
     plusminus();
     stats_list();
     play_rules();
+    overall_ratings();
     printf("rulestest: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }
