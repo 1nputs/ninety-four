@@ -19,7 +19,7 @@ void romsrc_cartridge(struct romsrc *s, const uint8_t *cart)
 {
     static const uint32_t retail[LG_TABLES] = { SYM_TeamList, SYM_TeamPalettes, SYM_TeamLogoBitmaps, SYM_TeamGfxList, SYM_TeamSongs,
                                                 SYM_TeamRatings, SYM_TeamLogoPalettes, SYM_FeaturedPictures, SYM_playoffseats,
-                                                SYM_PlayerRecordOffsets, SYM_Teamblocksmap, 0 };
+                                                SYM_PlayerRecordOffsets, SYM_Teamblocksmap, 0, 0 };
     memset(s, 0, sizeof *s);
     s->b = cart;
     s->size = ROM_SIZE;

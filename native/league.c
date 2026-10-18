@@ -82,6 +82,7 @@
 #define LEN_PHOTO 40
 #define ICE_MAX (16 * 8 * 16 * 8)  /* (a centre ice picture: the rink round its 24 tiles) */
 #define PHOTOS_MAX (LEAGUE_MAX * PICTURES)
+#define OPTION_NAME 21          /* the setup screen's room for a team's name (the cartridge's longest: 18) */
 #define IMAGE_MAX 0xA00000u     /* a league built: the cartridge and all that comes past it (to the Z80's and I/O's addresses) */
 #define SRAM_START 0x200000u    /* (the save RAM's addresses on the bus: nothing the VDP takes by DMA there) */
 #define SRAM_END 0x400000u
@@ -1231,6 +1232,20 @@ static void put_banners(struct buf *b, struct lg *L, const uint8_t *c, uint8_t *
     put16(b, 11);
     put16(b, 2);
     for (int i = 0; i < 22; i++) put16(b, (c16(c, map + 4 + 2u * (uint32_t)i) & 0xE000) | (unsigned)i);
+    /* the setup screen's set: 22 tiles (each team's are DMA'd into them), not the cartridge's
+     * 398 loaded twice (LoadSetupTiles): the room the hacks make for a setup screen of their own
+     * (the NHL 2026 edition's: 1152 tiles) */
+    uint32_t pal = SYM_TeamBitmaps + c32(c, SYM_TeamBitmaps), first = lg->banner_tiles[0];
+    dma_align(b, 8 + 2 + 22 * 32 + 128 + 4 + 44);
+    lg->asset[ART_TeamBitmaps] = at(b);
+    put32(b, 8 + 2 + 22 * 32);
+    put32(b, 8 + 2 + 22 * 32 + 128);
+    put16(b, 22);
+    if (!b->bad) put(b, b->b + first, 22 * 32);           /* (the first team's: any will do) */
+    put(b, c + pal, 128);
+    put16(b, 11);
+    put16(b, 2);
+    for (int i = 0; i < 22; i++) put16(b, (c16(c, map + 4 + 2u * (uint32_t)i) & 0xE000) | (unsigned)i);
 }
 
 /* the shared art of the folder (art/game): each asset's bytes from NAME.bin (a hack's: the
@@ -1436,12 +1451,33 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
     }
     lg->table[LG_playoffseats] = at(&b);
     put(&b, L->seats, 16u * (uint32_t)L->rows);
+    /* the setup screen's names: a team's city, its whole name when another has its city (and the
+     * menu has room: else its nickname) */
+    uint32_t names = lg->table[LG_OptionTeamNames] = at(&b);
+    for (int t = 0; t < L->teams; t++) put32(&b, 0);
+    for (int t = 0; t < L->teams; t++) {
+        const struct team *T = &L->t[t];
+        int shared = 0;
+        for (int k = 0; k < L->teams; k++) shared += k != t && same_word(L->t[k].city, T->city);
+        if (b.bad) break;
+        uint32_t block = c32(b.b, list + 4u * (uint32_t)t);
+        if (!shared) { set32(&b, names + 4u * (uint32_t)t, block + c16(b.b, block + 4)); continue; }
+        char whole[LEN_CITY + LEN_NICK + 2];
+        snprintf(whole, sizeof whole, "%s %s", T->city, T->nickname);
+        set32(&b, names + 4u * (uint32_t)t, at(&b));
+        put_string(&b, strlen(whole) <= OPTION_NAME ? whole : T->nickname);
+    }
     lg->table[LG_PlayerRecordOffsets] = at(&b);           /* (save RAM: the cartridge's places, the rest where it has room) */
     for (int t = 0; t < L->teams; t++)
         put16(&b, t < CART_TEAMS ? 26u * (unsigned)t : LEAGUE_SRAM_PLAYERS / 4 + 26u * (unsigned)(t - CART_TEAMS));
     lg->table[LG_Teamblocksmap] = SYM_Teamblocksmap;
     for (int t = 0; t < L->teams; t++) lg->block[t] = (uint8_t)L->t[t].art;
-    if (own) put_banners(&b, L, c, own_px, lg);
+    /* banners drawn a team at a time (put_banners) when the league has its own, or a setup screen
+     * of more tiles than the cartridge's: the room the full set of setup banners would take */
+    uint32_t setup = lg->asset[ART_GameSetUpMap];
+    const uint8_t *sb = setup >= ROM_SIZE && !b.bad ? b.b : c;
+    int room = (c16(sb, setup + 8) & 0x7FFF) > (c16(c, SYM_GameSetUpMap + 8) & 0x7FFF);
+    if (own || room) put_banners(&b, L, c, own_px, lg);
     free(photo_at);
     if (b.bad) { free(b.b); return fail("out of memory"); }
     if (at(&b) > IMAGE_MAX) { free(b.b); return fail("%u KB past the cartridge: a league holds %u KB at most", (unsigned)((at(&b) - ROM_SIZE - (at(&b) > SRAM_END ? SRAM_END - SRAM_START : 0)) >> 10), (IMAGE_MAX - ROM_SIZE - (SRAM_END - SRAM_START)) >> 10); }

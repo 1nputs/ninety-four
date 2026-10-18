@@ -344,7 +344,8 @@ void PrintScrollMarks(void)
 }
 
 /* optsetup94.asm:PrintOptTeamName. A blank value, then team d3 of option d7 (its TeamList city;
- * the full names of the two New York teams). */
+ * the full names of the two New York teams). A league of its own says which names
+ * (LG(OptionTeamNames)): the cartridge's code knows its New York teams by number. */
 void PrintOptTeamName(uint16_t line)
 {
     uint16_t x = g.printx;
@@ -353,7 +354,8 @@ void PrintOptTeamName(uint16_t line)
     uint16_t team = option(line);
     uint32_t a1 = rd32(rom_ptr(LG(TeamList) + (uint16_t)(team << 2)));
     a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1 + 4));
-    if (team == 0xE) a1 = SYM_RangersTxt;
+    if (LG(OptionTeamNames)) a1 = rd32(rom_ptr(LG(OptionTeamNames) + (uint16_t)(team << 2)));
+    else if (team == 0xE) a1 = SYM_RangersTxt;
     else if (team == 0xD) a1 = SYM_IslandersTxt;
     print(a1);
 }

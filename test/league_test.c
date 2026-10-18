@@ -33,6 +33,42 @@ static uint32_t block_size(const uint8_t *m, uint32_t b)
     return p - b;
 }
 
+/* the String at a in m, as text */
+static const char *string_at(const uint8_t *m, uint32_t a)
+{
+    static char s[64];
+    uint16_t n = r16(m, a);
+    int k = 0;
+    for (uint32_t i = 2; i < n && k < 63; i++) if (m[a + i]) s[k++] = (char)m[a + i];
+    s[k] = 0;
+    return s;
+}
+
+/* the setup screen's names (LG(OptionTeamNames)): each team's city, or its whole name when
+ * another team has its city; the count of those that are right */
+static int option_names(const uint8_t *m, const char *dir)
+{
+    int right = 0;
+    for (int t = 0; t < league.teams; t++) {
+        uint32_t b = r32(m, LG(TeamList) + 4u * (uint32_t)t), p = b + r16(m, b + 4);
+        char city[64], nick[64], want[130];
+        snprintf(city, sizeof city, "%s", string_at(m, p));
+        p += r16(m, p);
+        p += r16(m, p);
+        snprintf(nick, sizeof nick, "%s", string_at(m, p));
+        int shared = 0;
+        for (int k = 0; k < league.teams; k++) {
+            uint32_t bk = r32(m, LG(TeamList) + 4u * (uint32_t)k);
+            shared += k != t && !strcmp(string_at(m, bk + r16(m, bk + 4)), city);
+        }
+        snprintf(want, sizeof want, shared ? "%s %s" : "%s", city, nick);
+        int same = LG(OptionTeamNames) && !strcmp(string_at(m, r32(m, LG(OptionTeamNames) + 4u * (uint32_t)t)), want);
+        CHECK(same, "%s: team %d's name on the setup screen: \"%s\", not \"%s\"", dir, t, string_at(m, r32(m, LG(OptionTeamNames) + 4u * (uint32_t)t)), want);
+        right += same;
+    }
+    return right;
+}
+
 static void round_trip(const char *dir)
 {
     league_next(dir);
@@ -69,6 +105,10 @@ static void round_trip(const char *dir)
     int own = 0;
     for (int t = 0; t < league.teams; t++) own += league.block_tiles[t] != 0 || league.banner_tiles[t] != 0 || league.block[t] != t;
     CHECK(LG(Teamblocksmap) == SYM_Teamblocksmap && own == 0, "the cartridge's banners (%d teams with others)", own);
+    int names = option_names(m, dir);                      /* (the two New York teams' as the cartridge's own) */
+    CHECK(!strcmp(string_at(m, r32(m, LG(OptionTeamNames) + 4 * 13)), string_at(c, SYM_IslandersTxt))
+          && !strcmp(string_at(m, r32(m, LG(OptionTeamNames) + 4 * 14)), string_at(c, SYM_RangersTxt)), "the New York teams' names");
+    printf("  %s: %d of %d names on the setup screen as the cartridge shows them\n", dir, names, league.teams);
     printf("  %s: %d of %d team blocks and %d of %d table entries the cartridge's\n", dir, blocks, SYM_NumTeams, tables, 7 * SYM_NumTeams);
     league_next(NULL);
     league_power_on();
@@ -248,6 +288,7 @@ static void hack(const char *path, const char *dir)
         CHECK(!r32(m, la) && !rs32(&s, lb), "team %d's photos: as many as the hack's", t);
     }
     printf("  %s: the hack's art: %d logos, %d centre ices, %d teams' banners, %d of %d photos\n", dir, logos, ices, banners, photos, pics);
+    printf("  %s: %d of %d names on the setup screen right (the shared cities' whole)\n", dir, option_names(m, dir), league.teams);
     /* its shared art: each of the hack's own (not the cartridge's) as the hack's, gathered; the rest the cartridge's */
     struct romsrc cs;
     romsrc_cartridge(&cs, rom_cart);

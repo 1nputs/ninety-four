@@ -9,7 +9,7 @@
 
 enum { LG_TeamList, LG_TeamPalettes, LG_TeamLogoBitmaps, LG_TeamGfxList, LG_TeamSongs, LG_TeamRatings,
        LG_TeamLogoPalettes, LG_FeaturedPictures, LG_playoffseats, LG_PlayerRecordOffsets, LG_Teamblocksmap,
-       LG_BannerSlotMap, LG_TABLES };
+       LG_BannerSlotMap, LG_OptionTeamNames, LG_TABLES };
 #define LEAGUE_MAX 32                                   /* (a team is a byte in the playoff tree and 5 bits elsewhere) */
 /* the game's art every team shares (titles, setup screens, the rink, the sprites, the fonts,
  * the stock photos ...), read through asset[] (ART()): the cartridge's own, or a league's (art/game) */
@@ -40,6 +40,9 @@ struct league {
 extern struct league league;
 extern const struct league league_cartridge;
 #define LG(name) (league.table[LG_##name])
+/* LG(OptionTeamNames): a built league's, the String the setup screen's Team lines show for each
+ * team (its city; its whole name when another team has its city, as the cartridge's two New
+ * York teams); 0, the cartridge's: its own code, which knows them as teams 13 and 14 */
 #define ART(name) (league.asset[ART_##name])
 
 void league_retail(void);       /* the cartridge's */
