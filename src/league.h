@@ -36,6 +36,9 @@ struct league {
     uint8_t block[LEAGUE_MAX];
     uint32_t block_tiles[LEAGUE_MAX], banner_tiles[LEAGUE_MAX];
     uint32_t asset[ART_ASSETS]; /* each shared asset's ROM address */
+    /* HiScoreScreen's two pictures' places (column, row): the logo, then HiScoreImg (the
+     * cartridge's 14, 3 and 16, 16; the hacks draw a whole screen of their own at 0, 0) */
+    uint8_t hiscore_at[2][2];
 };
 extern struct league league;
 extern const struct league league_cartridge;

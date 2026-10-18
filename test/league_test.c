@@ -79,6 +79,10 @@ static void round_trip(const char *dir)
     CHECK(memcmp(m, c, ROM_SIZE) == 0, "the cartridge's own bytes changed");
     CHECK(league.teams == SYM_NumTeams && league.playoff_teams == SYM_NumPlayoffTeams && league.playoff_rows == SYM_PlayoffRows,
           "the counts: %d %d %d", league.teams, league.playoff_teams, league.playoff_rows);
+    struct romsrc cs;                                     /* (the screen after the EA logo: the cartridge's places, read off it) */
+    romsrc_cartridge(&cs, c);
+    CHECK(!memcmp(league.hiscore_at, league_cartridge.hiscore_at, sizeof league.hiscore_at) && !memcmp(cs.hiscore_at, league_cartridge.hiscore_at, sizeof cs.hiscore_at),
+          "the screen after the EA logo's places: %d,%d %d,%d", league.hiscore_at[0][0], league.hiscore_at[0][1], league.hiscore_at[1][0], league.hiscore_at[1][1]);
     int blocks = 0, tables = 0;
     for (uint32_t t = 0; t < SYM_NumTeams; t++) {
         uint32_t cb = r32(c, SYM_TeamList + 4 * t), mb = r32(m, LG(TeamList) + 4 * t), n = block_size(c, cb);
@@ -258,8 +262,12 @@ static void hack(const char *path, const char *dir)
     bs.size = rom_limit;
     memcpy(bs.table, league.table, sizeof bs.table);
     bs.teams = league.teams;
-    int logos = 0, ices = 0, banners = 0, photos = 0, pics = 0;
+    int logos = 0, ices = 0, banners = 0, photos = 0, pics = 0, label = 1;
     static uint8_t a[64 * 64 * 4], b[64 * 64 * 4];
+    for (int t = 1; t < s.teams && label; t++) {          /* (every team's setup banner the same: the template's label) */
+        uint16_t pa[ART_BANNER_COLOURS];
+        label = art_banners(&s, 0, a, pa) == 0 && art_banners(&s, t, b, pa) == 0 && !memcmp(a + 16 * ART_BANNER_W, b + 16 * ART_BANNER_W, 16 * ART_BANNER_W);
+    }
     for (int t = 0; t < league.teams && t < s.teams; t++) {
         uint16_t pa[ART_BANNER_COLOURS], pb[ART_BANNER_COLOURS];
         int same = art_logo(&bs, t, a, pa) == 0 && art_logo(&s, t, b, pb) == 0 && !memcmp(a, b, ART_LOGO * ART_LOGO) && !memcmp(pa, pb, 32);
@@ -270,8 +278,18 @@ static void hack(const char *path, const char *dir)
                && art_tiles(&s, rs32(&s, s.table[LG_TeamGfxList] + 4u * (uint32_t)t) + 8, tb, 24) == 24 && !memcmp(ta, tb, sizeof ta);
         CHECK(same, "team %d's centre ice", t);
         ices += same;
-        /* (the top banner in its row of the league's Teamblocksmap, the setup screen's its 22 tiles) */
+        /* (the top banner in its row of the league's Teamblocksmap; the setup screen's its 22 tiles,
+         * the hack's, or when every team's is the template's label, its city's in the cartridge's letters) */
         same = art_banners(&s, t, b, pb) == 0 && art_banners(&bs, league_block((uint16_t)t), a, pa) == 0 && !memcmp(a, b, 16 * ART_BANNER_W);
+        if (label) {
+            uint32_t blk = r32(m, LG(TeamList) + 4u * (uint32_t)t);
+            char city[64], no[120];
+            uint8_t name[16][88];
+            snprintf(city, sizeof city, "%s", string_at(m, blk + r16(m, blk + 4)));
+            for (char *c = city; *c; c++) if (*c >= 'a' && *c <= 'z') *c = (char)(*c - 32);
+            banner_pixels(BANNER_BITMAPS, league_art((uint16_t)t), banner_check(city, no, sizeof no) == 0 ? city : NULL, name);
+            for (int i = 0; i < 16 * ART_BANNER_W; i++) b[16 * ART_BANNER_W + i] = (uint8_t)(ART_BANNER_SETUP + name[i / ART_BANNER_W][i % ART_BANNER_W]);
+        }
         for (int i = 0; same && i < 22 * 64; i++) {
             int x = i % 88, y = i / 88, tile = (y / 8) * 11 + x / 8, v = rom_image[league.banner_tiles[t] + (uint32_t)(tile * 32 + (y % 8) * 4 + (x % 8) / 2)];
             same = league.banner_tiles[t] && (x % 2 ? v & 15 : v >> 4) == b[(16 + y) * ART_BANNER_W + x] - ART_BANNER_SETUP;
@@ -287,7 +305,11 @@ static void hack(const char *path, const char *dir)
         }
         CHECK(!r32(m, la) && !rs32(&s, lb), "team %d's photos: as many as the hack's", t);
     }
-    printf("  %s: the hack's art: %d logos, %d centre ices, %d teams' banners, %d of %d photos\n", dir, logos, ices, banners, photos, pics);
+    printf("  %s: the hack's art: %d logos, %d centre ices, %d teams' banners%s, %d of %d photos\n", dir, logos, ices, banners,
+           label ? " (the setup screen's: names, for the template's label)" : "", photos, pics);
+    CHECK(!memcmp(league.hiscore_at, s.hiscore_at, sizeof s.hiscore_at) && !s.hiscore_at[0][0] && !s.hiscore_at[1][1],
+          "%s: the screen after the EA logo's places %d,%d %d,%d, not the hack's 0,0 0,0", dir,
+          league.hiscore_at[0][0], league.hiscore_at[0][1], league.hiscore_at[1][0], league.hiscore_at[1][1]);
     printf("  %s: %d of %d names on the setup screen right (the shared cities' whole)\n", dir, option_names(m, dir), league.teams);
     /* its shared art: each of the hack's own (not the cartridge's) as the hack's, gathered; the rest the cartridge's */
     struct romsrc cs;

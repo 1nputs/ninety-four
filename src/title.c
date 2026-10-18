@@ -394,10 +394,16 @@ void HiScoreScreen(void)
     forceblack();
     memset(RAM_W(RAM_OFF_palfadenew), 0, 0x80);
     setVram_0();
-    printz(str_HiScoreScreen_1, sizeof str_HiScoreScreen_1);
+    uint8_t at[2][sizeof str_HiScoreScreen_1];            /* (str_HiScoreScreen_1 and _2 at the league's places) */
+    for (int k = 0; k < 2; k++) {
+        memcpy(at[k], k ? str_HiScoreScreen_2 : str_HiScoreScreen_1, sizeof at[k]);
+        at[k][3] = league.hiscore_at[k][0];
+        at[k][4] = league.hiscore_at[k][1];
+    }
+    printz(at[0], sizeof at[0]);
     struct Picture p = picture(ART(PlayoffSprite) + 0x12E0);
     uint16_t c = dobitmap(p.pal, p.map, p.tiles, 0, 0, p.w, p.h, 0, 0xF);
-    printz(str_HiScoreScreen_2, sizeof str_HiScoreScreen_2);
+    printz(at[1], sizeof at[1]);
     p = picture(ART(HiScoreImg));
     dobitmap(p.pal, p.map, p.tiles, 0, 0, p.w, p.h, c, 0);
     g.palcount = 0x18;

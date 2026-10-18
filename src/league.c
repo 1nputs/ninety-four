@@ -20,7 +20,8 @@
                    SYM_PicturePalette, SYM_NoPicSkater1, SYM_NoPicSkater2, SYM_NoPicGoalie1, \
                    SYM_NoPicGoalie2, SYM_PlayerCardsScreenPic, SYM_CornerLogoMap, SYM_ArenaGfxBank, \
                    SYM_PlayoffSprite, SYM_HiScoreImg, SYM_HotIconMap, SYM_ColdIconMap, \
-                   SYM_TeamBitmaps } }
+                   SYM_TeamBitmaps }, \
+                 { { 14, 3 }, { 16, 16 } } }              /* (title94.asm's HiScoreScreen places) */
 
 struct league league = RETAIL;                           /* (the cartridge's from the start) */
 const struct league league_cartridge = RETAIL;

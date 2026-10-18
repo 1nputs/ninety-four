@@ -84,6 +84,7 @@ struct romsrc {
     int teams, playoff_teams, rows;
     uint32_t bitmaps, rink, rink_tiles, photos;   /* TeamBitmaps, Rinktilelist, Rinktiles, PicturePalette */
     uint32_t asset[ART_ASSETS];         /* the shared art's addresses (league.h's ART_) */
+    uint8_t hiscore_at[2][2];           /* HiScoreScreen's pictures' places (league.h) */
 };
 void romsrc_cartridge(struct romsrc *s, const uint8_t *cart);
 /* rom (size bytes), a hack read against the cartridge cart: 0, else -1 and why */

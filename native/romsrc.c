@@ -15,6 +15,25 @@ uint8_t rs8(const struct romsrc *s, uint32_t a) { return a < s->size ? s->b[a] :
 uint16_t rs16(const struct romsrc *s, uint32_t a) { return (uint16_t)(rs8(s, a) << 8 | rs8(s, a + 1)); }
 uint32_t rs32(const struct romsrc *s, uint32_t a) { return (uint32_t)rs16(s, a) << 16 | rs16(s, a + 2); }
 
+/* HiScoreScreen's pictures' places: the column and row in each of its two printz strings (00 06 BE
+ * x y 00, inline in its code, which the hacks change in place to draw a whole screen at 0, 0);
+ * the cartridge's league_cartridge has, where a string is not one */
+static void hiscore_places(struct romsrc *s, const uint8_t *cart)
+{
+    uint32_t at = SYM_HiScoreScreen;
+    memcpy(s->hiscore_at, league_cartridge.hiscore_at, sizeof s->hiscore_at);
+    for (int k = 0; k < 2; k++) {
+        while (at < SYM_HiScoreScreen + 0x100 && (cart[at] || cart[at + 1] != 6 || cart[at + 2] != 0xBE)) at += 2;
+        if (at >= SYM_HiScoreScreen + 0x100) return;
+        uint8_t x = rs8(s, at + 3), y = rs8(s, at + 4);
+        if (!rs8(s, at) && rs8(s, at + 1) == 6 && rs8(s, at + 2) == 0xBE && !rs8(s, at + 5) && x < 40 && y < 28) {
+            s->hiscore_at[k][0] = x;
+            s->hiscore_at[k][1] = y;
+        }
+        at += 6;
+    }
+}
+
 void romsrc_cartridge(struct romsrc *s, const uint8_t *cart)
 {
     static const uint32_t retail[LG_TABLES] = { SYM_TeamList, SYM_TeamPalettes, SYM_TeamLogoBitmaps, SYM_TeamGfxList, SYM_TeamSongs,
@@ -32,6 +51,7 @@ void romsrc_cartridge(struct romsrc *s, const uint8_t *cart)
     s->rink_tiles = SYM_Rinktiles;
     s->photos = SYM_PicturePalette;
     memcpy(s->asset, league_cartridge.asset, sizeof s->asset);
+    hiscore_places(s, cart);
 }
 
 /* "movea.l #address,An" or "lea address,An": the instructions the cartridge's code reads its
@@ -132,6 +152,7 @@ int romsrc_hack(struct romsrc *s, const uint8_t *rom, uint32_t size, const uint8
         uint32_t a = moved(s, cart, league_cartridge.asset[k]);
         s->asset[k] = a && !(a & 1) && a < size ? a : league_cartridge.asset[k];
     }
+    hiscore_places(s, cart);
     /* the counts: its teams, as many blocks as read well; its playoff teams and draws, from the
      * playoff code (NewPO: moveq #PlayoffRows,d0 ... cmp.w #NumPlayoffTeams-1,d2) */
     while (s->teams < LEAGUE_MAX && romsrc_block_ok(s, s->teams)) s->teams++;

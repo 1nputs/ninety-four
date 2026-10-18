@@ -120,15 +120,18 @@ drawn in the cartridge's own lettering. Each league keeps its own records
 cartridge's own league, exported and built again, plays the original frame for frame.
 
 A league can also come from a community hack made on the 32-team template (NHL 94 2025, NHL 2026
-94 Edition, the 30th Anniversary Championship Teams and the like): `nhl94 --extract-rom
-"HACK.bin" leagues/2026` writes its teams, players, ratings, lines, playoff draws, colours
-(jerseys too, with its player sprites) and all its art out the same way: the shared art it has
-of its own goes in `art/game` as the game reads it (NAME.bin, gathered from wherever the hack put
-it) beside its picture to draw over. The hack is only read, never run, and stays yours: nothing
-from it goes anywhere but that folder. Its code is not taken, so what it changed there (its
-gameplay, the photo carousel's order) is not either. Two players may share a number (the lines
-then name them); names up to 24 letters are taken, though the roster screen has room for about
-19.
+94 Edition, the 30th Anniversary Championship Teams and the like): `nhl94 --extract-rom "HACK.bin"
+leagues/2026` writes its teams, players, ratings, lines, playoff draws, colours (jerseys too, with
+its player sprites) and all its art out the same way: the shared art it has of its own goes in
+`art/game` as the game reads it (NAME.bin, gathered from wherever the hack put it) beside its
+picture to draw over. The hack is only read, never run, and stays yours: nothing from it goes
+anywhere but that folder. Its code is not taken, so what it changed there (its gameplay, the photo
+carousel's order) is not either. Some of what its code shows is still taken as data: where the
+screen after the EA logo puts its pictures (`hiscore_screen` in `league.ini`: the hacks draw a
+whole screen there), and, where the hack's setup screen banners are one label for every team (the
+template's HOME, beside an AWAY its code makes), each team's own name in their place. Two players
+may share a number (the lines then name them); names up to 24 letters are taken, though the roster
+screen has room for about 19.
 
 A league travels as one file: `nhl94 --pack-league leagues/2026 2026.zip` puts its files in a
 zip (any unzip tool opens it), and a package in `leagues/` plays as it is, no unpacking. The same

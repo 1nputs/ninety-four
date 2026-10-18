@@ -2,7 +2,10 @@
  * cartridge's own formats past its end at power on. A folder holds:
  *
  *   league.ini    name = ... and playoff_teams = N (the first N teams play for the cup; the rest,
- *                 the All-Stars, only in single games). Optional: the folder's name, every team.
+ *                 the All-Stars, only in single games); hiscore_screen = X,Y X,Y (where the
+ *                 screen after the EA logo puts its two pictures: its logo, then HiScoreImg; a
+ *                 hack's whole screen at 0,0 0,0). Optional: the folder's name, every team, the
+ *                 cartridge's places.
  *   teams.csv     a team a row, in the order the game lists them: team (its abbreviation, how the
  *                 other files name it), city, nickname, arena, conference, art (the cartridge team
  *                 whose logo, banners and colours it shows), rating, offense and defense (0-7:
@@ -130,6 +133,7 @@ struct photo { char name[LEN_PHOTO + 1]; uint8_t px[ART_LOGO * ART_LOGO]; };
 struct lg {
     char name[64], dir[512];
     int teams, playoff_teams, rows;
+    uint8_t hiscore_at[2][2];   /* (league.h) */
     uint8_t seats[ROWS_MAX][16];
     struct team t[LEAGUE_MAX];
     struct photo *photo;        /* the folder's photos (art/photos) the pictures name */
@@ -467,6 +471,12 @@ static int read_ini(const char *dir, struct lg *L)
         while (*v == ' ' || *v == '\t') v++;
         if (!strcmp(line, "name")) r = text(v, L->name, (int)sizeof L->name - 1, "name") < 0 ? -1 : 0;
         else if (!strcmp(line, "playoff_teams")) r = num(v, 18, LEAGUE_MAX, "playoff_teams", &L->playoff_teams);
+        else if (!strcmp(line, "hiscore_screen")) {
+            int at[4], n = sscanf(v, "%d,%d %d,%d", &at[0], &at[1], &at[2], &at[3]);
+            for (int i = 0; i < 4 && n == 4; i++) n -= at[i] < 0 || at[i] >= (i % 2 ? 28 : 40);
+            if (n != 4) r = fail("hiscore_screen is two places, column,row (0-39, 0-27) each: %s", v);
+            else for (int i = 0; i < 4; i++) L->hiscore_at[i / 2][i % 2] = (uint8_t)at[i];
+        }
     }
     free(t);
     return r;
@@ -895,6 +905,7 @@ static int read_league(const char *folder, struct lg **out, int art)
     err_line = 0;
     if (!L) return fail("out of memory");
     snprintf(L->dir, sizeof L->dir, "%s", dir);
+    memcpy(L->hiscore_at, league_cartridge.hiscore_at, sizeof L->hiscore_at);
     if (src_open(dir) < 0) { free_lg(L); return -1; }
     const char *base = strrchr(dir, '/');
     snprintf(L->name, sizeof L->name, "%.63s", base && base[1] ? base + 1 : dir);
@@ -1483,6 +1494,7 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
     if (at(&b) > IMAGE_MAX) { free(b.b); return fail("%u KB past the cartridge: a league holds %u KB at most", (unsigned)((at(&b) - ROM_SIZE - (at(&b) > SRAM_END ? SRAM_END - SRAM_START : 0)) >> 10), (IMAGE_MAX - ROM_SIZE - (SRAM_END - SRAM_START)) >> 10); }
     lg->teams = (uint16_t)L->teams;
     lg->playoff_teams = (uint16_t)L->playoff_teams;
+    memcpy(lg->hiscore_at, L->hiscore_at, sizeof lg->hiscore_at);
     lg->playoff_rows = (uint16_t)L->rows;
     for (int t = 0; t < L->teams; t++) lg->art[t] = (uint8_t)L->t[t].art;
     B->img = b.b;
@@ -1491,6 +1503,8 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
     uint8_t counts[6] = { (uint8_t)(lg->teams >> 8), (uint8_t)lg->teams, (uint8_t)(lg->playoff_teams >> 8), (uint8_t)lg->playoff_teams,
                           (uint8_t)(lg->playoff_rows >> 8), (uint8_t)lg->playoff_rows };
     h = fnv64(fnv64(fnv64(h, counts, sizeof counts), lg->art, sizeof lg->art), lg->block, sizeof lg->block);
+    if (memcmp(lg->hiscore_at, league_cartridge.hiscore_at, sizeof lg->hiscore_at))   /* (a league with the cartridge's keeps its checksum) */
+        h = fnv64(h, lg->hiscore_at, sizeof lg->hiscore_at);
     B->hash = h ? h : 1;                                  /* (0 is the cartridge's) */
     return 0;
 }
@@ -1922,6 +1936,9 @@ int league_extract(const struct romsrc *s, const char *dir, const char *name)
                    "# lines, colours, pictures and art (art/: logos, banners, centre ice, photos), to change as you\n"
                    "# like (README.md, \"Leagues\")\n");
     fprintf(f, "name = %s\nplayoff_teams = %d\n", name, s->playoff_teams);
+    if (memcmp(s->hiscore_at, league_cartridge.hiscore_at, sizeof s->hiscore_at))
+        fprintf(f, "# where the screen after the EA logo puts its two pictures (column,row): its logo, then HiScoreImg\n"
+                   "hiscore_screen = %d,%d %d,%d\n", s->hiscore_at[0][0], s->hiscore_at[0][1], s->hiscore_at[1][0], s->hiscore_at[1][1]);
     fclose(f);
     if (!(f = create(dir, "teams.csv"))) return -1;
     fputs("team,city,nickname,arena,conference,art,rating,offense,defense,pp,pk,home,away,songs,banner\n", f);
@@ -2026,20 +2043,39 @@ int league_extract(const struct romsrc *s, const char *dir, const char *name)
         snprintf(sub, sizeof sub, "%.900s/art/%s", dir, kinds[k]);
         if (make_dirs(sub) < 0) return -1;
     }
+    /* the setup screen's banners: a team's own, unless every team has the same one (the NHL 2026
+     * edition's HOME, which its own code, not taken, draws as a label beside one it makes):
+     * then its name in the cartridge's letters and colours, as a team the cartridge has no
+     * banner for gets */
+    static uint8_t first[ART_BANNER_H * ART_BANNER_W], apx[ICE_MAX];
+    uint16_t apal[ART_BANNER_COLOURS], cpal[ART_BANNER_COLOURS];
+    int same = s->hack && art_banners(s, 0, first, apal) == 0;
+    for (int t = 1; t < s->teams && same; t++)
+        same = art_banners(s, t, apx, apal) == 0 && !memcmp(apx + 16 * ART_BANNER_W, first + 16 * ART_BANNER_W, 16 * ART_BANNER_W);
+    if (same && banner_prepare(rom_cart) < 0) return fail("the cartridge's team banners cannot be read");
+    if (same) printf("  banners: the setup screen's the same for every team (a label): each team's name there instead\n");
     for (int t = 0; t < s->teams; t++) {
-        static uint8_t px[ICE_MAX];
-        uint16_t pal[ART_BANNER_COLOURS];
         int w, h;
         char path[1200];
         snprintf(path, sizeof path, "%.900s/art/logos/%.3s.png", dir, T[t].abbr);
-        if (art_logo(s, t, px, pal) < 0) return fail("%s's logo cannot be read", T[t].abbr);
-        if (art_save(path, px, ART_LOGO, ART_LOGO, pal, 16, 1) < 0) return fail("%s", art_error());
+        if (art_logo(s, t, apx, apal) < 0) return fail("%s's logo cannot be read", T[t].abbr);
+        if (art_save(path, apx, ART_LOGO, ART_LOGO, apal, 16, 1) < 0) return fail("%s", art_error());
         snprintf(path, sizeof path, "%.900s/art/banners/%.3s.png", dir, T[t].abbr);
-        if (art_banners(s, t, px, pal) < 0) return fail("%s's banners cannot be read", T[t].abbr);
-        if (art_save(path, px, ART_BANNER_W, ART_BANNER_H, pal, ART_BANNER_COLOURS, 0) < 0) return fail("%s", art_error());
+        if (art_banners(s, t, apx, apal) < 0) return fail("%s's banners cannot be read", T[t].abbr);
+        if (same) {
+            uint8_t label[16][88];
+            char text[LEN_CITY + 1], why[120];
+            for (size_t k = 0; k <= strlen(T[t].city); k++) text[k] = T[t].city[k] >= 'a' && T[t].city[k] <= 'z' ? (char)(T[t].city[k] - 32) : T[t].city[k];
+            banner_pixels(BANNER_BITMAPS, T[t].art, banner_check(text, why, sizeof why) == 0 ? text : NULL, label);   /* (else its art team's) */
+            for (int y = 0; y < 16; y++)
+                for (int x = 0; x < ART_BANNER_W; x++) apx[(16 + y) * ART_BANNER_W + x] = (uint8_t)(ART_BANNER_SETUP + label[y][x]);
+            if (art_banners(cart_src(), T[t].art, first, cpal) < 0) return fail("the cartridge's team banners cannot be read");
+            for (int k = 0; k < 16; k++) if (k < 1 || k > 4) apal[ART_BANNER_SETUP + k] = cpal[ART_BANNER_SETUP + k];   /* (1-4: the team's) */
+        }
+        if (art_save(path, apx, ART_BANNER_W, ART_BANNER_H, apal, ART_BANNER_COLOURS, 0) < 0) return fail("%s", art_error());
         snprintf(path, sizeof path, "%.900s/art/ice/%.3s.png", dir, T[t].abbr);
-        if (art_ice(s, t, px, &w, &h, pal) < 0) return fail("%s's centre ice cannot be read", T[t].abbr);
-        if (art_save(path, px, w, h, pal, 16, 0) < 0) return fail("%s", art_error());
+        if (art_ice(s, t, apx, &w, &h, apal) < 0) return fail("%s's centre ice cannot be read", T[t].abbr);
+        if (art_save(path, apx, w, h, apal, 16, 0) < 0) return fail("%s", art_error());
     }
     if (shared_extract(s, dir) < 0) return -1;
     for (int k = 0; k < nnamed; k++) {
