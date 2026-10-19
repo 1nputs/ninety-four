@@ -161,6 +161,21 @@ int rules_page_changed(int which, int *values, void *user)
     return 1;
 }
 
+/* in a session (the window's thread, while it lasts): the host's choices, which the game plays by */
+int rules_page_session(int *values, void *user)
+{
+    uint8_t v[RULE_COUNT];
+    int sent, host;
+    if (!native_net_session(v, &sent, &host)) return 0;
+    int k = host ? values[P_LEAGUE] : sent ? league_session_entry() : 0;   /* (the host: its own choice, which was sent) */
+    if (k < 0) return 0;                                  /* (not listed yet: asked again) */
+    if (k >= rule_page[P_LEAGUE].count) rule_page[P_LEAGUE].count = k + 1;
+    values[P_LEAGUE] = k;
+    for (int i = 0; i < RULE_COUNT; i++) values[P_RULES + i] = v[i];
+    rules_page_changed(P_RULES, values, user);            /* (the preset they are) */
+    return 1;
+}
+
 void rules_page_use(const int *values, void *user)
 {
     char dir[600];

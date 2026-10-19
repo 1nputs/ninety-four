@@ -21,6 +21,10 @@ full_game_30s.txt does: 30 second periods); pad 2 plays at random (its own seed)
            intermission
   delay0   host and join, 15 ms +-5, 2% lost, delay 0 (a rollback for nearly every change of
            buttons): the whole game, to the setup screen again
+  fourway  host and join, 30 ms +-10, 5% lost, delay 2: four players, two pads each (the host's
+           --pads 2: EA's 4 Way Play in the ports on both, the host pads 1 and 2, the guest 3 and
+           4), as the lockstep vector four_way_game plays them (four_way_p1.txt to p4: Players:
+           Four on the setup screen); the solo run with --four-way
 
     tools/netplay_check.py [NAME...]
 """
@@ -28,6 +32,7 @@ import os
 import random
 import re
 import shutil
+import socket
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -43,7 +48,9 @@ SCENARIOS = [
     ('h2h', 6000, [], 'peer', 2, '40,10,5,1', 1),
     ('league', 7000, ['--league', 'out/leagues/thirty-two', '--rule', 'preset=arcade'], 'join', 1, '25,25,10,1', 2),
     ('delay0', 16000, [], 'join', 0, '15,5,2,0', 3),
+    ('fourway', 6000, ['--pads', '2'], 'join', 2, '30,10,5,1', None),
 ]
+SOLO = {'fourway': ['--four-way']}                      # (the solo run's own options besides the host's)
 NEEDS = {'league': 'out/leagues/thirty-two'}
 
 
@@ -126,23 +133,39 @@ def fresh(path, like=None):
     return path
 
 
+def free_ports(n):
+    """n UDP ports the system has free now (other checks may run on this machine: no fixed numbers)"""
+    socks = [socket.socket(socket.AF_INET, socket.SOCK_DGRAM) for _ in range(n)]
+    for x in socks:
+        x.bind(('127.0.0.1', 0))
+    ports = [x.getsockname()[1] for x in socks]
+    for x in socks:
+        x.close()
+    return ports
+
+
 def scenario(k, s):
     name, frames, opts, how, delay, sim, seed = s
     if name in NEEDS and not os.path.isdir(os.path.join(ROOT, NEEDS[name])):
         return name, 'no %s (make golden)' % NEEDS[name], []
     d = os.path.join(OUT, name)
     os.makedirs(d, exist_ok=True)
-    p1, p2 = pad1(), pad2(seed, frames)
-    write(os.path.join(d, 'pad1.txt'), p1)
-    write(os.path.join(d, 'pad2.txt'), p2)
-    write(os.path.join(d, 'solo1.txt'), p1, delay)
-    write(os.path.join(d, 'solo2.txt'), p2, delay)
-    base = [NHL94, '--headless', '--frames', str(frames), '--input', os.path.join(d, 'pad1.txt'),
-            '--input2', os.path.join(d, 'pad2.txt'), '--delay', str(delay), '--net-sim', sim]
+    if seed is None:                                      # (4 Way Play: the lockstep vector's four scripts)
+        pads = [entries(os.path.join(SCRIPTS, 'four_way_p%d.txt' % (k + 1))) for k in range(4)]
+    else:
+        pads = [pad1(), pad2(seed, frames)]
+    ins, solo_ins = [], []
+    for k, p in enumerate(pads):                          # (each peer plays its own pads' scripts)
+        flag = '--input' if k == 0 else '--input%d' % (k + 1)
+        write(os.path.join(d, 'pad%d.txt' % (k + 1)), p)
+        write(os.path.join(d, 'solo%d.txt' % (k + 1)), p, delay)
+        ins += [flag, os.path.join(d, 'pad%d.txt' % (k + 1))]
+        solo_ins += [flag, os.path.join(d, 'solo%d.txt' % (k + 1))]
+    base = [NHL94, '--headless', '--frames', str(frames)] + ins + ['--delay', str(delay), '--net-sim', sim]
     own = [opts + ['--sram', fresh(os.path.join(d, 'a.srm'), RECORDS)], ['--sram', fresh(os.path.join(d, 'b.srm'))]]
     if how == 'peer':
         own[1] = opts + ['--sram', fresh(os.path.join(d, 'b.srm'), RECORDS)]
-    pa, pb = 7570 + 2 * k, 7571 + 2 * k
+    pa, pb = free_ports(2)
     if how == 'join':
         roles = [['--host', str(pa)], ['--join', '127.0.0.1:%d' % pa]]
     else:
@@ -154,9 +177,8 @@ def scenario(k, s):
         procs.append((subprocess.Popen(base + role + mine + ['--hashes', os.path.join(d, who + '.hashes')], cwd=ROOT,
                                        stdout=subprocess.DEVNULL, stderr=err), err))
     srm = fresh(os.path.join(d, 'solo.srm'), RECORDS)
-    solo = subprocess.run([NHL94, '--headless', '--frames', str(frames), '--input', os.path.join(d, 'solo1.txt'),
-                           '--input2', os.path.join(d, 'solo2.txt'), '--sram', srm,
-                           '--hashes', os.path.join(d, 'solo.hashes')] + opts, cwd=ROOT, stdout=subprocess.DEVNULL,
+    solo = subprocess.run([NHL94, '--headless', '--frames', str(frames)] + solo_ins + ['--sram', srm,
+                           '--hashes', os.path.join(d, 'solo.hashes')] + opts + SOLO.get(name, []), cwd=ROOT, stdout=subprocess.DEVNULL,
                           stderr=subprocess.PIPE, text=True, timeout=limit)
     bad = []
     for (p, err), who in zip(procs, 'ab'):

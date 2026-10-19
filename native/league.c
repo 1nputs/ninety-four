@@ -1789,7 +1789,8 @@ const char *league_list_dir(int i, char *out, size_t size)
 {
     if (i <= 0 || i >= list_n) return NULL;
     const char *n = list_name[i];
-    if (strpbrk(n, "/\\") || (n[0] && n[1] == ':')) snprintf(out, size, "%s", n);   /* (found by the player: its path) */
+    if (sent.b && !strcmp(n, sent.label)) snprintf(out, size, "%s", n);   /* (the league a host sent: by its name) */
+    else if (strpbrk(n, "/\\") || (n[0] && n[1] == ':')) snprintf(out, size, "%s", n);   /* (found by the player: its path) */
     else snprintf(out, size, "leagues/%s", n);
     return out;
 }
@@ -1798,6 +1799,7 @@ void league_files(int i, char *text, size_t size)
 {
     char dir[600], file[64], kb[24];
     if (i <= 0 || i >= list_n || !about[i]) { snprintf(text, size, "the cartridge's own"); return; }
+    if (sent.b && !strcmp(list_name[i], sent.label)) { snprintf(text, size, "sent by the host, %ld KB", (about[i]->bytes + 1023) / 1024); return; }
     snprintf(kb, sizeof kb, about[i]->package ? ", %ld KB" : ", a folder", (about[i]->bytes + 1023) / 1024);
     short_path(file, league_list_dir(i, dir, sizeof dir), 49 - 5 - 2 - (int)strlen(kb));
     snprintf(text, size, "%s%s", file, kb);
@@ -1813,6 +1815,29 @@ static void real_place(const char *path, char *out, size_t size)
     snprintf(out, size, "%s", r ? r : path);
     free(r);
 #endif
+}
+
+int league_session_entry(void)
+{
+    static int at = -1, version;
+    if (!sent.b) return -1;
+    if (at > 0 && version == sent.version) return at;
+    if (atomic_flag_test_and_set(&reading)) return -1;   /* (the game is reading one: asked again later) */
+    int k = at > 0 ? at : list_n, r = -1;
+    struct lg *L;
+    if (k < LIST_MAX && (r = read_league(sent.label, &L, 0)) == 0) {
+        snprintf(list_name[k], sizeof list_name[0], "%s", sent.label);
+        listed(k, L, sent.label);
+        snprintf(list_label[k], sizeof list_label[k], "%.26s (the host's)", L->name);
+        if (about[k]) about[k]->bytes = (long)sent.n;
+        free_lg(L);
+        if (k == list_n) list_n++;
+        at = k;
+        version = sent.version;
+    }
+    src_close();
+    atomic_flag_clear(&reading);
+    return r == 0 ? at : -1;
 }
 
 int league_add(const char *path, char *why, size_t why_size)

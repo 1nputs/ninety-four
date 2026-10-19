@@ -1,10 +1,11 @@
 /* Netplay (pulseman's mdrt/netplay.h over mdrt/net_udp.h): two players, each on their own
- * machine, the host pad 1 and the guest pad 2, from power on. The game's resumable point is the
+ * machine, the host pad 1 and the guest pad 2, from power on; or two pads each, the host's choice
+ * (--pads 2: EA's 4 Way Play in the ports on both, the host pads 1 and 2, the guest 3 and 4). The game's resumable point is the
  * game loop's wait (setvideo's, where states are taken: state.c), and a rollback goes on from there
  * as a loaded state does (restart_at native_resume_game_loop). The game plays whatever session its
  * console has (mdrt_get_net): the window's, made on its Online page or from the command line, or a
- * headless run's own. The identity the peers compare: the build (its commit), the ROM, and what
- * changes the simulation on the command line and is not sent (--four-way). What is sent, the
+ * headless run's own. The identity the peers compare: the build (its commit) and the ROM. What is
+ * sent, the
  * host's for both (native_net_settings, made where the session is: the window's Start, or the
  * command line): the next game's rules, its league (a package: a folder's files packed), and its
  * save RAM; neither player's save RAM is written while the session lasts. Each player's buttons
@@ -16,6 +17,7 @@
  * game code, then the session's turn, then the handshake reads the next frame's buttons. */
 #include <stdio.h>
 #include <string.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include "game.h"
 #include "native.h"
@@ -54,6 +56,9 @@ const char *native_net_identity(const char *setup)
  * RAM (a u16 size, 0 for blank or 0x2000, the bytes), the league (a u32 size, 0 for the cartridge's,
  * a package's bytes) */
 static uint8_t *settings;
+static uint8_t session_rules[RULE_COUNT];               /* the settings the game plays by (the window's pages show them) */
+static int session_league, session_host;
+static atomic_int session_known;
 
 const void *native_net_settings(const char *sram, size_t *size)
 {
@@ -100,12 +105,26 @@ static const char *settings_use(mdrt *m, const uint8_t *b, size_t size)
     mdrt_sram *r = mdrt_get_sram(m);
     memset(r->bytes, 0, r->size);
     if (sn) memcpy(r->bytes, s, sn < r->size ? sn : r->size);
+    rules_next_get(session_rules);
+    session_league = n != 0;
+    session_host = mdrt_net_is_host(mdrt_get_net(m));
+    atomic_store(&session_known, 1);
     return NULL;
+}
+
+int native_net_session(uint8_t *v, int *sent, int *host)
+{
+    if (!atomic_load(&session_known)) return 0;
+    memcpy(v, session_rules, RULE_COUNT);
+    *sent = session_league;
+    *host = session_host;
+    return 1;
 }
 
 void native_net_power_on(mdrt *m)
 {
     mdrt_net *n = mdrt_get_net(m);
+    atomic_store(&session_known, 0);
     if (!n || mdrt_net_state(n) != MDRT_NET_GO) return;
     size_t size;
     const void *b = mdrt_net_settings(n, &size);
@@ -122,6 +141,7 @@ int native_net_open(const mdrt_net_options *o, const char *setup, const void *se
     if (!udp) return 0;
     mdrt_net_config c = { .role = o->role, .identity = native_net_identity(setup), .name = o->name, .delay = o->delay,
                           .window = 8, .rollback = 30, .check_every = 60, .settings = set, .settings_size = set ? set_size : 0 };
+    mdrt_net_options_pads(o, &c.host_pads, &c.guest_pads);
     c.link = mdrt_udp_link(udp);
     c.local_input = local_input;
     local_fn = input;
@@ -157,12 +177,16 @@ int native_net_connect(void)
     }
     mdrt_udp_lock(udp);
     headless = 1;
-    fprintf(stderr, "netplay: playing with %s, %s, pad %d, input delay %d\n", mdrt_udp_peer(udp, peer, sizeof peer),
-            mdrt_net_is_host(net) ? "hosting" : "joined", mdrt_net_pads(net) == 1 ? 1 : 2, mdrt_net_delay(net));
+    uint8_t pads = mdrt_net_pads(net);
+    fprintf(stderr, "netplay: playing with %s, %s, %s %s, input delay %d\n", mdrt_udp_peer(udp, peer, sizeof peer),
+            mdrt_net_is_host(net) ? "hosting" : "joined", pads & (pads - 1) ? "pads" : "pad",
+            pads == 1 ? "1" : pads == 2 ? "2" : pads == 3 ? "1 and 2" : "3 and 4", mdrt_net_delay(net));
     const char *who = mdrt_net_peer_name(net);
     fprintf(stderr, "netplay: %s has joined\n", who[0] ? who : mdrt_net_is_host(net) ? "player 2" : "player 1");
     return 1;
 }
+
+int native_net_two_each(void) { uint8_t p = net ? mdrt_net_pads(net) : 0; return (p & (p - 1)) != 0; }
 
 mdrt_net *native_net(void) { return net; }
 mdrt_udp *native_net_udp(void) { return udp; }

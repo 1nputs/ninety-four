@@ -13,7 +13,7 @@
  *              [--rule NAME=VALUE ...] [--league DIR] [--check-league DIR] [--export-league DIR]
  *              [--extract-rom HACK DIR] [--pack-league DIR FILE.zip] [--art-check | --art-map]
  *              [--hashes FILE] [--host [PORT] | --join ADDR[:PORT] | --peer ADDR[:PORT]] [--port PORT]
- *              [--delay N] [--name NAME] [--net-sim MS,MS,%,%]
+ *              [--delay N] [--name NAME] [--pads 1|2] [--net-sim MS,MS,%,%]
  *
  * --art-check (headless) counts every byte the VDP takes by DMA from the game's data and those in
  * no piece of the art map (art.c: every piece of art the game reads by number, the cartridge's
@@ -50,7 +50,8 @@
  * in leagues/, which plays it as it is). --host, --join and --peer play online (net.c: two
  * players from power on, the host pad 1; in the window it connects first; headless, each plays
  * its pad's script and the run ends at --frames once both have every button), --delay the input
- * delay, --net-sim a simulated network for tests. --hashes FILE (headless) writes a line a frame
+ * delay, --pads 2 (the host's) two pads each with 4 Way Play, --net-sim a simulated network for
+ * tests. --hashes FILE (headless) writes a line a frame
  * at its wait, the frame and hashes of work RAM, the VDP, Z80 RAM and save RAM, frames a rollback plays
  * again included (tools/netplay_check.py compares the last of each with a solo run's). */
 #include <setjmp.h>
@@ -505,13 +506,6 @@ static uint16_t window_pad(int pad, int k)
     return b[k];
 }
 
-/* an option that changes the simulation, into netplay's identity */
-static void add_setup(char *setup, size_t size, const char *opt, const char *value)
-{
-    size_t k = strlen(setup);
-    snprintf(setup + k, size - k, "%s %s ", opt, value);
-}
-
 /* pictures to files */
 static void write_ppm(const char *path)
 {
@@ -613,7 +607,7 @@ int main(int argc, char **argv)
     int scale = 0, aspect = 0, headless = 0;
     const char *hashes_path = NULL;
     mdrt_net_options netopt;
-    char setup[1024] = "", err[256];
+    char err[256];
     mdrt_net_options_init(&netopt);
     for (int i = 1; i < argc; i++) {
         int net = mdrt_net_parse(&netopt, argc, argv, &i, err, sizeof err);
@@ -642,7 +636,7 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--art-map")) art_check = 2;
         else if (!strcmp(argv[i], "--input") && i + 1 < argc) input_path[0] = argv[++i];
         else if (!strncmp(argv[i], "--input", 7) && argv[i][7] >= '2' && argv[i][7] <= '4' && !argv[i][8] && i + 1 < argc) { int pad = argv[i][7] - '1'; input_path[pad] = argv[++i]; }
-        else if (!strcmp(argv[i], "--four-way")) { four_way = 1; add_setup(setup, sizeof setup, "--four-way", ""); }
+        else if (!strcmp(argv[i], "--four-way")) four_way = 1;
         else if (!strcmp(argv[i], "--rule") && i + 1 < argc) {
             const char *why = rules_arg(argv[++i]);
             if (why) { fprintf(stderr, "--rule %s: %s\n", argv[i], why); return 2; }
@@ -730,6 +724,7 @@ int main(int argc, char **argv)
         o.pages = rules_pages(&o.npages);
         o.net_identity = native_net_identity("");        /* (the menu's Online page) */
         o.net_settings = window_settings;
+        o.options_session = rules_page_session;            /* (the pages in a session: the host's) */
         if (netopt.on) {                                  /* (the window connects, then powers on: by the command line's rules and league) */
             size_t n;
             const void *set = native_net_settings(sram_for(NULL), &n);
@@ -756,8 +751,9 @@ int main(int argc, char **argv)
     if (netopt.on) {                                      /* (from power on: the session's pads replace the scripts'; its save RAM the host's) */
         size_t n;
         const void *set = native_net_settings(sram, &n);
-        if (!native_net_open(&netopt, setup, set, n, script_pad, err, sizeof err)) { fprintf(stderr, "netplay: %s\n", err); return 1; }
+        if (!native_net_open(&netopt, "", set, n, script_pad, err, sizeof err)) { fprintf(stderr, "netplay: %s\n", err); return 1; }
         if (!native_net_connect()) return 1;
+        mdrt_pads_set_adaptor(mdrt_get_pads(m), native_net_two_each() ? MDRT_ADAPTOR_EA4WAY : MDRT_ADAPTOR_NONE);   /* (the session's pads say: two each, 4 Way Play) */
         native_net_stop_at(stop_after);
     }
     if (lockstep_path || golden || netopt.on) sram = NULL;   /* lockstep, golden: save RAM blank, as the oracle's at power on (netplay: the host's, not written) */

@@ -53,6 +53,7 @@ const char *native_net_identity(const char *setup);     /* setup: the command li
 int native_net_open(const mdrt_net_options *o, const char *setup, const void *settings, size_t settings_size, native_input_fn input,
                     char *err, size_t errsize);
 int native_net_connect(void);                           /* headless: connected (0: refused, or gone; why on stderr) */
+int native_net_two_each(void);                          /* the session's players have two pads each (4 Way Play) */
 void native_net_start(mdrt *m);                         /* at power on, the states' parts added */
 void native_net_stop_at(long frame);                    /* headless: the session ends at --frames */
 void native_net_wait(void);                             /* at each of the game's waits, before the handshake */
@@ -62,6 +63,9 @@ int native_net_on(void);                                /* in a session (headles
  * player who may host (the window's Start, or the command line), applied by both at power on */
 const void *native_net_settings(const char *sram, size_t *size);
 void native_net_power_on(mdrt *m);                      /* in a session: its settings the next game's (before the rules and league power on) */
+/* the session's rules (RULE_COUNT of them) into v, whether its league is one sent and whether this
+ * player hosts it: 1, or 0 when the game has no session's settings (yet) */
+int native_net_session(uint8_t *v, int *sent, int *host);
 mdrt_net *native_net(void);                             /* the command line's session, and its link */
 mdrt_udp *native_net_udp(void);
 void native_net_close(void);
@@ -81,6 +85,7 @@ int rules_page_pick(int which, const char *path, char *why, size_t why_size, voi
 void rules_page_detail(int which, int value, char *text, size_t size, void *user);
 void rules_page_use(const int *values, void *user);
 int rules_page_changed(int which, int *values, void *user);
+int rules_page_session(int *values, void *user);        /* the session's choices, for the pages (options_session) */
 const char *rules_arg(const char *arg);   /* NULL, or what is wrong */
 int rules_classic(void);                 /* the next game's are all the original's */
 void rules_power_on(void);
@@ -95,6 +100,9 @@ void league_next(const char *dir);      /* the next game's (NULL or "": the cart
  * packed, a package's as they are): their size, 0 (*out NULL) for the cartridge's, -1 */
 long league_next_package(uint8_t **out);
 int league_next_bytes(const uint8_t *b, size_t n);   /* the next game's built from a package's bytes (0: the cartridge's): 0, -1 */
+/* the league a host sent (kept for the run), one of the League page's: its index (listed when it
+ * is not, read again for another), -1 when none was sent (or it is being read: ask again) */
+int league_session_entry(void);
 int league_next_is_cartridge(void);
 void league_power_on(void);             /* (a league that will not build: the cartridge's, and why on stderr) */
 uint64_t league_hash(void);             /* this game's league: its checksum (0 the cartridge's) */

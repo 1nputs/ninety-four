@@ -462,6 +462,38 @@ static void about(const char *dir)
     if (chdir(here) != 0) CHECK(0, "cannot go back to %s", here);
 }
 
+/* dir's league as a host sends it online (net.c): its package's bytes (its files packed) built
+ * as the folder is, the next game's again as they came, and one of the League page's while the
+ * session lasts (league_session_entry) */
+static void sent(const char *dir)
+{
+    league_next(dir);
+    league_power_on();
+    uint64_t want_hash = league_hash();
+    uint8_t *b;
+    long n = league_next_package(&b);
+    CHECK(n > 0, "%s: no package: %s", dir, league_error());
+    if (n <= 0) return;
+    CHECK(league_next_bytes(b, (size_t)n) == 0, "%s: the package not taken: %s", dir, league_error());
+    free(b);
+    league_power_on();
+    CHECK(league_hash() == want_hash, "%s: its package builds another league (%016llx, the folder's %016llx)", dir,
+          (unsigned long long)league_hash(), (unsigned long long)want_hash);
+    long again = league_next_package(&b);                 /* (a host that sends it on: the same bytes) */
+    CHECK(again == n, "the league sent as a package again: %ld bytes, not %ld", again, n);
+    free(b);
+    const char *const *names, *const *labels;
+    int before = league_list(&names, &labels), k = league_session_entry();
+    char text[16384] = "";
+    if (k > 0) league_about(k, text, sizeof text);
+    CHECK(k == before && strstr(labels[k], "(the host's)") && strstr(text, "Teams\t") && league_session_entry() == k,
+          "the league sent on the League page: entry %d of %d, \"%s\", %.40s", k, before, k > 0 ? labels[k] : "", text);
+    printf("  sent online: %s as a %ld KB package, built the same (%016llx); on the League page as \"%s\"\n", dir, (n + 1023) / 1024,
+           (unsigned long long)want_hash, k > 0 ? labels[k] : "(none)");
+    league_next(NULL);
+    league_power_on();
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 3) { fprintf(stderr, "usage: %s ROM CARTRIDGE_DIR [OTHER_DIR] [--hack HACK DIR ...] [--listed DIR NAME]\n", argv[0]); return 2; }
@@ -479,7 +511,7 @@ int main(int argc, char **argv)
     for (int i = 3; i < argc; i++) {
         if (!strcmp(argv[i], "--hack") && i + 2 < argc) { hack(argv[i + 1], argv[i + 2]); i += 2; }
         else if (!strcmp(argv[i], "--listed") && i + 2 < argc) i += 2;
-        else other(argv[i]);
+        else { other(argv[i]); sent(argv[i]); }
     }
     printf("league_test: %d checks, %d failed\n", checks, failed);
     return failed != 0;
