@@ -228,11 +228,15 @@ tell us what it said.
   League and Game rules pages. In pulseman: the console's state as a value, a client-owned clock
   with line-by-line drawing and an H-interrupt hook, a bus map, FM cores and models chosen at run
   time, a trace recorder, PNG and zip, the client's option pages, and vsync.
-- **Native state** (the owner's direction): the game's RAM is a native struct (the 68000's offsets,
-  the host's byte order, any compiler); the console's big-endian view of it is made on demand
-  (`src/mem.h` reads and writes by 68000 address through `src/ram.c`'s generated map,
-  `ram_pack`/`ram_unpack` for the checks and states). RAM's regions become typed native structs
-  one by one: the team structs are (`struct Team`); then the rest, then leagues as native tables.
+- **Native state** (the owner's direction): the game's state is native structs (the 68000's
+  offsets, the host's byte order, any compiler), generated with the address map by
+  `tools/gen_ram.py`: the team structs, the night's games, the replay frames, the sound driver's
+  slots, channels and voices, the sort objects and their drawn parts (the pads, the arrows, the
+  replay camera), the menus, the faceoff, the plane maps, the clock and the rest; byte buffers in
+  the machine's own formats (Strings, the sprite table, the DMA list, records) are host bytes
+  (`ram_bytes`). The console's big-endian view is made on demand (`src/mem.h`, `src/ram.c`'s map,
+  `ram_pack`/`ram_unpack` for the checks and states); what still goes by 68000 address is listed
+  at the top of `src/mem.h`. Next: leagues as native tables.
 - **Deferred by the owner.** WebAssembly (the game's code compiles for it now; a browser platform
   for pulseman is the job) and the cartridge's slowdown (it needs a 68k cost model).
 - **Read first.** `ext/pulseman/README.md` and `docs/API.md` there; the comments at the top

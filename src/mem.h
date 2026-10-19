@@ -1,9 +1,18 @@
-/* Work RAM by its 68000 address, as the original's code holds places in its registers: the way to
- * RAM's bytes besides its named fields (g.x, o->x). A place (rp) is opaque, so the compiler finds
- * every raw access, and there is no host pointer into RAM's bytes outside this header. Behind it is
- * struct g, native (src/ram.h: the 68000's offsets, the host's byte order): a machine byte is read
- * and written where ram_host_ says the host keeps it, so the 68000's big-endian view holds over
- * fields of any width (the playbook's NATIVE-STATE.md). */
+/* Work RAM by its 68000 address: the machine's view of struct g (src/ram.h: the game's state as
+ * native structs, at the 68000's offsets, in the host's byte order). A machine byte is read and
+ * written where ram_host_ says the host keeps it, so the 68000's big-endian view holds over fields
+ * of any width (the playbook's NATIVE-STATE.md).
+ *
+ * The game reads its state by name (g.x, tm->score, the replay frames, the sound driver's slots);
+ * what still goes by machine address, on purpose: addresses the game keeps or passes as data (m8
+ * and its kin follow them, cartridge or RAM), a region's second use in another layout than its own
+ * (the replay area as the save RAM's copy and the highlight's keep, the sort objects as the
+ * credits' line scroll), the cartridge's tables of offsets into a team struct (the stats screens),
+ * clears of a span of fields, the 68000's reads and writes past an array's end, and the edges
+ * (the Z80's command buffer, the checks' images). A byte buffer, RAM that holds bytes as the
+ * machine has them (Strings, the sprite table, the DMA list, records), is read through a host
+ * pointer: ram_bytes. A place (rp) is opaque, so the compiler finds every such access, and there
+ * is no other host pointer into RAM's bytes. */
 #pragma once
 #include <stddef.h>
 #include <stdint.h>

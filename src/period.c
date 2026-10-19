@@ -257,34 +257,32 @@ static uint16_t team_logo(uint16_t team, uint16_t chars)
     return dobitmap(pal, map, bmp + 8, 0, 0, 6, 6, chars, 4);
 }
 
-/* PeriodStatsScreen's .num: the next period total of a0, added to matchuptimer, in 2 or 3
- * columns */
-static rp period_num(rp a0)
+/* PeriodStatsScreen's .num: team a2's total of period k (goals, or shots in the matchup), added
+ * to matchuptimer, in 2 or 3 columns */
+static void period_num(const struct Team *tm, int k)
 {
-    uint16_t v = r16(a0, 0);
+    uint16_t v = g.matchup ? tm->pershots[k] : tm->pergoals[k];
     g.matchuptimer += v;
     printz(str_PeriodStatsScreen_15, sizeof str_PeriodStatsScreen_15);
     g.printx -= 3;
     print(PushNumberWidth(v, (int16_t)v < 0x64 ? 2 : 3));
-    return rp_add(a0, 2);
 }
 
 /* PeriodStatsScreen's .team: team a2's goals (or shots, matchup) by period, then the total */
 static void period_team(struct Team *tm)
 {
-    rp a0 = rp_add(team_place(tm), g.matchup ? offsetof(struct Team, pershots) : offsetof(struct Team, pergoals));
     g.matchuptimer = 0;
     g.printx = 0xB;
-    a0 = period_num(a0);
+    period_num(tm, 0);
     if ((int16_t)g.gsp >= 1) {
         g.printx = 0x10;
-        a0 = period_num(a0);
+        period_num(tm, 1);
         if ((int16_t)g.gsp >= 2) {
             g.printx = 0x15;
-            a0 = period_num(a0);
+            period_num(tm, 2);
             if ((int16_t)g.gsp >= 3 && (g.sflags7 & 2)) {
                 g.printx = 0x1A;
-                period_num(a0);
+                period_num(tm, 3);
             }
         }
     }
