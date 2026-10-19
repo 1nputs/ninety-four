@@ -300,16 +300,13 @@ static void overall_ratings(void)
         memset(&g, 0, sizeof g);
         struct Team *tm = team_struct(0);
         memset(tm->hotcold, 0, sizeof tm->hotcold);               /* (no streaks) */
-        tm->data = rd32(rom_ptr(SYM_TeamList + 4u * (uint32_t)t));
+        tm->team = (uint16_t)t;                           /* (as InitTeamStructure makes it) */
+        tm->data = lg((uint16_t)t)->data;
         uint16_t count = GetPlayerCount(tm), goalies = GetGoalieCount(tm);
-        uint32_t a0 = tm->data;
-        a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0));       /* (as CalcAttrib walks to a player: past his name and 8 bytes) */
         for (uint16_t p = 0; p < count; p++) {
-            a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0)) + 8;
-            const uint8_t *b = rom_ptr(a0) - 8;           /* his number, then his 14 ratings */
-            uint8_t nib[14];
-            for (int k = 0; k < 14; k++) nib[k] = (uint8_t)(b[1 + k / 2] >> (k & 1 ? 0 : 4) & 15);
-            int goalie = p < goalies, number = (b[0] >> 4) * 10 + (b[0] & 15);
+            const struct LgPlayer *P = &lg((uint16_t)t)->player[p];   /* his number, then his 14 ratings */
+            const uint8_t *nib = P->rating;
+            int goalie = p < goalies, number = (P->number >> 4) * 10 + (P->number & 15);
             uint16_t div, v = CalcAttrib(p, tm, rd32(rom_ptr(goalie ? SYM_GAttribOverallMask : SYM_PAttribOverallMask)), &div);
             int want = AttribAdjust((uint16_t)m68k_divu((uint32_t)v * 100u, div));
             players++;
@@ -324,6 +321,7 @@ int main(void)
 {
     const char *rom = getenv("NHL94_ROM");
     if (!rom_load(rom ? rom : "NHL 94 (UE) [!].gen")) { fprintf(stderr, "cannot load ROM (set NHL94_ROM)\n"); return 2; }
+    league_retail();                                      /* (the league's tables, the cartridge's) */
     periods();
     overtime();
     weights();

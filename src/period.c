@@ -236,7 +236,7 @@ void updatePPTeamTime(void)
 /* period94.asm:GetTeamRating. The TeamRatings byte of team $28(a2). */
 uint16_t GetTeamRating(struct Team *tm)
 {
-    return rom_ptr(LG(TeamRatings))[tm->team];
+    return lg(tm->team)->rating;
 }
 
 /* period94.asm:ShortenMsgTimer. Cap msgtimer at 2, unless a second pad is on and a3 is not the

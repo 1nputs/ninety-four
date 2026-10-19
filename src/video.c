@@ -835,7 +835,7 @@ static uint16_t font_char(uint8_t c)
 /* video94.asm:printsmall. Print a String with control codes (negative bytes,
  * ControlCodeJumpTable) at printx/printy/printm with printa; the char set is printfontset
  * (smallfontchars, or setupfontchars when sflags6 bit 3). -> a1 = past the string. */
-static struct Text printsmall_p(struct Text s)
+struct Text printsmall_p(struct Text s)
 {
     static void (*const codes[9])(struct PrintState *) = {
         NULL, ControlCode_SetMap, ControlCode_SetAttribute, ControlCode_SetX, ControlCode_SetY,
@@ -912,7 +912,7 @@ void ControlCode_SetFont(struct PrintState *st) { g.printfontset = (uint16_t)(te
 /* video94.asm:print. Print a String at printx/printy/printm with printa. A negative byte -$ab
  * starts a new position: map a, palette / priority b, then x and y bytes; $40 is a blank tile,
  * $5E skips a column, 0 is padding. -> a1 = past the string. */
-static struct Text print_p(struct Text s)
+struct Text print_p(struct Text s)
 {
     uint16_t saved = g.disflags;
     g.disflags |= HI(dfng);
@@ -1022,7 +1022,7 @@ uint32_t PushNumberWidth(uint16_t n, uint16_t width)
 
 /* video94.asm:appstring. a1 = String, a3 = String in RAM: append the first to the second (the
  * text of a3 ends at its first zero byte after the first character). */
-static void appstring_p(struct Text src, uint32_t buf)
+void appstring_p(struct Text src, uint32_t buf)
 {
     uint16_t have = m16(buf), more = text_word(&src);
     uint8_t *dst = ram_bytes(ram_at(buf), (uint16_t)((have > 2 ? have : 2) + more)), *a0 = dst + 2;
@@ -1049,7 +1049,7 @@ void appendz(const uint8_t *s, unsigned n, uint32_t buf) { (void)n; appstring_p(
 /* video94.asm:printbig. Print a String in the big font (two rows high, chars one or two
  * columns wide) at printx/printy; a negative byte starts a new position as in print. printx /
  * printy end past the text. */
-static struct Text printbig_p(struct Text s)
+struct Text printbig_p(struct Text s)
 {
     uint16_t saved = g.disflags;
     g.disflags |= HI(dfng);

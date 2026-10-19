@@ -21,7 +21,7 @@ void ChooseSong(void)
         n = 0xFFFF;
     } else {
         g.sflags8 &= (uint8_t)~0x40;
-        n = rom_ptr(LG(TeamSongs))[(int16_t)(g.HmTeam * 6 + g.SongIndex)];
+        n = lg(g.HmTeam)->songs[g.SongIndex];
         if (n == 0) n = rom_ptr(SYM_RandomSongs)[randomd0(8) & 7];
     }
     g.SongNum = n;

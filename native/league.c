@@ -1553,6 +1553,7 @@ static void use_built(struct built *B, const char *dir, const char *name)
     snprintf(now.dir, sizeof now.dir, "%s", dir);
     snprintf(now.name, sizeof now.name, "%s", name);
     free(old);
+    league_read();                                        /* (its tables, from what was built) */
 }
 
 /* dir's league built on the cartridge: 0, or -1 with league_error() */

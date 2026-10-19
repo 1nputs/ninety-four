@@ -692,13 +692,10 @@ void updatepwrplay(void)
     if (!was) a3->PwrPlays++;
     printz(str_updatepwrplay_1, sizeof str_updatepwrplay_1);
     print(PushTime(GetLowestPen(a2, a3)));
-    uint32_t a0 = a3->data;
     uint32_t mes = ram_addr(g.mesarea);
     wr16(g.mesarea, 2);
     appendz(str_updatepwrplay_2, sizeof str_updatepwrplay_2, mes);
-    a0 += rd16(rom_ptr(a0) + 4);                          /* the team name */
-    a0 += rd16(rom_ptr(a0));
-    appstring(a0, mes);
+    appstring_p(lg_text(&lg(a3->team)->abbr), mes);      /* the team's abbreviation */
     print(mes);
 }
 
@@ -773,14 +770,11 @@ void printscores1(void)
     PrintTeamNameAndScore(team_struct(1));
 }
 
-/* penalty94.asm:PrintTeamNameAndScore. The team name of a2 at printx / printy, then its score
- * as 2 digits at x $1C. */
+/* penalty94.asm:PrintTeamNameAndScore. The abbreviation of team a2 at printx / printy, then its
+ * score as 2 digits at x $1C. */
 void PrintTeamNameAndScore(struct Team *tm)
 {
-    uint32_t a1 = tm->data;
-    a1 += rd16(rom_ptr(a1) + 4);
-    a1 += rd16(rom_ptr(a1));
-    print(a1);
+    print_p(lg_text(&lg(tm->team)->abbr));
     g.printx = 0x1C;
     print(PushNumberWidth(tm->score, 2));
 }
@@ -848,13 +842,7 @@ void pplpen(struct Team *tm, uint16_t d0)
 {
     if (g.printy > 0xA) return;
     uint16_t d2 = (uint16_t)(tm->pdst[d0 / 2] & 0x7FF);
-    const uint8_t *a1 = rom_ptr(tm->data);
-    a1 += rd16(a1);
-    for (int i = (int)(d0 >> 1); i >= 0; i--) {           /* skip d0 / 2 + 1 roster entries */
-        a1 += rd16(a1);
-        a1 += 8;
-    }
-    uint16_t num = a1[-8];                                /* his number (BCD) */
+    uint16_t num = lg(tm->team)->player[d0 >> 1].number;  /* his number (BCD) */
     uint16_t saved = g.printx;
     ConvertByteToDigits(num, text_buffer());
     wr16(g.mesarea, 4);                                   /* string length: 2 digits */
@@ -1004,15 +992,10 @@ static void set_nib_long(int k, uint32_t v) { g.nibblebuffer[2 * k] = (uint16_t)
  * scoring team's (bits 4-6) and the other team's (bits 0-2) sctab rows as weights */
 static uint16_t getscore(uint16_t d0, uint16_t d1)
 {
-    const uint8_t *tl = rom_ptr(LG(TeamList));
-    const uint8_t *a1 = rom_ptr(rd32(tl + d0 * 4));
-    a1 += rd16(a1 + 8);
-    unsigned row = (a1[0] & 0x70) >> 1;                   /* row * 8 */
+    unsigned row = (lg(d0)->offense & 7u) << 3;            /* row * 8: the scorers' offense */
     set_nib_long(0, ((uint32_t)sctab[row / 2] << 16) | sctab[row / 2 + 1]);
     set_nib_long(1, ((uint32_t)sctab[row / 2 + 2] << 16) | sctab[row / 2 + 3]);
-    a1 = rom_ptr(rd32(tl + d1 * 4));
-    a1 += rd16(a1 + 8);
-    row = (a1[0] & 7) << 3;
+    row = (lg(d1)->defense & 7u) << 3;                    /* the other team's defense */
     set_nib_long(0, nib_long(0) + (((uint32_t)sctab[row / 2] << 16) | sctab[row / 2 + 1]));
     set_nib_long(1, nib_long(1) + (((uint32_t)sctab[row / 2 + 2] << 16) | sctab[row / 2 + 3]));
     return WeightedRandomSelect(4);
@@ -1101,9 +1084,7 @@ static void ticker_team(uint16_t team, uint16_t score, uint16_t x)
 {
     g.printx = x;
     g.printy += 1;
-    uint32_t a1 = rd32(rom_ptr(LG(TeamList)) + team * 4);
-    a1 += rd16(rom_ptr(a1) + 4);                          /* the team name */
-    print(a1);
+    print_p(lg_text(&lg(team)->city));
     g.printx = (uint16_t)(x + 0x15);
     print(PushNumberWidth(score, 2));
 }

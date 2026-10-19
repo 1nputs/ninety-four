@@ -65,7 +65,7 @@ void CountPlayers(void)
 void PlayerRecordIO(uint32_t slot, uint16_t team, uint32_t buf)
 {
     uint32_t at = slot << 2;
-    at += (uint32_t)(int32_t)(int16_t)(rd16(rom_ptr(LG(PlayerRecordOffsets)) + (uint16_t)(team << 1)) << 2);
+    at += (uint32_t)(int32_t)(int16_t)(lg(team)->records << 2);
     if (g.sflags6 & HI(6)) WriteSRAM(at, 4, buf);
     else ReadSRAM(at, 4, buf);
 }
@@ -253,9 +253,9 @@ void PlayerCardScreen(void)
     g.printx = vis ? 4 : 0x1D;
     g.printy = 6;
     uint16_t chars = g.homepicchars, d3 = (uint16_t)(g.featuredplayer * 6);
-    uint32_t list = rd32(rom_ptr(LG(FeaturedPictures) + (uint32_t)(int16_t)(uint16_t)(team << 2)));
-    g.cardroster = rd16(rom_ptr(list + (int16_t)d3 + 4));
-    uint32_t pic = rd32(rom_ptr(list + (int16_t)d3));
+    const struct LgTeam *T = lg(team);
+    g.cardroster = T->picture[d3 / 6].slot;
+    uint32_t pic = T->picture[d3 / 6].pic;
     uint32_t pal = ART(PicturePalette) + rd32(rom_ptr(ART(PicturePalette))), map;
     if (rd32(rom_ptr(pic + 4)) == 0) map = ART(PicturePalette) + rd32(rom_ptr(ART(PicturePalette) + 4));   /* no map: the common one */
     else map = pic + rd32(rom_ptr(pic + 4));
@@ -279,14 +279,12 @@ void PlayerCardScreen(void)
     g.printm = 0;
     team = vis ? g.VisTeam : g.HomeTeam;
     g.cardteamnum = team;
-    uint32_t a2 = rd32(rom_ptr(LG(TeamList) + (uint32_t)(int16_t)(uint16_t)(team << 2)));
-    a2 += (uint32_t)(int16_t)rd16(rom_ptr(a2));          /* the roster: name String, then 8 bytes */
-    for (uint16_t n = g.cardroster; n-- != 0;) a2 += (uint32_t)(int16_t)rd16(rom_ptr(a2)) + 8;
+    const struct LgPlayer *P = &lg(team)->player[g.cardroster];
     uint8_t *mes = g.mesarea;
     wr16(mes, 6);
-    ConvertByteToDigits((uint16_t)(int16_t)(int8_t)*rom_ptr(a2 + (int16_t)rd16(rom_ptr(a2))), mes + 2);          /* the uniform number */
+    ConvertByteToDigits((uint16_t)(int16_t)(int8_t)P->number, mes + 2);   /* the uniform number */
     wr16(mes + 4, 0x2000);
-    appstring(a2, MESAREA);                               /* and the name */
+    appstring_p(lg_text(&P->name), MESAREA);              /* and the name */
     print_setup(MESAREA);
     if ((int16_t)g.ValidSRAM >= 0) {                      /* the user records */
         PrintRecordValue(MESAREA, g.cardteamnum, g.cardroster);
@@ -328,12 +326,12 @@ void PrintRecordValue(uint32_t buf, uint16_t team, uint16_t player)
 }
 
 /* cards94.asm:CopyString. Copy String a1 (its length word first) to a3. */
-void CopyString(uint32_t src, uint32_t dst)
+void CopyString(uint32_t src, uint32_t dst) { CopyString_p((struct Text){ NULL, src }, dst); }
+void CopyString_p(struct Text src, uint32_t dst)
 {
-    uint32_t s = src;
-    uint16_t n = (uint16_t)(m16(s) - 1);
+    uint16_t n = (uint16_t)(text_len(src) - 1);
     uint8_t *d = ram_bytes(ram_at(dst), (uint16_t)(n + 1));
-    do *d++ = m8(s++); while (n-- != 0);
+    do *d++ = text_next(&src); while (n-- != 0);
 }
 
 /* cards94.asm:AppendNumber. d0 (0-999, no leading zeros) as a String at a1, padded to an even
@@ -360,11 +358,7 @@ uint16_t GetRecordValue(uint16_t team, uint16_t player, uint16_t *goalie)
 {
     ReadPlayerRecord((uint32_t)(int32_t)(int16_t)player, team, RAM_BASE);
     uint16_t v = (uint16_t)(int16_t)(int8_t)m8(RAM_BASE);
-    uint32_t blk = rd32(rom_ptr(LG(TeamList) + (uint32_t)(int16_t)(uint16_t)(team << 2)));
-    uint16_t odds = rd16(rom_ptr(blk + (int16_t)rd16(rom_ptr(blk + 0xA))));
-    int16_t goalies = 0;
-    do { goalies++; odds = (uint16_t)(odds << 4); } while (odds != 0);
-    *goalie = goalies > (int16_t)player;
+    *goalie = (int16_t)lg(team)->goalies > (int16_t)player;
     return v;
 }
 
@@ -455,13 +449,10 @@ void AppendUserName(uint32_t buf, uint16_t user)
     if (g.sflags6 & HI(7)) TrimSpaces(buf);
 }
 
-/* cards94.asm:AppendTeamName. Append team d0's city (its TeamList block String) to a1. */
+/* cards94.asm:AppendTeamName. Append the abbreviation of team d0 (its low byte) to a1. */
 void AppendTeamName(uint16_t team, uint32_t buf)
 {
-    uint32_t blk = rd32(rom_ptr(LG(TeamList) + (uint32_t)(int16_t)(uint16_t)((int16_t)(int8_t)team << 2)));
-    blk += (uint32_t)(int32_t)(int16_t)rd16(rom_ptr(blk + 4));
-    blk += (uint32_t)(int16_t)rd16(rom_ptr(blk));
-    appstring(blk, buf);
+    appstring_p(lg_text(&lg((uint16_t)(int16_t)(int8_t)team)->abbr), buf);
 }
 
 /* cards94.asm:TrimSpaces. Drop the trailing spaces of String a2 (zeroed) and pad its length to
@@ -484,17 +475,11 @@ void TrimSpaces(uint32_t str)
  * goalies). */
 uint32_t DrawPlayerPicture(uint16_t player, uint16_t team)
 {
-    uint32_t list = rd32(rom_ptr(LG(FeaturedPictures) + (uint32_t)(int16_t)(uint16_t)(team << 2)));
-    for (; rd32(rom_ptr(list)) != 0; list += 6)
-        if (rd16(rom_ptr(list + 4)) == player) return rd32(rom_ptr(list));
-    uint32_t data = rd32(rom_ptr(LG(TeamList) + (uint32_t)(int16_t)(uint16_t)(team << 2)));
-    uint32_t a6 = data + (uint32_t)(int16_t)rd16(rom_ptr(data));
-    for (uint16_t n = player; n-- != 0;) a6 += (uint32_t)(int16_t)rd16(rom_ptr(a6)) + 8;
-    a6 += (uint32_t)(int16_t)rd16(rom_ptr(a6));           /* past his name: his attributes */
-    uint16_t odds = rd16(rom_ptr(data + (int16_t)rd16(rom_ptr(data + 0xA)))), goalies = 0;
-    do { goalies++; odds = (uint16_t)(odds << 4); } while (odds != 0);
-    int pic1 = rom_ptr(a6)[4] & 1;
-    if ((int16_t)player < (int16_t)goalies) return pic1 ? ART(NoPicGoalie1) : ART(NoPicGoalie2);
+    const struct LgTeam *T = lg(team);
+    for (int k = 0; k < T->pictures; k++)
+        if (T->picture[k].slot == player) return T->picture[k].pic;
+    int pic1 = T->player[player].rating[LR_HANDED_FIGHTING] & 1;
+    if ((int16_t)player < (int16_t)T->goalies) return pic1 ? ART(NoPicGoalie1) : ART(NoPicGoalie2);
     return pic1 ? ART(NoPicSkater2) : ART(NoPicSkater1);
 }
 
@@ -512,18 +497,12 @@ uint16_t CalcAttrib(uint16_t player, struct Team *tm, uint32_t mask, uint16_t *d
     uint32_t weights = SYM_AttribWgtList;
     if (mask == rd32(rom_ptr(SYM_PAttribOverallMask))) weights = SYM_OvrPlayerWgtList;
     if (mask == rd32(rom_ptr(SYM_GAttribOverallMask))) weights = SYM_OvrGoalWgtList;
-    uint32_t a0 = tm->data;
+    const struct LgPlayer *P = &lg(tm->team)->player[player];
     const uint8_t *hotcold = tm->hotcold[player] + 0x10;                        /* the end of his hot / cold bytes */
-    a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0));
-    for (uint16_t n = player;; n--) {                     /* past his name and attributes */
-        a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0)) + 8;
-        if (n == 0) break;
-    }
-    const uint8_t *attrs = rom_ptr(a0);
     uint16_t d0 = 0, d1 = 0, bits = (uint16_t)(mask >> 16);
     for (int16_t d2 = 0xF; d2 >= 0; d2--) {
         if (!(bits & (1u << d2))) continue;
-        uint16_t d3 = attrs[-(d2 >> 1) - 1];
+        uint16_t d3 = lg_attr(P, 7 - (d2 >> 1));        /* (his 8 bytes from the end back: 7, his last ratings, to 0, his number) */
         if (d2 & 1) d3 >>= 4;
         d3 &= 0xF;
         if (d2 != 0xD && d2 != 6) {
@@ -656,8 +635,7 @@ void WrapCardIndex(uint16_t idx)
  * position. */
 void DrawPlayerCard(uint16_t idx)
 {
-    uint32_t pal = LG(TeamPalettes) + (uint32_t)(int16_t)(uint16_t)(card_team() << 6) + 0x26;
-    pal_load(0x11, rom_ptr(pal), 2);
+    pal_load_w(0x11, &lg(card_team())->matchup[1][3], 2);
     g.palcount = 0x64;
     printz(str_DrawPlayerCard_1, sizeof str_DrawPlayerCard_1);
     eraser(0x28, 0x15, 0x7FF);
@@ -673,11 +651,8 @@ void DrawPlayerCard(uint16_t idx)
     printz(str_DrawPlayerCard_3, sizeof str_DrawPlayerCard_3);
     uint16_t team = card_team();
     g.TempWord2 = team;
-    uint32_t a2 = rd32(rom_ptr(LG(TeamList) + (uint32_t)(int16_t)(uint16_t)(team << 2)));
-    a2 += (uint32_t)(int16_t)rd16(rom_ptr(a2));
-    for (uint16_t n = GetCardPlayer(); n-- != 0;) a2 += (uint32_t)(int16_t)rd16(rom_ptr(a2)) + 8;
     uint8_t *ts = g.ThreeStars;
-    CopyString(a2, ram_addr(ts));                         /* his first name */
+    CopyString_p(lg_text(&lg(team)->player[GetCardPlayer()].name), ram_addr(ts));   /* his first name */
     uint16_t len = 0;
     while (ts[2 + len] != ' ') len++;
     ts[2 + len] = 0;
@@ -846,8 +821,7 @@ void PrintStartingLine(uint16_t x, uint16_t y)
         team = g.VisTeam;
         tm = GetTeamStruct(team);
     }
-    uint32_t a0 = rd32(rom_ptr(LG(TeamList) + (uint32_t)(int32_t)(int16_t)(uint16_t)(team << 2)));
-    a0 += (uint32_t)(int32_t)(int16_t)rd16(rom_ptr(a0 + 6));
+    const uint8_t *a0 = lg(team)->lines[0];
     g.printx = x;
     g.printy = y;
     printsmallz(str_PrintStartingLine_1, sizeof str_PrintStartingLine_1);
@@ -856,7 +830,7 @@ void PrintStartingLine(uint16_t x, uint16_t y)
     for (uint32_t a1 = SYM_LinePosNames; rd16(rom_ptr(a1)) != 2; a1 += (uint32_t)(int32_t)(int16_t)rd16(rom_ptr(a1))) {
         g.printx = x;
         printsmall(a1);
-        uint16_t p = (uint16_t)((int16_t)(int8_t)*rom_ptr(a0++) - 1);
+        uint16_t p = (uint16_t)((int16_t)(int8_t)*a0++ - 1);
         printsmall(FormatPlayerNameShort(p, tm));
         g.printy++;
     }
@@ -895,31 +869,25 @@ void PrintTeamRating(uint16_t x, uint16_t y)
 void PrintCardTeam(uint16_t y)
 {
     g.printy = y;
-    uint32_t a0 = GetCardTeam()->data;
-    a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0 + 4));
-    PrintCentered(a0);
-    a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0));
-    a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0));
+    const struct LgTeam *T = lg(GetCardTeam()->team);
+    PrintCentered_p(lg_text(&T->city));
     g.printy++;
-    PrintCentered(a0);
+    PrintCentered_p(lg_text(&T->nickname));
 }
 
 /* cards94.asm:PrintCentered. printsmall String a0 centred on column $14. */
-void PrintCentered(uint32_t s)
+void PrintCentered(uint32_t s) { PrintCentered_p((struct Text){ NULL, s }); }
+void PrintCentered_p(struct Text s)
 {
-    g.printx = (uint16_t)(0x14 - ((uint16_t)(m16(s) - 2) >> 1));
-    printsmall(s);
+    g.printx = (uint16_t)(0x14 - ((uint16_t)(text_len(s) - 2) >> 1));
+    printsmall_p(s);
 }
 
 /* cards94.asm:GetJerseyString. Player d0 of the card team: his number as a 2 digit String at a1
  * (a space for a leading 0). */
 void GetJerseyString(uint16_t player, uint32_t buf)
 {
-    uint32_t a0 = GetCardTeam()->data;
-    a0 += (uint32_t)(int32_t)(int16_t)rd16(rom_ptr(a0));
-    uint16_t n = player;
-    do a0 += (uint32_t)(int32_t)(int16_t)rd16(rom_ptr(a0)) + 8; while (n-- != 0);
-    uint8_t num = *rom_ptr(a0 - 8);
+    uint8_t num = lg(GetCardTeam()->team)->player[player].number;
     uint8_t *b = ram_bytes(ram_at(buf), 4);
     wr16(b, 4);
     b[2] = (num >> 4) ? (uint8_t)((num >> 4) + '0') : ' ';
@@ -1002,8 +970,7 @@ void BuildCardPlayerLists(void)
  * line at +6) in roster order, then the others from a1 + 6. */
 void BuildCardPlayerList(struct Team *tm, uint8_t *list)
 {
-    uint32_t a0 = tm->data;
-    const uint8_t *line = rom_ptr(a0 + (uint32_t)(int16_t)rd16(rom_ptr(a0 + 6)));
+    const uint8_t *line = lg(tm->team)->lines[0];
     uint8_t *rest = list + 6;
     for (uint16_t p = 0; p < SYM_RosterSlots; p++) {
         int starter = 0;

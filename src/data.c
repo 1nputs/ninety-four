@@ -112,10 +112,7 @@ void ShowThreeStars(void)
         uint16_t player = TakeTopStarScore(&tm);
         g.printx = 0x1A;
         g.printy++;
-        uint32_t data = tm->data;
-        uint32_t abbr = data + (int16_t)rd16(rom_ptr(data + 4));
-        abbr += (int16_t)rd16(rom_ptr(abbr));
-        print(abbr);
+        print_p(lg_text(&lg(tm->team)->abbr));
         uint32_t name = getname(player, tm);
         g.printx = 3;
         print(name);
@@ -189,15 +186,11 @@ uint16_t TakeTopStarScore(struct Team **tm)
     return n;
 }
 
-/* data94.asm:GetPlayerNamePointer. d0 = roster slot, a2 = team -> a0 = the player's name
- * String in the team data (each player: a String, then 8 bytes). */
-uint32_t GetPlayerNamePointer(uint16_t player, struct Team *tm)
-{
-    uint32_t a = tm->data;
-    a += rd16(rom_ptr(a));
-    while (player--) a += rd16(rom_ptr(a)) + 8;
-    return a;
-}
+/* data94.asm:GetPlayerNamePointer. d0 = roster slot, a2 = team -> a0 = the player's name. */
+const struct LgText *GetPlayerNamePointer(uint16_t player, struct Team *tm) { return &lg(tm->team)->player[player].name; }
+
+/* the number of the player whose name that is (the byte after it, on the cartridge) */
+static uint8_t name_number(const struct LgText *name) { return ((const struct LgPlayer *)(const void *)name)->number; }
 
 /* data94.asm:ConvertByteToDigits. d0 = BCD byte: two ASCII digits to (a1)+, a leading 0 as a
  * space. -> a1 */
@@ -225,10 +218,10 @@ uint32_t FinalizeTextBuffer(uint8_t *end)
  * (the first name), optionally after the first initial and ". " */
 static uint32_t format_name(uint16_t player, struct Team *tm, int initial)
 {
-    uint32_t name = GetPlayerNamePointer(player, tm);
-    const uint8_t *p = rom_ptr(name);
+    const struct LgText *name = GetPlayerNamePointer(player, tm);
+    const uint8_t *p = name->s;
     uint8_t *out = text_buffer();
-    out = ConvertByteToDigits(p[rd16(p)], out);          /* the jersey number after the name */
+    out = ConvertByteToDigits(name_number(name), out);    /* his jersey number */
     *out++ = ' ';
     const uint8_t *end = p + rd16(p);
     p += 2;
@@ -247,9 +240,9 @@ uint32_t FormatPlayerNumInitial(uint16_t player, struct Team *tm) { return forma
 /* data94.asm:FormatLastName. Name string a0 (a length word String): from after the first space
  * (the first name) to its end or a 0 byte, to a1, space padded to TextBuffer + 12 -> a1 =
  * mesarea (FinalizeTextBuffer). */
-uint32_t FormatLastName(uint32_t name, uint8_t *out)
+uint32_t FormatLastName(const struct LgText *name, uint8_t *out)
 {
-    const uint8_t *p = rom_ptr(name);
+    const uint8_t *p = name->s;
     const uint8_t *end = p + rd16(p);
     p += 2;
     while (*p++ != ' ') {}
@@ -276,14 +269,13 @@ uint32_t FormatPlayerNameLast(uint16_t player, struct Team *tm)
  * number, then appendz / appstring). */
 uint32_t getname(uint16_t player, struct Team *tm)
 {
-    uint32_t name = GetPlayerNamePointer(player, tm);
-    const uint8_t *p = rom_ptr(name);
+    const struct LgText *name = GetPlayerNamePointer(player, tm);
     uint8_t *mes = g.mesarea;
     uint32_t mes_addr = ram_addr(mes);
     wr16(mes, 4);
-    ConvertByteToDigits(p[rd16(p)], mes + 2);
+    ConvertByteToDigits(name_number(name), mes + 2);
     appendz(str_getname_1, sizeof str_getname_1, mes_addr);
-    appstring(name, mes_addr);
+    appstring_p(lg_text(name), mes_addr);
     return mes_addr;
 }
 
@@ -538,8 +530,7 @@ void FigureJoy(void)
 void maketree(void)
 {
     uint8_t *tree = g.potree;
-    const uint8_t *seats = rom_ptr(LG(playoffseats)) + (uint16_t)(g.postarts << 4);
-    memcpy(tree, seats, 16);
+    memcpy(tree, lg_seats[g.postarts & 31], 16);
     uint8_t *a0 = tree, *a1 = tree + 16;
     uint16_t bits = g.WinBits;
     for (int i = 0; i < 15; i++, a0 += 2, bits >>= 1) *a1++ = a0[bits & 1];
@@ -574,7 +565,7 @@ void NewPO(void)
     uint16_t team = g.Opt1Team > league.playoff_teams - 1 ? league.playoff_teams - 1 : g.Opt1Team;
     for (;;) {
         row = (row + 1) & (league.playoff_rows - 1);
-        const uint8_t *a0 = rom_ptr(LG(playoffseats)) + (row << 4);
+        const uint8_t *a0 = lg_seats[row & 31];
         for (d1 = SYM_PlayoffRowTeams - 1; *a0++ != (uint8_t)team; )   /* dbeq */
             if (d1-- == 0) break;
         if (d1 != 0xFFFF) break;

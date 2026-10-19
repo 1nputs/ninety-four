@@ -342,21 +342,21 @@ void PrintScrollMarks(void)
     print(a1);
 }
 
-/* optsetup94.asm:PrintOptTeamName. A blank value, then team d3 of option d7 (its TeamList city;
- * the full names of the two New York teams). A league of its own says which names
- * (LG(OptionTeamNames)): the cartridge's code knows its New York teams by number. */
+/* optsetup94.asm:PrintOptTeamName. A blank value, then team d3 of option d7 (its city; the full
+ * names of the two New York teams). A league of its own says which names (its option_name): the
+ * cartridge's code knows its New York teams by number. */
 void PrintOptTeamName(uint16_t line)
 {
     uint16_t x = g.printx;
     print(SYM_BlankValueTxt);
     g.printx = x;
     uint16_t team = option(line);
-    uint32_t a1 = rd32(rom_ptr(LG(TeamList) + (uint16_t)(team << 2)));
-    a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1 + 4));
-    if (LG(OptionTeamNames)) a1 = rd32(rom_ptr(LG(OptionTeamNames) + (uint16_t)(team << 2)));
-    else if (team == 0xE) a1 = SYM_RangersTxt;
-    else if (team == 0xD) a1 = SYM_IslandersTxt;
-    print(a1);
+    const struct LgTeam *T = lg(team);
+    struct Text a1 = lg_text(&T->city);
+    if (T->option_name.s[1] != 0) a1 = lg_text(&T->option_name);   /* (a league's own) */
+    else if (team == 0xE) a1 = (struct Text){ NULL, SYM_RangersTxt };
+    else if (team == 0xD) a1 = (struct Text){ NULL, SYM_IslandersTxt };
+    print_p(a1);
 }
 
 /* optsetup94.asm:PrintOptionNames. The option names (OptionNames) at x 3, two rows apart from

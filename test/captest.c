@@ -114,6 +114,7 @@ int main(int argc, char **argv)
     const char *usage = "usage: captest FILE.cap... [routine ...] [-v]\n";
     const char *rom = getenv("NHL94_ROM");
     if (!rom_load(rom ? rom : "NHL 94 (UE) [!].gen")) { fprintf(stderr, "cannot load ROM (set NHL94_ROM)\n"); return 2; }
+    league_retail();                                      /* (the league's tables, the cartridge's) */
     const char *caps[256], *only[32];
     int ncaps = 0, nonly = 0;
     for (int i = 1; i < argc; i++) {

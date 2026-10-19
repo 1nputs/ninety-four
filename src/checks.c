@@ -1208,24 +1208,22 @@ found:
 int SelectPenaltyShotSkater(void)
 {
     struct Team *a0 = team_struct(g.BA_Team != 0);
-    const uint8_t *a2 = rom_ptr(a0->data);
-    a2 += rd16(a2);
+    const struct LgTeam *T = lg(a0->team);
     int16_t d6 = -1, d5 = -1;
-    for (uint16_t d1 = 0; rd16(a2) != 2; ) {
-        a2 += rd16(a2);                                   /* past the name */
+    for (uint16_t d1 = 0; d1 < T->players; ) {
+        const uint8_t *r = T->player[d1].rating;
         uint16_t d7 = (uint16_t)(d1 * 2);
-        uint8_t d0 = a2[5] & 0xF;
+        uint8_t d0 = r[LR_SHOT_ACCURACY];
         if ((int8_t)d0 > 1) {
             if (g.gmode2 & HI(0)) goto setskater;
             uint16_t st = a0->pdst[d7 / 2];
             if (st == 0xFFFE || st == 0xFFFF) {           /* bench or ice */
-                int16_t d3 = (int16_t)((a2[1] & 0xF) + (a2[2] & 0xF) + (a2[2] >> 4) + (a2[3] & 0xF) + (a2[3] >> 4)
-                                       + (a2[5] & 0xF) + (a2[5] >> 4) + (a2[6] >> 4) + (a2[7] >> 4));
+                int16_t d3 = (int16_t)(r[LR_AGILITY] + r[LR_OFF_AWARENESS] + r[LR_SPEED] + r[LR_SHOT_POWER] + r[LR_DEF_AWARENESS]
+                                       + r[LR_SHOT_ACCURACY] + r[LR_STICK_HANDLING] + r[LR_ENDURANCE] + r[LR_PASS_ACCURACY]);
                 if (d1 == g.BA_Skater_Offset) d3 = 0x7FFF;
                 if (!(d3 < d6)) { d6 = d3; d5 = (int16_t)d1; }
             }
         }
-        a2 += 8;
         d1++;
         if (!(d1 < 0x1A)) break;
     }

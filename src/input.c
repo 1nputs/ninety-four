@@ -325,11 +325,8 @@ void SetLCmode2(struct Team *tm)
         g.printx -= 5;
         g.printy -= 1;
     }
-    uint32_t a1 = tm->data;                               /* the team name */
-    a1 += rd16(rom_ptr(a1) + 4);
-    a1 += rd16(rom_ptr(a1));
     g.printx += 2;
-    print(a1);
+    print_p(lg_text(&lg(tm->team)->abbr));                /* the team's abbreviation */
 }
 
 /* input94.asm:setlccords. Set printx / printy to the coordinates of the line change box of

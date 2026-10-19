@@ -59,6 +59,7 @@ static inline void wr32(uint8_t *p, uint32_t v) { p[0] = (uint8_t)(v >> 24); p[1
 /* palfadenew, the 64 colours the palette fades to: n of them from the cartridge's (big-endian
  * words) at colour c */
 static inline void pal_load(unsigned c, const uint8_t *src, unsigned n) { for (unsigned i = 0; i < n; i++) g.palfadenew[c + i] = rd16(src + 2 * i); }
+static inline void pal_load_w(unsigned c, const uint16_t *src, unsigned n) { for (unsigned i = 0; i < n; i++) g.palfadenew[c + i] = src[i]; }   /* (colours as words: the league's) */
 
 /* a 16.16 position as the 68k reads it with move.l */
 #define POS32(o, f) (((int32_t)(o) << 16) | f)
@@ -148,6 +149,18 @@ void xyVmMap(void);
 struct Text { const uint8_t *host; uint32_t at; };
 static inline uint8_t text_next(struct Text *t) { return t->host ? *t->host++ : m8(t->at++); }
 static inline uint16_t text_word(struct Text *t) { uint16_t hi = text_next(t); return (uint16_t)(hi << 8 | text_next(t)); }
+static inline uint8_t text_byte(struct Text t, uint32_t k) { return t.host ? t.host[k] : m8(t.at + k); }   /* (byte k of it) */
+static inline uint16_t text_len(struct Text t) { return (uint16_t)(text_byte(t, 0) << 8 | text_byte(t, 1)); }
+/* a String of the league's tables (league.h): its bytes, and in the cartridge's league its
+ * address (what the 68000's registers held) */
+static inline struct Text lg_text(const struct LgText *t) { return (struct Text){ t->s, t->at }; }
+/* the printers, appstring and CopyString on a Text (print and the rest take a 68000 address) */
+struct Text print_p(struct Text s);
+struct Text printsmall_p(struct Text s);
+struct Text printbig_p(struct Text s);
+void appstring_p(struct Text src, uint32_t buf);
+void CopyString_p(struct Text src, uint32_t dst);
+void PrintCentered_p(struct Text s);
 /* printsmall's registers: a1 = string, d2 = attribute, d3 = bytes left */
 struct PrintState { struct Text p; uint16_t attr; uint16_t count; };
 void ControlCode_SetMapAndPosition(struct PrintState *st);
@@ -667,7 +680,7 @@ void ShowThreeStars(void);
 void CalcStarScores(uint16_t d2);                       /* d2 = extra ice time a goalie needs */
 int16_t CalcTeamStarScores(struct Team *tm, struct Team *other, uint8_t **out, uint16_t mintime);   /* a2, a3, a4, d5 -> d3 */
 uint16_t TakeTopStarScore(struct Team **tm);            /* -> d0, a2 */
-uint32_t GetPlayerNamePointer(uint16_t player, struct Team *tm);     /* d0, a2 -> a0 */
+const struct LgText *GetPlayerNamePointer(uint16_t player, struct Team *tm);   /* d0, a2 -> a0 */
 uint8_t *ConvertByteToDigits(uint16_t bcd, uint8_t *dst);          /* d0, a1 -> a1 */
 uint32_t FinalizeTextBuffer(uint8_t *end);              /* a1 -> a1 = mesarea */
 uint32_t FormatPlayerName(uint16_t player, struct Team *tm);    /* d0, a2 -> a1 */
@@ -695,7 +708,7 @@ void PushBits(uint8_t *bits, uint16_t v, uint16_t range);         /* a3, d0, d1 
 void WritePassBits(uint8_t *bits);                            /* a3 */
 void ResolveGames(void);
 void EncodePW(void);
-uint32_t FormatLastName(uint32_t name, uint8_t *out);   /* a0, a1 -> a1 = mesarea */
+uint32_t FormatLastName(const struct LgText *name, uint8_t *out);   /* a0, a1 -> a1 = mesarea */
 uint32_t FormatPlayerNameShort(uint16_t player, struct Team *tm);    /* d0, a2 -> a1 */
 uint32_t FormatPlayerNameLast(uint16_t player, struct Team *tm);     /* d0, a2 -> a1 */
 
@@ -797,8 +810,8 @@ void GetMatchupPlayers(void);
 uint16_t GetMatchupPlayer(struct Team *tm);             /* a0 -> d0 */
 void RestartAdvantageMarks(void);
 void PrintAdvantageMarks(void);
-uint32_t GetTeamNickname(struct Team *tm);              /* a2 -> a1 */
-uint32_t GetTeamArena(struct Team *tm);                 /* a2 -> a1 */
+struct Text GetTeamNickname(struct Team *tm);           /* a2 -> a1 */
+struct Text GetTeamArena(struct Team *tm);              /* a2 -> a1 */
 
 /* ---- records94.asm: the user records: the name entry, Record Holders ---- */
 void UserNameEntry(void);                               /* the name entry */

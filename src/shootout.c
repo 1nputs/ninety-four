@@ -23,8 +23,7 @@ void ShootoutModeBox(void)
     print(FormatPlayerNumInitial(sortobj((int16_t)g.BA_Goalie_SCnum)->pnum, team_struct(g.BA_Team == 0)));
     for (int away = 0; away < 2; away++) {
         printz(away ? str_ShootoutModeBox_4 : str_ShootoutModeBox_3, away ? sizeof str_ShootoutModeBox_4 : sizeof str_ShootoutModeBox_3);
-        uint32_t data = team_struct(away)->data;
-        print(data + (int16_t)rd16(rom_ptr(data + 4)));
+        print_p(lg_text(&lg(team_struct(away)->team)->city));
         g.printx = 0x15;
         print(PushNumberWidth(away ? g.awayshootgoals : g.homeshootgoals, 3));
     }
@@ -71,9 +70,8 @@ void ShootoutWonBy(void)
     printbigz(str_ShootoutWonBy_2, sizeof str_ShootoutWonBy_2);
     g.printy += 2;
     uint16_t team = (int16_t)g.homeshootgoals > (int16_t)g.awayshootgoals ? g.HomeTeam : g.VisTeam;
-    uint32_t data = rd32(rom_ptr(LG(TeamList) + (int16_t)(team << 2)));
     g.printx = 2;
-    printbig(data + (int16_t)rd16(rom_ptr(data + 4)));
+    printbig_p(lg_text(&lg(team)->city));
 }
 
 /* shootout94.asm:InitShooters. The six starters of the home team (shootoutteam 0: the list
@@ -83,8 +81,7 @@ void InitShooters(void)
     uint16_t team = g.HomeTeam;
     uint8_t *list = g.homeshooters;                       /* (below homeshootnum or shootoutteam) */
     if (g.shootoutteam) { team = g.VisTeam; list = g.awayshooters; }
-    uint32_t data = rd32(rom_ptr(LG(TeamList) + (uint16_t)(team << 2)));
-    const uint8_t *a1 = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 6)));
+    const uint8_t *a1 = lg(team)->lines[0];               /* (its first line set) */
     for (int i = 5; i >= 0; i--) wr16(list + 2 * i, (uint16_t)(*a1++ - 1));   /* (written from the end) */
 }
 

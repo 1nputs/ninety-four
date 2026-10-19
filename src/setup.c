@@ -105,9 +105,7 @@ uint16_t ReloadCrowdTiles(void) { return DecompressGraphicsPlain(ART(CrowdFrameL
 void setplayercolors(void)
 {
     for (int away = 0; away < 2; away++) {
-        uint32_t data = team_struct(away)->data;
-        const uint8_t *src = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 2)) + 0x20 * away);
-        pal_load(0x20 + 0x10 * away, src, 0x10);
+        pal_load_w(0x20 + 0x10 * away, lg(team_struct(away)->team)->colours[away], 0x10);
     }
 }
 
@@ -330,7 +328,7 @@ void setupice(void)
 void InitTeamStructure(uint16_t team, struct Team *tm)
 {
     tm->team = team;
-    tm->data = rd32(rom_ptr(LG(TeamList) + (uint16_t)(team << 2)));
+    tm->data = lg(team)->data;
     InitTeamLines(tm);
 }
 
@@ -338,8 +336,7 @@ void InitTeamStructure(uint16_t team, struct Team *tm)
  * layout by OptLine); the line editor's "Set Original lines". */
 void InitTeamLines(struct Team *tm)
 {
-    uint32_t data = tm->data;
-    const uint8_t *src = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 6)));
+    const uint8_t *src = lg(tm->team)->lines[0];
     uint8_t *dst = tm->lines[0];                          /* (the 7 line sets, row after row) */
     if (g.OptLine != 0) {
         memcpy(dst, src, 8);
@@ -690,22 +687,22 @@ void UpdateScoutingDisplay(void)
     const uint8_t *a2 = rom_ptr(a1) + d0;
     g.typedelay = 0xA;
     d0 = (int16_t)g.DispAttribCtr;
-    uint32_t str;                                         /* a String the special character puts in */
+    struct Text str;                                      /* a String the special character puts in */
     struct Team *tm;
     uint16_t d1;
     switch (*a2) {
-    case '_': case '{': str = g.teams[0].data; goto string4;
-    case '+': case '}': str = g.teams[1].data; goto string4;
-    case '$': str = team_struct(g.awayhotter != 0)->data; goto string4;
+    case '_': case '{': tm = team_struct(0); goto city;
+    case '+': case '}': tm = team_struct(1); goto city;
+    case '$': tm = team_struct(g.awayhotter != 0); goto city;
     case '[': tm = team_struct(0); d1 = tm->goalie; goto roster;
     case ']': tm = team_struct(1); d1 = tm->goalie; goto roster;
     case '<': d1 = NextHomeHotPlayer(&tm); goto roster;
     case '>': d1 = NextAwayHotPlayer(&tm); goto roster;
     case '|': d1 = NextHomeColdPlayer(&tm); goto roster;
     case '\\': d1 = NextAwayColdPlayer(&tm); goto roster;
-    case '@': str = ScoutCrowdRecord(); goto append;
-    case '#': str = PlayedByHome(); goto append;
-    case '%': str = PlayedByAway(); goto append;
+    case '@': str = (struct Text){ NULL, ScoutCrowdRecord() }; goto append;
+    case '#': str = (struct Text){ NULL, PlayedByHome() }; goto append;
+    case '%': str = (struct Text){ NULL, PlayedByAway() }; goto append;
     case '=': str = GetTeamNickname(team_struct(0)); goto append;
     case '*': str = GetTeamNickname(team_struct(1)); goto append;
     case '^': str = GetTeamArena(team_struct(0)); goto append;
@@ -733,30 +730,25 @@ void UpdateScoutingDisplay(void)
         }
         wr16(g.mesarea, (uint16_t)(d1 + 2));
         if (d1 & 1) { *a0 = 0; wr16(g.mesarea, (uint16_t)(rd16(g.mesarea) + 1)); }
-        str = ram_addr(g.mesarea);
+        str = (struct Text){ NULL, ram_addr(g.mesarea) };
         goto put;
     }
-string4:                                                  /* the String at word 4 of a team data block */
-    str += (uint32_t)(int16_t)rd16(rom_ptr(str + 4));
+city:                                                     /* the team's city (the String at word 4 of its data) */
+    str = lg_text(&lg(tm->team)->city);
     goto append;
 roster:                                                   /* player d1's name in team a1's roster */
-    str = tm->data;
-    str += (uint32_t)(int16_t)rd16(rom_ptr(str));
-    for (; d1-- != 0;) str += (uint32_t)(int16_t)rd16(rom_ptr(str)) + 8;
+    str = lg_text(&lg(tm->team)->player[d1].name);
 append:
     g.PlayerScrollCtr++;
-    {
-        uint32_t s = str;
-        d0 = (int16_t)(d0 + m16(s) - 1);
-        d1 = (uint16_t)(m16(s) - 2);
-        if (m8(s + 1 + (int16_t)d1) == 0) d1--;           /* (not its pad byte) */
-    }
+    d0 = (int16_t)(d0 + text_len(str) - 1);
+    d1 = (uint16_t)(text_len(str) - 2);
+    if (text_byte(str, 1u + (uint32_t)(int16_t)d1) == 0) d1--;   /* (not its pad byte) */
 put:
     if (d0 > 0x1D) ScrollDisplayUp();                     /* not on this line: the next */
     printz(str_UpdateScoutingDisplay_1, sizeof str_UpdateScoutingDisplay_1);
     g.printx += g.DispAttribCtr;
     g.printy += g.VertLineScrolling;
-    print(str);
+    print_p(str);
     g.DispAttribCtr += d1;
 }
 

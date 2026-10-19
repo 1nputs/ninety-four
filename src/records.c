@@ -86,10 +86,9 @@ void NameEntryScreen(void)
     DecompressGraphicsWithCallback(ART(BigFontMap) + 8, d4, rom_find(SYM_NameEntryScreen, SYM_NameLetterGrid, bigfont, 8));
     PRINTZ(str_NameEntryScreen_3);                        /* the team's city, centred on x $1F */
     uint16_t team = g.nameentryvis ? g.VisTeam : g.HomeTeam;
-    uint32_t blk = rd32(rom_ptr(LG(TeamList) + (uint32_t)(int16_t)(uint16_t)(team << 2)));
-    uint32_t city = blk + (uint32_t)(int16_t)rd16(rom_ptr(blk + 4));
-    g.printx -= (uint16_t)((uint16_t)(rd16(rom_ptr(city)) - 2) >> 1);
-    print(city);
+    struct Text city = lg_text(&lg(team)->city);
+    g.printx -= (uint16_t)((uint16_t)(text_len(city) - 2) >> 1);
+    print_p(city);
     PRINTZ(str_NameEntryScreen_4);
     Framer(8, 8);
     PRINTZ(str_NameEntryScreen_5);                        /* its logo */
@@ -451,7 +450,7 @@ void WriteNameRecord(void)
     uint8_t user = (uint8_t)g.namelogsel;
     uint32_t at;
     for (int t = 0; t < (int)league.teams; t++) {         /* the player records (the cartridge's: $2D8 from 0) */
-        at = (uint32_t)rd16(rom_ptr(LG(PlayerRecordOffsets)) + 2 * t) << 2;
+        at = (uint32_t)lg((uint16_t)t)->records << 2;
         for (int n = 0; n < 0x1A; n++, at += 4) {
             int changed = 0;
             ReadSRAM(at, 4, ram_addr(g.ThreeStars));

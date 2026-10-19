@@ -320,8 +320,7 @@ void GetMatchupPlayers(void)
  * of the first of its line sets. */
 uint16_t GetMatchupPlayer(struct Team *tm)
 {
-    uint32_t data = tm->data;
-    const uint8_t *lines = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 6)));
+    const uint8_t *lines = lg(tm->team)->lines[0];
     int16_t slot = (int8_t)rom_ptr(SYM_MatchupLineSlots)[g.matchup];
     g.matchupslot = (uint16_t)slot;
     return (uint16_t)((int8_t)lines[slot] - 1);
@@ -354,26 +353,14 @@ void PrintAdvantageMarks(void)
     g.printfontset = 0;
 }
 
-/* the team data Strings after the city (city, abbreviation, nickname, arena): String n of team a2 */
-static uint32_t team_string(struct Team *tm, int n)
-{
-    uint32_t a1 = tm->data;
-    a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1 + 4));
-    while (n-- > 0) a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1));
-    return a1;
-}
-
 /* scout94.asm:GetTeamNickname. The text player's '=' (a2 the home team) and '*' -> a1 = the
  * team's nickname, or 'Home' / 'Visitors' when it has none (the all-star teams). */
-uint32_t GetTeamNickname(struct Team *tm)
+struct Text GetTeamNickname(struct Team *tm)
 {
-    uint32_t a1 = team_string(tm, 2);
-    if (rd16(rom_ptr(a1)) == 2) a1 = tm == team_struct(0) ? SYM_HomeTxt : SYM_VisitorsTxt;
+    struct Text a1 = lg_text(&lg(tm->team)->nickname);
+    if (text_len(a1) == 2) a1 = (struct Text){ NULL, tm == team_struct(0) ? SYM_HomeTxt : SYM_VisitorsTxt };
     return a1;
 }
 
 /* scout94.asm:GetTeamArena. The text player's '^' and ';' -> a1 = the team's arena. */
-uint32_t GetTeamArena(struct Team *tm)
-{
-    return team_string(tm, 3);
-}
+struct Text GetTeamArena(struct Team *tm) { return lg_text(&lg(tm->team)->arena); }

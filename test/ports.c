@@ -436,7 +436,7 @@ static void run_TakeTopStarScore(const Record *r)
     expect_reg16(r, R_D0, TakeTopStarScore(&tm), "d0");
     expect_reg16(r, R_A2, (uint16_t)rp_addr(team_place(tm)), "a2");
 }
-static void run_GetPlayerNamePointer(const Record *r) { expect_reg16(r, R_A0, (uint16_t)GetPlayerNamePointer(R16(R_D0), TEAM(R_A2)), "a0"); }
+static void run_GetPlayerNamePointer(const Record *r) { expect_reg16(r, R_A0, (uint16_t)GetPlayerNamePointer(R16(R_D0), TEAM(R_A2))->at, "a0"); }
 static void run_ConvertByteToDigits(const Record *r) { expect_reg16(r, R_A1, (uint16_t)ram_addr(ConvertByteToDigits(R16(R_D0), ram_bytes(PLACE(R_A1), 2))), "a1"); }
 static void run_FinalizeTextBuffer(const Record *r) { expect_reg16(r, R_A1, (uint16_t)FinalizeTextBuffer(ram_bytes(PLACE(R_A1), 1)), "a1"); }
 static void run_FormatPlayerName(const Record *r) { expect_reg16(r, R_A1, (uint16_t)FormatPlayerName(R16(R_D0), TEAM(R_A2)), "a1"); }
@@ -674,8 +674,8 @@ static void run_GetMatchupPlayers(const Record *r) { GetMatchupPlayers(); }
 static void run_GetMatchupPlayer(const Record *r) { expect_reg16(r, R_D0, GetMatchupPlayer(TEAM(R_A0)), "d0"); }
 static void run_RestartAdvantageMarks(const Record *r) { RestartAdvantageMarks(); }
 static void run_PrintAdvantageMarks(const Record *r) { PrintAdvantageMarks(); }
-static void run_GetTeamNickname(const Record *r) { expect_reg32(r, R_A1, GetTeamNickname(TEAM(R_A2)), "a1"); }
-static void run_GetTeamArena(const Record *r) { expect_reg32(r, R_A1, GetTeamArena(TEAM(R_A2)), "a1"); }
+static void run_GetTeamNickname(const Record *r) { expect_reg32(r, R_A1, GetTeamNickname(TEAM(R_A2)).at, "a1"); }
+static void run_GetTeamArena(const Record *r) { expect_reg32(r, R_A1, GetTeamArena(TEAM(R_A2)).at, "a1"); }
 static void run_InitScoutingDisplay(const Record *r) { expect_reg16(r, R_A0, (uint16_t)InitScoutingDisplay(), "a0"); }
 static void run_UpdateScoutingDisplay(const Record *r) { UpdateScoutingDisplay(); }
 static void run_ScrollDisplayUp(const Record *r) { ScrollDisplayUp(); }

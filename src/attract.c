@@ -60,11 +60,11 @@ void DrawMatchupBitmaps(void)
     }
     printz(str_DrawMatchupBitmaps_1, sizeof str_DrawMatchupBitmaps_1);
     uint16_t t = g.VisTeam;
-    pal_load(0x13, rom_ptr(LG(TeamPalettes) + (uint32_t)(int16_t)(uint16_t)(t << 6) + 0x26), 2);
+    pal_load_w(0x13, &lg(t)->matchup[1][3], 2);          /* (TeamPalettes: colours 3 and 4 of its second) */
     DrawTeamBitmap(t, g.teambitmapchars);
     printz(str_DrawMatchupBitmaps_2, sizeof str_DrawMatchupBitmaps_2);
     t = g.HomeTeam;
-    pal_load(0x11, rom_ptr(LG(TeamPalettes) + (uint32_t)(int16_t)(uint16_t)(t << 6) + 2), 2);
+    pal_load_w(0x11, &lg(t)->matchup[0][1], 2);          /* (colours 1 and 2 of its first) */
     g.palfadenew[0x15] = 0xEEE;
     DrawTeamBitmap(t, 2);
     setteams();

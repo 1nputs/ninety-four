@@ -1543,19 +1543,18 @@ void setplayer(uint16_t roster, struct SortObj *o)
         o->SPA = 0;
     }
     tm->pdst[idx / 2] = 0xFFFF;
-    const uint8_t *td = rom_ptr(tm->data);
-    const uint8_t *odds = td + (int16_t)rd16(td + 8);     /* the team's ScoreOdds bytes */
+    const struct LgTeam *T = lg(tm->team);                /* (its bonuses: the team's ScoreOdds bytes) */
     g.PPBonus = g.PKBonus = g.ThirdPBonus = g.HmAwBonus = 0;
     if (o->position != 0) {
         if (g.sflags2 & HI(sf2pwrplay)) {
             if (!chkpk2(o))
-                g.PPBonus = odds[1] & 0xF;
+                g.PPBonus = T->pp;
             else
-                g.PKBonus = (uint8_t)-(odds[1] >> 4);
+                g.PKBonus = (uint8_t)-T->pk;
         }
-        uint8_t ha = (uint8_t)-(odds[2] & 0xF);
+        uint8_t ha = (uint8_t)-T->away;
         if (!(o->pflags & (1 << pfteam)))
-            ha = odds[2] >> 4;
+            ha = T->home;
         g.HmAwBonus = ha;
         if ((int16_t)g.gsp >= 2) {
             int lead = 1;
@@ -1575,45 +1574,41 @@ void setplayer(uint16_t roster, struct SortObj *o)
             }
         }
     }
-    const uint8_t *p = td + (int16_t)rd16(td);
-    for (int i = 0; i <= (int)(uint16_t)(idx >> 1); i++) {
-        p += (int16_t)rd16(p);
-        p += 8;
-    }
-    p -= 8;
-    o->rostnum = p[0];
-    o->weight = (uint8_t)((p[1] & 0xF0) >> 1);
+    const struct LgPlayer *P = &T->player[(uint16_t)(idx >> 1)];
+    const uint8_t *r = P->rating;
+    o->rostnum = P->number;
+    o->weight = (uint8_t)(r[LR_WEIGHT] << 3);
     uint8_t d3;
-    g.TempWord2 = 3;  d3 = AttributeCalc(p[1] & 0xF, o);  o->legstr = d3;
-    g.TempWord2 = 4;  d3 = AttributeCalc(p[2] >> 4, o);   o->legspd = d3;
-    g.TempWord2 = 5;  d3 = AttributeCalc(p[2] & 0xF, o);
+    g.TempWord2 = 3;  d3 = AttributeCalc(r[LR_AGILITY], o);  o->legstr = d3;
+    g.TempWord2 = 4;  d3 = AttributeCalc(r[LR_SPEED], o);    o->legspd = d3;
+    g.TempWord2 = 5;  d3 = AttributeCalc(r[LR_OFF_AWARENESS], o);
     d3 = (uint8_t)(d3 + g.PPBonus + g.PKBonus + g.HmAwBonus + g.ThirdPBonus);
     d3 = ClampNibble(d3); d3 >>= 1; d3 ^= 0xF; d3 = (uint8_t)(d3 + 0xF); d3 >>= 1;
     o->aioff = d3;                                         /* (30 - (OfA + bonuses) / 2) / 2 */
-    g.TempWord2 = 6;  d3 = AttributeCalc(p[3] >> 4, o);
+    g.TempWord2 = 6;  d3 = AttributeCalc(r[LR_DEF_AWARENESS], o);
     d3 = (uint8_t)(d3 + g.HmAwBonus);
     d3 = ClampNibble(d3); d3 >>= 1; d3 ^= 0xF; d3 = (uint8_t)(d3 + 0xF); d3 >>= 1;
     o->aidef = d3;
-    o->shotspd = p[3] & 0xF;
+    o->shotspd = r[LR_SHOT_POWER];
     g.TempWord2 = 7;  o->shotspd = AttributeCalc(o->shotspd, o);
-    g.TempWord2 = 8;  d3 = AttributeCalc(p[4] >> 4, o);
+    g.TempWord2 = 8;  d3 = AttributeCalc(r[LR_CHECKING], o);
     d3 = (uint8_t)(d3 + g.ThirdPBonus);
     o->checking = ClampNibble(d3);
     o->attribute &= (uint16_t)~HI(3);
-    o->handed[0] = (uint8_t)((p[4] & 1) ^ 1);             /* 1 = left handed */
+    o->handed[0] = (uint8_t)((r[LR_HANDED_FIGHTING] & 1) ^ 1);   /* 1 = left handed */
     if (o->handed[0] == 0)
         o->attribute |= HI(3);
-    o->fighting = p[4] & 0xE;
-    g.TempWord2 = 0xA; d3 = AttributeCalc(p[5] >> 4, o);
+    o->fighting = r[LR_HANDED_FIGHTING] & 0xE;
+    g.TempWord2 = 0xA; d3 = AttributeCalc(r[LR_STICK_HANDLING], o);
     o->stickhand = ClampNibble((uint8_t)(d3 + g.PPBonus + g.PKBonus + g.HmAwBonus));
-    g.TempWord2 = 0xB; d3 = AttributeCalc(p[5] & 0xF, o);
+    g.TempWord2 = 0xB; d3 = AttributeCalc(r[LR_SHOT_ACCURACY], o);
     o->shotacc = ClampNibble((uint8_t)(d3 + g.PPBonus + g.PKBonus + g.HmAwBonus));
-    g.TempWord2 = 0xC; o->endurance = AttributeCalc(p[6] >> 4, o);
-    g.TempWord2 = 0xD; d3 = AttributeCalc(p[6] & 0xF, o);
+    g.TempWord2 = 0xC; o->endurance = AttributeCalc(r[LR_ENDURANCE], o);
+    g.TempWord2 = 0xD; d3 = AttributeCalc(r[LR_SHOOT_OR_PASS], o);
     o->spodds = ClampNibble((uint8_t)(d3 + g.ThirdPBonus + g.ThirdPBonus));
-    g.TempWord2 = 0xE; d3 = AttributeCalc(p[7] >> 4, o);
+    g.TempWord2 = 0xE; d3 = AttributeCalc(r[LR_PASS_ACCURACY], o);
     o->passacc = ClampNibble((uint8_t)(d3 + g.PPBonus + g.HmAwBonus));
-    o->aggress = p[7];
+    o->aggress = lg_attr(P, 7);                           /* (pass accuracy and aggressiveness, a moment) */
     g.TempWord2 = 0xF; d3 = AttributeCalc(o->aggress & 0xF, o);
     o->aggress = d3 & 0xF;
 }

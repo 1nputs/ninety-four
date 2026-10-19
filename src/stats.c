@@ -8,29 +8,11 @@
 #include "view.h"
 #include "stats_strings_gen.h"
 
-/* stats94.asm:GetPlayerCount. a2 = team -> d0 = its players (records until a length word 2). */
-uint16_t GetPlayerCount(struct Team *tm)
-{
-    uint32_t a = tm->data;
-    a += (int16_t)rd16(rom_ptr(a));
-    uint16_t n = 0;
-    do {
-        n++;
-        a += (int16_t)rd16(rom_ptr(a));
-        a += 8;
-    } while (rd16(rom_ptr(a)) != 2);
-    return n;
-}
+/* stats94.asm:GetPlayerCount. a2 = team -> d0 = its players. */
+uint16_t GetPlayerCount(struct Team *tm) { return lg(tm->team)->players; }
 
-/* stats94.asm:GetGoalieCount. a2 = team -> d0 = its goalies (the nibbles of a team data word). */
-uint16_t GetGoalieCount(struct Team *tm)
-{
-    uint32_t a = tm->data;
-    a += (int16_t)rd16(rom_ptr(a + 0xA));
-    uint16_t w = rd16(rom_ptr(a)), n = 0;
-    do { n++; w = (uint16_t)(w << 4); } while (w != 0);
-    return n;
-}
+/* stats94.asm:GetGoalieCount. a2 = team -> d0 = its goalies (the nibbles of its start odds). */
+uint16_t GetGoalieCount(struct Team *tm) { return lg(tm->team)->goalies; }
 
 /* stats94.asm:GetDefenseStart. d0 = the roster index of team a2's first defenseman: its goalies
  * (GetGoalieCount) and forwards (GetForwardCount). */
@@ -39,14 +21,8 @@ uint16_t GetDefenseStart(struct Team *tm)
     return (uint16_t)(GetGoalieCount(tm) + GetForwardCount(tm));
 }
 
-/* stats94.asm:GetForwardCount. d0 = team a2's forwards: the high nibble of byte 3 of its team
- * data block at +8. */
-uint16_t GetForwardCount(struct Team *tm)
-{
-    uint32_t a = tm->data;
-    a += (uint32_t)(int16_t)rd16(rom_ptr(a + 8));
-    return (uint16_t)(rom_ptr(a)[3] >> 4);
-}
+/* stats94.asm:GetForwardCount. d0 = team a2's forwards. */
+uint16_t GetForwardCount(struct Team *tm) { return lg(tm->team)->forwards; }
 
 /* stats94.asm:ReloadRinkGraphics. After a screen over the rink: back to 32 columns, then reload
  * the rink (reversed in a reverse angle replay), team, font, framer, EASN, energy bar and crowd
@@ -295,15 +271,13 @@ void DrawStatsList(struct Team *tm, int playoff)
     do {
         int32_t top = -1;
         best = 0xFF;
-        uint32_t data = tm->data;
+        const struct LgTeam *T = lg(tm->team);
         for (int16_t p = (int16_t)GetPlayerCount(tm) - 1; p >= 0; p--) {
             if (done & (1u << (p & 31))) continue;
             uint16_t v = 0;
             if ((int16_t)g.DispAttribCtr >= 0) v = GetStatColumn((uint16_t)p, g.DispAttribCtr, tm, playoff);
             if (g.DispAttribCtr == 5 && more_stats(playoff)) v = (uint16_t)(v + 0x80);   /* (plus/minus: sorted above zero) */
-            uint32_t a = data + (uint32_t)(int16_t)rd16(rom_ptr(data)) - 8;   /* past his name: his number */
-            for (int16_t i = p; i >= 0; i--) { a += 8; a += (uint32_t)(int16_t)rd16(rom_ptr(a)); }
-            int32_t key = (int32_t)((uint32_t)(int32_t)(int16_t)v << 8 & 0xFFFFFF00u) | (uint8_t)(0xFF - *rom_ptr(a));
+            int32_t key = (int32_t)((uint32_t)(int32_t)(int16_t)v << 8 & 0xFFFFFF00u) | (uint8_t)(0xFF - T->player[p].number);
             if (key > top) { top = key; best = (uint8_t)p; }
         }
         done |= 1u << (best & 31);
@@ -498,10 +472,8 @@ void DisplayGameInfo(uint16_t n)
 /* stats94.asm:PrintGameInfo. Team d0's city at x 6 and score d1 (2 digits) at x $18. */
 void PrintGameInfo(uint16_t team, uint16_t score)
 {
-    uint32_t a1 = rd32(rom_ptr(LG(TeamList) + (uint32_t)(int16_t)(uint16_t)(team << 2)));
-    a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1 + 4));
     g.printx = 6;
-    print(a1);
+    print_p(lg_text(&lg(team)->city));
     g.printx = 0x18;
     print(PushNumberWidth(score, 2));
 }
@@ -1157,11 +1129,8 @@ void DrawScoringRowDown(uint16_t entry)
 static void summary_team(uint8_t flags)
 {
     struct Team *tm = team_struct(flags & 0x80);
-    uint32_t a1 = tm->data;
-    a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1 + 4));
-    a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1));
     g.printx = 0xC;
-    print(a1);
+    print_p(lg_text(&lg(tm->team)->abbr));
 }
 
 /* stats94.asm:DrawScoringRow. ScoreSum entry d3: the time, the team, the goal type (GoalTypeTbl),
@@ -1370,10 +1339,9 @@ void TimeoutMenu(struct Team *tm)
     printz(str_TimeoutMenu_1, sizeof str_TimeoutMenu_1);
     Framer(0x16, 6);
     printz(str_TimeoutMenu_2, sizeof str_TimeoutMenu_2);
-    uint32_t city = tm->data;
-    city += (uint32_t)(int16_t)rd16(rom_ptr(city + 4));
-    g.printx -= (uint16_t)(rd16(rom_ptr(city)) >> 1);
-    print(city);
+    struct Text city = lg_text(&lg(tm->team)->city);
+    g.printx -= (uint16_t)(text_len(city) >> 1);
+    print_p(city);
     RestoreTeamEnergy(team_struct(0));
     RestoreTeamEnergy(team_struct(1));
     uint16_t d0, d1, d2, d3;
@@ -1430,12 +1398,10 @@ void DrawGoalieSelectList(struct Team *tm)
             g.printx = 0xB;
             printz(str_DrawGoalieSelectList_2, sizeof str_DrawGoalieSelectList_2);
         } else {
-            uint32_t a1 = tm->data;
-            a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1));
-            for (uint16_t i = (uint16_t)(n - 1); i-- != 0;) a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1)) + 8;
+            const struct LgPlayer *P = &lg(tm->team)->player[n - 1];
             g.printx = 8;
-            a1 = print(a1);
-            uint8_t num = *rom_ptr(a1);
+            print_p(lg_text(&P->name));
+            uint8_t num = P->number;
             uint8_t *buf = text_buffer();
             buf[0] = (uint8_t)((num >> 4) + '0');
             buf[1] = (uint8_t)((num & 0xF) + '0');
