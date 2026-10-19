@@ -3,8 +3,9 @@
  *   league_test ROM CARTRIDGE_DIR [OTHER_DIR] [--hack HACK DIR ...]
  *
  * CARTRIDGE_DIR is the cartridge's league as nhl94 --export-league writes it: built again it must
- * be the cartridge's, byte for byte (every team block and every entry of every table, the counts,
- * the playoff draws), on an untouched cartridge. OTHER_DIR (tools/leaguetest.py: 32 teams) must
+ * be the cartridge's, its tables (league.h) as the game reads them off the cartridge, field for
+ * field, and its art's tables entry for entry (the counts, the playoff draws too), on an untouched
+ * cartridge. OTHER_DIR (tools/leaguetest.py: 32 teams) must
  * build with its save RAM records apart from each other and from the cartridge's, with every
  * playoff team in a draw of 16 different ones, and with banners of their own for the teams whose
  * cities the cartridge has none for. A hack on the 32-team template (HACK), extracted to DIR, must
@@ -25,45 +26,93 @@ static int checks, failed;
 static uint16_t r16(const uint8_t *m, uint32_t a) { return (uint16_t)(m[a] << 8 | m[a + 1]); }
 static uint32_t r32(const uint8_t *m, uint32_t a) { return (uint32_t)r16(m, a) << 16 | r16(m, a + 2); }
 
-/* a team block's size: to the end of its arena String */
-static uint32_t block_size(const uint8_t *m, uint32_t b)
+/* a String as text (its bytes but 0s) */
+static const char *string_of(const uint8_t *s)
 {
-    uint32_t p = b + r16(m, b + 4);
-    for (int k = 0; k < 4; k++) p += r16(m, p);
-    return p - b;
+    static char t[4][64];
+    static int k;
+    char *o = t[k++ & 3];
+    uint16_t n = r16(s, 0);
+    int j = 0;
+    for (uint32_t i = 2; i < n && j < 63; i++) if (s[i]) o[j++] = (char)s[i];
+    o[j] = 0;
+    return o;
+}
+static const char *text_of(const struct LgText *x) { return string_of(x->s); }
+
+/* the tables (league.h) the game reads off ROM img (size bytes) by its tables' addresses, as
+ * league_read reads them, into teams and seats (the game's own as they were) */
+static struct LgTeam want[LEAGUE_MAX];
+static uint8_t want_seats[32][16];
+static void read_tables(const uint8_t *img, uint32_t size, const uint32_t table[LG_TABLES], int teams, int rows)
+{
+    static struct LgTeam keep[LEAGUE_MAX];
+    static uint8_t keep_seats[32][16];
+    memcpy(keep, lg_team, sizeof keep);
+    memcpy(keep_seats, lg_seats, sizeof keep_seats);
+    const uint8_t *ki = rom_image;
+    uint32_t kl = rom_limit;
+    struct league kg = league;
+    rom_image = img;
+    rom_limit = size;
+    memcpy(league.table, table, sizeof league.table);
+    league.teams = (uint16_t)teams;
+    league.playoff_rows = (uint16_t)rows;
+    league_read();
+    memcpy(want, lg_team, sizeof want);
+    memcpy(want_seats, lg_seats, sizeof want_seats);
+    rom_image = ki;
+    rom_limit = kl;
+    league = kg;
+    memcpy(lg_team, keep, sizeof keep);
+    memcpy(lg_seats, keep_seats, sizeof keep_seats);
 }
 
-/* the String at a in m, as text */
-static const char *string_at(const uint8_t *m, uint32_t a)
+/* what of team a is not as team b: "" when all is (but its data and Strings' addresses; and the
+ * parts SKIP_ leaves out) */
+enum { SKIP_DEFENSEMEN = 1, SKIP_RECORDS = 2, SKIP_PICTURES = 4, SKIP_OPTION = 8 };
+static const char *team_diff(const struct LgTeam *a, const struct LgTeam *b, int skip)
 {
-    static char s[64];
-    uint16_t n = r16(m, a);
-    int k = 0;
-    for (uint32_t i = 2; i < n && k < 63; i++) if (m[a + i]) s[k++] = (char)m[a + i];
-    s[k] = 0;
-    return s;
+    static char why[200];
+    why[0] = 0;
+#define DIFF(c, what) do { if (c) { strcat(why, " "); strcat(why, what); } } while (0)
+    DIFF(memcmp(a->city.s, b->city.s, LG_TEXT) || memcmp(a->abbr.s, b->abbr.s, LG_TEXT) || memcmp(a->nickname.s, b->nickname.s, LG_TEXT)
+         || memcmp(a->arena.s, b->arena.s, LG_TEXT), "names");
+    DIFF(memcmp(a->colours, b->colours, sizeof a->colours), "jerseys");
+    DIFF(memcmp(a->matchup, b->matchup, sizeof a->matchup), "matchup-colours");
+    DIFF(a->offense != b->offense || a->defense != b->defense || a->pp != b->pp || a->pk != b->pk || a->home != b->home || a->away != b->away, "bonuses");
+    DIFF(a->forwards != b->forwards || a->goalies != b->goalies || a->starts != b->starts
+         || (!(skip & SKIP_DEFENSEMEN) && a->defensemen != b->defensemen), "counts");
+    DIFF(memcmp(a->lines, b->lines, sizeof a->lines), "lines");
+    int players = a->players == b->players;
+    for (int i = 0; players && i < a->players; i++)
+        players = !memcmp(a->player[i].name.s, b->player[i].name.s, LG_TEXT) && a->player[i].number == b->player[i].number
+                  && !memcmp(a->player[i].rating, b->player[i].rating, sizeof a->player[i].rating);
+    DIFF(!players, "players");
+    DIFF(a->rating != b->rating || memcmp(a->songs, b->songs, sizeof a->songs), "rating-songs");
+    DIFF(!(skip & SKIP_RECORDS) && a->records != b->records, "records");
+    int pictures = a->pictures == b->pictures;
+    for (int i = 0; pictures && i < a->pictures; i++)
+        pictures = a->picture[i].slot == b->picture[i].slot && ((skip & SKIP_PICTURES) || a->picture[i].pic == b->picture[i].pic);
+    DIFF(!pictures, "pictures");
+    DIFF(!(skip & SKIP_OPTION) && memcmp(a->option_name.s, b->option_name.s, LG_TEXT), "setup-name");
+#undef DIFF
+    return why;
 }
 
-/* the setup screen's names (LG(OptionTeamNames)): each team's city, or its whole name when
- * another team has its city; the count of those that are right */
-static int option_names(const uint8_t *m, const char *dir)
+/* the setup screen's names (option_name): each team's city, or its whole name when another team
+ * has its city; the count of those that are right */
+static int option_names(const char *dir)
 {
     int right = 0;
     for (int t = 0; t < league.teams; t++) {
-        uint32_t b = r32(m, LG(TeamList) + 4u * (uint32_t)t), p = b + r16(m, b + 4);
-        char city[64], nick[64], want[130];
-        snprintf(city, sizeof city, "%s", string_at(m, p));
-        p += r16(m, p);
-        p += r16(m, p);
-        snprintf(nick, sizeof nick, "%s", string_at(m, p));
+        char city[64], want_name[130];
+        snprintf(city, sizeof city, "%s", text_of(&lg_team[t].city));
         int shared = 0;
-        for (int k = 0; k < league.teams; k++) {
-            uint32_t bk = r32(m, LG(TeamList) + 4u * (uint32_t)k);
-            shared += k != t && !strcmp(string_at(m, bk + r16(m, bk + 4)), city);
-        }
-        snprintf(want, sizeof want, shared ? "%s %s" : "%s", city, nick);
-        int same = LG(OptionTeamNames) && !strcmp(string_at(m, r32(m, LG(OptionTeamNames) + 4u * (uint32_t)t)), want);
-        CHECK(same, "%s: team %d's name on the setup screen: \"%s\", not \"%s\"", dir, t, string_at(m, r32(m, LG(OptionTeamNames) + 4u * (uint32_t)t)), want);
+        for (int k = 0; k < league.teams; k++) shared += k != t && !strcmp(text_of(&lg_team[k].city), city);
+        snprintf(want_name, sizeof want_name, shared ? "%s %s" : "%s", city, text_of(&lg_team[t].nickname));
+        int same = !strcmp(text_of(&lg_team[t].option_name), want_name);
+        CHECK(same, "%s: team %d's name on the setup screen: \"%s\", not \"%s\"", dir, t, text_of(&lg_team[t].option_name), want_name);
         right += same;
     }
     return right;
@@ -83,40 +132,38 @@ static void round_trip(const char *dir)
     romsrc_cartridge(&cs, c);
     CHECK(!memcmp(league.hiscore_at, league_cartridge.hiscore_at, sizeof league.hiscore_at) && !memcmp(cs.hiscore_at, league_cartridge.hiscore_at, sizeof cs.hiscore_at),
           "the screen after the EA logo's places: %d,%d %d,%d", league.hiscore_at[0][0], league.hiscore_at[0][1], league.hiscore_at[1][0], league.hiscore_at[1][1]);
-    int blocks = 0, tables = 0;
+    read_tables(c, ROM_SIZE, league_cartridge.table, SYM_NumTeams, SYM_PlayoffRows);   /* (the cartridge's, as the game reads them) */
+    int teams = 0, tables = 0;
     for (uint32_t t = 0; t < SYM_NumTeams; t++) {
-        uint32_t cb = r32(c, SYM_TeamList + 4 * t), mb = r32(m, LG(TeamList) + 4 * t), n = block_size(c, cb);
-        CHECK(mb >= ROM_SIZE && block_size(m, mb) == n && memcmp(m + mb, c + cb, n) == 0, "team %u's block (%u bytes)", t, n);
-        blocks += mb >= ROM_SIZE && block_size(m, mb) == n && memcmp(m + mb, c + cb, n) == 0;
-        static const struct { int table; uint32_t cart, size; } tab[] = {
-            { LG_TeamPalettes, SYM_TeamPalettes, 64 }, { LG_TeamLogoBitmaps, SYM_TeamLogoBitmaps, 4 }, { LG_TeamGfxList, SYM_TeamGfxList, 4 },
-            { LG_TeamSongs, SYM_TeamSongs, 6 }, { LG_TeamRatings, SYM_TeamRatings, 1 }, { LG_TeamLogoPalettes, SYM_TeamLogoPalettes, 32 },
-            { LG_PlayerRecordOffsets, SYM_PlayerRecordOffsets, 2 },
+        const char *why = team_diff(&lg_team[t], &want[t], SKIP_OPTION);
+        CHECK(!*why && lg_team[t].data == LG_DATA(t), "team %u's tables:%s (data %06X)", t, why, lg_team[t].data);
+        teams += !*why;
+        static const struct { int table; uint32_t cart, size; } tab[] = {   /* (the art's: by address yet) */
+            { LG_TeamLogoBitmaps, SYM_TeamLogoBitmaps, 4 }, { LG_TeamGfxList, SYM_TeamGfxList, 4 }, { LG_TeamLogoPalettes, SYM_TeamLogoPalettes, 32 },
         };
         for (size_t k = 0; k < sizeof tab / sizeof tab[0]; k++) {
             int same = memcmp(m + league.table[tab[k].table] + t * tab[k].size, c + tab[k].cart + t * tab[k].size, tab[k].size) == 0;
             CHECK(same, "team %u's entry of table %d", t, tab[k].table);
             tables += same;
         }
-        uint32_t cp = r32(c, SYM_FeaturedPictures + 4 * t), mp = r32(m, LG(FeaturedPictures) + 4 * t);
-        for (;; cp += 6, mp += 6) {                       /* (the lists, entry by entry) */
-            CHECK(r32(m, mp) == r32(c, cp) && (!r32(c, cp) || r16(m, mp + 4) == r16(c, cp + 4)), "team %u's pictures", t);
-            if (!r32(c, cp) || r32(m, mp) != r32(c, cp)) break;
-        }
         CHECK(league.art[t] == t, "team %u shows team %d's art", t, league.art[t]);
     }
-    CHECK(memcmp(m + LG(playoffseats), c + SYM_playoffseats, 16 * SYM_PlayoffRows) == 0, "the playoff draws");
+    CHECK(memcmp(lg_seats, want_seats, 16 * SYM_PlayoffRows) == 0, "the playoff draws");
+    CHECK(!LG(TeamList) && !LG(TeamPalettes) && !LG(TeamSongs) && !LG(TeamRatings) && !LG(FeaturedPictures) && !LG(playoffseats)
+          && !LG(PlayerRecordOffsets) && !LG(OptionTeamNames), "the teams' tables past the cartridge");
     int own = 0;
     for (int t = 0; t < league.teams; t++) own += league.block_tiles[t] != 0 || league.banner_tiles[t] != 0 || league.block[t] != t;
     CHECK(LG(Teamblocksmap) == SYM_Teamblocksmap && own == 0, "the cartridge's banners (%d teams with others)", own);
-    int names = option_names(m, dir);                      /* (the two New York teams' as the cartridge's own) */
-    CHECK(!strcmp(string_at(m, r32(m, LG(OptionTeamNames) + 4 * 13)), string_at(c, SYM_IslandersTxt))
-          && !strcmp(string_at(m, r32(m, LG(OptionTeamNames) + 4 * 14)), string_at(c, SYM_RangersTxt)), "the New York teams' names");
+    int names = option_names(dir);                         /* (the two New York teams' as the cartridge's own) */
+    CHECK(!strcmp(text_of(&lg_team[13].option_name), string_of(c + SYM_IslandersTxt))
+          && !strcmp(text_of(&lg_team[14].option_name), string_of(c + SYM_RangersTxt)), "the New York teams' names");
     printf("  %s: %d of %d names on the setup screen as the cartridge shows them\n", dir, names, league.teams);
-    printf("  %s: %d of %d team blocks and %d of %d table entries the cartridge's\n", dir, blocks, SYM_NumTeams, tables, 7 * SYM_NumTeams);
+    printf("  %s: %d of %d teams' tables and %d of %d art table entries the cartridge's\n", dir, teams, SYM_NumTeams, tables, 3 * SYM_NumTeams);
     league_next(NULL);
     league_power_on();
-    CHECK(rom_image == rom_cart && rom_limit == ROM_SIZE && league_hash() == 0 && LG(TeamList) == SYM_TeamList, "back to the cartridge's");
+    read_tables(rom_cart, ROM_SIZE, league_cartridge.table, SYM_NumTeams, SYM_PlayoffRows);
+    CHECK(rom_image == rom_cart && rom_limit == ROM_SIZE && league_hash() == 0 && LG(TeamList) == SYM_TeamList && !memcmp(lg_team, want, sizeof want)
+          && lg_team[0].data == r32(c, SYM_TeamList), "back to the cartridge's");
 }
 
 static void other(const char *dir)
@@ -135,7 +182,7 @@ static void other(const char *dir)
     for (uint32_t a = SYM_LineDataBase; a < 0x2000; a++) used[a] = 1;
     int clash = 0;
     for (int t = 0; t < teams; t++) {
-        uint32_t p = (uint32_t)r16(m, LG(PlayerRecordOffsets) + 2u * (uint32_t)t) << 2, cr = league_crowd_record((uint16_t)t);
+        uint32_t p = (uint32_t)lg_team[t].records << 2, cr = league_crowd_record((uint16_t)t);
         for (uint32_t a = p; a < p + 26 * 4; a++) clash += a >= 0x2000 || used[a]++;
         for (uint32_t a = cr; a < cr + 16; a++) clash += a >= 0x2000 || used[a]++;
     }
@@ -143,13 +190,13 @@ static void other(const char *dir)
     int missing = 0, twice = 0;
     for (int t = 0; t < league.playoff_teams; t++) {
         int seen = 0;
-        for (int i = 0; i < rows * 16; i++) seen += m[LG(playoffseats) + (uint32_t)i] == t;
+        for (int i = 0; i < rows * 16; i++) seen += lg_seats[i / 16][i % 16] == t;
         missing += !seen;
     }
     for (int r = 0; r < rows; r++) {
         uint32_t in = 0;
         for (int k = 0; k < 16; k++) {
-            int t = m[LG(playoffseats) + 16u * (uint32_t)r + (uint32_t)k];
+            int t = lg_seats[r][k];
             twice += t >= league.playoff_teams || (in >> t & 1);
             in |= 1u << t;
         }
@@ -165,11 +212,10 @@ static void other(const char *dir)
     CHECK(own == 4 && all == teams && LG(Teamblocksmap) >= ROM_SIZE && LG(BannerSlotMap) >= ROM_SIZE, "banners: %d own, %d drawn", own, all);
     uint32_t tb = LG(Teamblocksmap), count = r16(m, tb + 8);
     CHECK(!(count & 0x8000) && count == 501 + 22 * 4 && (tb + 10) >> 17 == (tb + 10 + 32 * count - 1) >> 17, "the league's Teamblocksmap: %u tiles", count);
-    for (int t = 0; t < teams; t++) {                     /* every block readable: its players to the end word */
-        uint32_t b = r32(m, LG(TeamList) + 4u * (uint32_t)t), p = b + r16(m, b);
-        int n = 0;
-        while (r16(m, p) != 2 && n < 30) { p += r16(m, p) + 8; n++; }
-        CHECK(n >= 17 && n <= 25 && p == b + r16(m, b + 4) - 2, "team %d's players (%d)", t, n);
+    for (int t = 0; t < teams; t++) {                     /* every team's players, its own data */
+        int n = lg_team[t].players;
+        CHECK(n >= 17 && n <= 25 && lg_team[t].data == LG_DATA(t) && n == lg_team[t].goalies + lg_team[t].forwards + lg_team[t].defensemen,
+              "team %d's players (%d)", t, n);
     }
     /* its own art (tools/leaguetest.py): HOU's logo in plain RGB (a corner transparent, then red,
      * then white: colours 0, 1, 2 in the order they come), BOS's with its first pixel changed,
@@ -187,8 +233,7 @@ static void other(const char *dir)
     CHECK(drawn == ART_LOGO * ART_LOGO && pal[1] == art_word(0xFF0000) && pal[2] == art_word(0xFFFFFF), "HOU's logo as drawn (%d pixels)", drawn);
     CHECK(art_logo(&bs, bos, px, pal) == 0 && art_logo(&cs, bos, cart, cpal) == 0 && r32(m, LG(TeamLogoBitmaps) + 4u * (uint32_t)bos) >= ROM_SIZE
           && px[0] == 1 && cart[0] != 1 && !memcmp(px + 1, cart + 1, sizeof px - 1) && !memcmp(pal, cpal, sizeof pal), "BOS's logo, a pixel changed");
-    uint32_t list = r32(m, LG(FeaturedPictures) + 4u * (uint32_t)kc), pic = 0;
-    for (; r32(m, list); list += 6) pic = r32(m, list);
+    uint32_t pic = lg_team[kc].pictures ? lg_team[kc].picture[lg_team[kc].pictures - 1].pic : 0;
     CHECK(pic >= ROM_SIZE && art_photo(&bs, pic, px) == 0 && px[0] == 6 && px[47] == 5, "KC's photo its own, its shades by brightness");
     /* the players' sprites with a pixel of their first tile changed (tools/leaguetest.py): their own,
      * the rest of them the cartridge's, their tiles where the game looks (Spritetiles) */
@@ -229,33 +274,25 @@ static void hack(const char *path, const char *dir)
     if (!league_hash()) return;
     CHECK(league.teams == s.teams && league.playoff_teams == s.playoff_teams && league.playoff_rows == s.rows,
           "the counts: %d %d %d, the hack's %d %d %d", league.teams, league.playoff_teams, league.playoff_rows, s.teams, s.playoff_teams, s.rows);
+    read_tables(h, n, s.table, s.teams, s.rows);         /* (the hack's, as the game would read them off it) */
     int blocks = 0, moved = 0, colours = 0;
     for (int t = 0; t < league.teams && t < s.teams; t++) {
-        /* (what the game reads of a block, through its offsets: some of the hack's have bytes of
-         * their own between the lines and the players) */
-        uint32_t hb = rs32(&s, s.table[LG_TeamList] + 4u * (uint32_t)t), mb = r32(m, LG(TeamList) + 4u * (uint32_t)t);
-        uint32_t hp = hb + r16(h, hb), mp = mb + r16(m, mb), players = hb + r16(h, hb + 4) - hp;
-        uint32_t hn = hb + r16(h, hb + 4), mn = mb + r16(m, mb + 4), names = block_size(h, hb) - r16(h, hb + 4);
-        int same = memcmp(m + mb + r16(m, mb + 6), h + hb + r16(h, hb + 6), 64) == 0                       /* lines */
-                   && memcmp(m + mb + r16(m, mb + 8), h + hb + r16(h, hb + 8), 3) == 0                    /* .sr */
-                   && (m[mb + r16(m, mb + 8) + 3] & 0xF0) == (h[hb + r16(h, hb + 8) + 3] & 0xF0)
-                   && r16(m, mb + r16(m, mb + 10)) == r16(h, hb + r16(h, hb + 10))                        /* .sodds */
-                   && mb + r16(m, mb + 4) - mp == players && memcmp(m + mp, h + hp, players) == 0
-                   && block_size(m, mb) - r16(m, mb + 4) == names && memcmp(m + mn, h + hn, names) == 0;
-        CHECK(same, "team %d's block", t);
-        blocks += same;
-        /* its colours: the jerseys (the block's home and away palettes), the logo's and the
-         * matchup screens' (TeamLogoPalettes, TeamPalettes) */
-        int jerseys = memcmp(m + mb + r16(m, mb + 2), h + hb + r16(h, hb + 2), 64) == 0;
+        /* (what the game reads of a team, but the count of defensemen, which the game counts
+         * itself; its pictures' addresses, its records' places, its setup screen name: the
+         * league's own) */
+        const char *differ = team_diff(&lg_team[t], &want[t], SKIP_DEFENSEMEN | SKIP_RECORDS | SKIP_PICTURES | SKIP_OPTION);
+        CHECK(!*differ, "team %d's tables:%s", t, differ);
+        blocks += !*differ;
+        /* its colours: the jerseys, the logo's and the matchup screens' (the logo's in the art's
+         * TeamLogoPalettes) */
+        int jerseys = !memcmp(lg_team[t].colours, want[t].colours, sizeof want[t].colours);
         int logo = memcmp(m + LG(TeamLogoPalettes) + 32u * (uint32_t)t, h + s.table[LG_TeamLogoPalettes] + 32u * (uint32_t)t, 32) == 0;
-        int matchup = memcmp(m + LG(TeamPalettes) + 64u * (uint32_t)t, h + s.table[LG_TeamPalettes] + 64u * (uint32_t)t, 64) == 0;
+        int matchup = !memcmp(lg_team[t].matchup, want[t].matchup, sizeof want[t].matchup);
         CHECK(jerseys && logo && matchup, "team %d's colours: jerseys %s, logo %s, matchup %s", t, jerseys ? "same" : "DIFFER",
               logo ? "same" : "DIFFER", matchup ? "same" : "DIFFER");
         colours += jerseys && logo && matchup;
-        CHECK(m[LG(TeamRatings) + (uint32_t)t] == rs8(&s, s.table[LG_TeamRatings] + (uint32_t)t), "team %d's rating", t);
-        CHECK(memcmp(m + LG(TeamSongs) + 6u * (uint32_t)t, h + s.table[LG_TeamSongs] + 6u * (uint32_t)t, 6) == 0, "team %d's songs", t);
     }
-    for (int i = 0; i < 16 * s.rows; i++) moved += m[LG(playoffseats) + (uint32_t)i] != h[s.table[LG_playoffseats] + (uint32_t)i];
+    for (int i = 0; i < 16 * s.rows; i++) moved += lg_seats[i / 16][i % 16] != want_seats[i / 16][i % 16];
     int missing = 0;
     for (int t = 0; t < s.playoff_teams; t++) {
         int seen = 0;
@@ -263,7 +300,7 @@ static void hack(const char *path, const char *dir)
         missing += !seen;
     }
     CHECK(moved == missing, "the draws: %d places changed, for %d teams in none", moved, missing);
-    printf("  %s: %d of %d team blocks the hack's, %d of their colours (jerseys, logo, matchups), %d draw places given to teams in none\n",
+    printf("  %s: %d of %d teams' tables the hack's, %d of their colours (jerseys, logo, matchups), %d draw places given to teams in none\n",
            dir, blocks, s.teams, colours, moved);
     /* its art as the hack's: each logo (and its colours), centre ice, both banners, each photo */
     struct romsrc bs;
@@ -291,10 +328,9 @@ static void hack(const char *path, const char *dir)
          * the hack's, or when every team's is the template's label, its city's in the cartridge's letters) */
         same = art_banners(&s, t, b, pb) == 0 && art_banners(&bs, league_block((uint16_t)t), a, pa) == 0 && !memcmp(a, b, 16 * ART_BANNER_W);
         if (label) {
-            uint32_t blk = r32(m, LG(TeamList) + 4u * (uint32_t)t);
             char city[64], no[120];
             uint8_t name[16][88];
-            snprintf(city, sizeof city, "%s", string_at(m, blk + r16(m, blk + 4)));
+            snprintf(city, sizeof city, "%s", text_of(&lg_team[t].city));
             for (char *c = city; *c; c++) if (*c >= 'a' && *c <= 'z') *c = (char)(*c - 32);
             banner_pixels(BANNER_BITMAPS, league_art((uint16_t)t), banner_check(city, no, sizeof no) == 0 ? city : NULL, name);
             for (int i = 0; i < 16 * ART_BANNER_W; i++) b[16 * ART_BANNER_W + i] = (uint8_t)(ART_BANNER_SETUP + name[i / ART_BANNER_W][i % ART_BANNER_W]);
@@ -305,14 +341,16 @@ static void hack(const char *path, const char *dir)
         }
         CHECK(same, "team %d's banners", t);
         banners += same;
-        uint32_t la = r32(m, LG(FeaturedPictures) + 4u * (uint32_t)t), lb = rs32(&s, s.table[LG_FeaturedPictures] + 4u * (uint32_t)t);
-        for (; r32(m, la) && rs32(&s, lb); la += 6, lb += 6) {
-            same = art_photo(&bs, r32(m, la), a) == 0 && art_photo(&s, rs32(&s, lb), b) == 0 && !memcmp(a, b, ART_LOGO * ART_LOGO) && r16(m, la + 4) == rs16(&s, lb + 4);
-            CHECK(same, "team %d's photo of roster place %d", t, rs16(&s, lb + 4));
+        const struct LgTeam *T = &lg_team[t];
+        int k = 0;
+        for (; k < T->pictures && k < want[t].pictures; k++) {
+            same = art_photo(&bs, T->picture[k].pic, a) == 0 && art_photo(&s, want[t].picture[k].pic, b) == 0 && !memcmp(a, b, ART_LOGO * ART_LOGO)
+                   && T->picture[k].slot == want[t].picture[k].slot;
+            CHECK(same, "team %d's photo of roster place %d", t, want[t].picture[k].slot);
             photos += same;
             pics++;
         }
-        CHECK(!r32(m, la) && !rs32(&s, lb), "team %d's photos: as many as the hack's", t);
+        CHECK(T->pictures == want[t].pictures, "team %d's photos: %d, the hack's %d", t, T->pictures, want[t].pictures);
     }
     int set = r16(m, LG(Teamblocksmap) + 8) & 0x7FFF;      /* (the playoff screen loads them all: no more than the hack's 22 a team) */
     CHECK(set <= 22 * league.teams, "%s: %d banner tiles for %d teams (the playoff screen has room for 22 a team)", dir, set, league.teams);
@@ -321,7 +359,7 @@ static void hack(const char *path, const char *dir)
     CHECK(!memcmp(league.hiscore_at, s.hiscore_at, sizeof s.hiscore_at) && !s.hiscore_at[0][0] && !s.hiscore_at[1][1],
           "%s: the screen after the EA logo's places %d,%d %d,%d, not the hack's 0,0 0,0", dir,
           league.hiscore_at[0][0], league.hiscore_at[0][1], league.hiscore_at[1][0], league.hiscore_at[1][1]);
-    printf("  %s: %d of %d names on the setup screen right (the shared cities' whole)\n", dir, option_names(m, dir), league.teams);
+    printf("  %s: %d of %d names on the setup screen right (the shared cities' whole)\n", dir, option_names(dir), league.teams);
     /* its shared art: each of the hack's own (not the cartridge's) as the hack's, gathered; the rest the cartridge's */
     struct romsrc cs;
     romsrc_cartridge(&cs, rom_cart);

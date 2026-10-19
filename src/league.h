@@ -1,9 +1,10 @@
 /* The league: the teams a game is played with. The cartridge's own (26 clubs and the two All-Star
- * teams) unless the native side builds another (native/league.c) past the cartridge's 1 MB, in the
- * ROM's own formats: a team list of team blocks, and the tables by team. The game reads every
- * table by team, and the counts, through here; with the cartridge's league they are its own
- * addresses and numbers, so it plays exactly as the original. A league is part of a game's
- * session, like its rules. */
+ * teams) unless the native side builds another (native/league.c). The game reads its teams from
+ * native tables (lg_team, below: read off the cartridge for its own league, made from a league's
+ * folder for another) and its art by address: the cartridge's, or a league's own past the
+ * cartridge's 1 MB, in the ROM's formats (league.asset, the art's tables). With the cartridge's
+ * league the tables are its own numbers and its art its own addresses, so it plays exactly as the
+ * original. A league is part of a game's session, like its rules. */
 #pragma once
 #include <stdint.h>
 
@@ -93,6 +94,9 @@ struct LgTeam {
     struct LgText option_name;                          /* the setup screen's Team line (s[0] == 0: the cartridge's code, by number) */
 };
 extern struct LgTeam lg_team[LEAGUE_MAX];
+/* the data a league's own team keeps in its team struct: a number for it (the cartridge's teams
+ * keep the cartridge's address of their data; a league's are in the tables only) */
+#define LG_DATA(t) (0xF00000u | (uint32_t)(t))
 extern uint8_t lg_seats[32][16];                        /* playoffseats: rows of 16 teams, the draws a playoff starts from */
 void league_read(void);                                 /* the tables from the league's ROM image (league.table) */
 __attribute__((noreturn, cold)) void league_bad_team(uint16_t team);

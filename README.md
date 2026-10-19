@@ -220,7 +220,7 @@ tell us what it said.
   against it: the game plays bit for bit the same whatever compiles it, as netplay between
   builds will need. `make rulestest` checks the game rules on the game's own routines (and the League page's
   ratings against the cards' for every player). `make leaguetest` checks the leagues: the
-  cartridge's exported and built again, byte for byte; a 32-team one; 22 broken ones refused; and
+  cartridge's exported and built again, its tables and art the cartridge's; a 32-team one; 22 broken ones refused; and
   with hack ROMs in `../roms` (or `HACKS=`), each extracted, built to its teams, colours and art
   as the hack has them, played and packed. pulseman is checked on the oracle's vectors (`make
   runtime-check`) and on this game's own recordings (`make runtime-selfcheck`).

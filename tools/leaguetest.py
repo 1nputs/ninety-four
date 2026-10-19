@@ -2,7 +2,8 @@
 """Leagues (native/league.c), from the outside: make leaguetest.
 
   1. nhl94 --export-league writes the cartridge's league (out/leagues/cartridge), and
-     build/leaguetest builds it again: it must be the cartridge's, byte for byte.
+     build/leaguetest builds it again: its tables must be the cartridge's as the game reads them
+     off the cartridge, field for field, and its art the cartridge's.
   2. A 32-team league made from it (out/leagues/thirty-two: four teams of the 1970s added before
      the All-Stars, two of them with no lines or colours, so they are made and borrowed, and two
      players of one wearing the same number) must build, its records apart in save RAM, every

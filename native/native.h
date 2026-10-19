@@ -62,8 +62,8 @@ void rules_power_on(void);
 size_t rules_state_save(void *user, uint8_t *out);
 int rules_state_load(void *user, const uint8_t *in, size_t size);
 
-/* leagues (league.c; src/league.h): a folder of text files (teams.csv, players.csv ...), built
- * past the cartridge at power on; the cartridge's own when none */
+/* leagues (league.c; src/league.h): a folder of text files (teams.csv, players.csv ...), made the
+ * game's tables at power on (its art past the cartridge); the cartridge's own when none */
 const char *league_error(void);         /* why the last call failed */
 void league_next(const char *dir);      /* the next game's (NULL or "": the cartridge's) */
 int league_next_is_cartridge(void);

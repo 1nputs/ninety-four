@@ -1,5 +1,6 @@
-/* Leagues (src/league.h): who plays, from a folder of text files a player can edit, built in the
- * cartridge's own formats past its end at power on. A folder holds:
+/* Leagues (src/league.h): who plays, from a folder of text files a player can edit, made at power
+ * on: its teams the game's tables (lg_team), its art past the cartridge's end in the cartridge's
+ * formats. A folder holds:
  *
  *   league.ini    name = ... and playoff_teams = N (the first N teams play for the cup; the rest,
  *                 the All-Stars, only in single games); hiscore_screen = X,Y X,Y (where the
@@ -50,8 +51,9 @@
  * 32-team template (league_extract, romsrc.c: read as data, never run), and may travel as a
  * package (league_pack: a zip of its files, played as it is from leagues/). The game reads the league
  * through the tables of src/league.h, so it plays as the cartridge does with whatever teams it
- * has; the cartridge's own league, exported and built again, is the cartridge's byte for byte
- * (make leaguetest). docs/LEAGUES.md tells it all for a league's maker. */
+ * has; the cartridge's own league, exported and built again, is the cartridge's: its tables as
+ * the game reads them off the cartridge, field for field, its art the cartridge's (make
+ * leaguetest). docs/LEAGUES.md tells it all for a league's maker. */
 #include <dirent.h>
 #include <stdarg.h>
 #include <stdatomic.h>
@@ -140,8 +142,10 @@ struct lg {
     struct photo *photo;        /* the folder's photos (art/photos) the pictures name */
     int photos;
 };
-/* a league built: the cartridge with it past the end */
-struct built { uint8_t *img; uint32_t size; struct league league; uint64_t hash; };
+/* a league built: its tables (league.h), and the cartridge with its art past the end */
+struct tables { struct LgTeam team[LEAGUE_MAX]; uint8_t seats[ROWS_MAX][16]; };
+struct built { uint8_t *img; uint32_t size; struct league league; struct tables *tables; uint64_t hash; };
+static void built_free(struct built *B) { free(B->img); free(B->tables); B->img = NULL; B->tables = NULL; }
 
 /* ---- errors ------------------------------------------------------------------------------------ */
 
@@ -1075,7 +1079,7 @@ static int art_of(const struct team *T, const struct team cart[CART_TEAMS])
     return best;
 }
 
-/* ---- building: the cartridge with the league past its end ---------------------------------------- */
+/* ---- building: the league's tables, and the cartridge with its art past the end ------------------- */
 
 struct buf { uint8_t *b; size_t n, cap; int bad; };
 
@@ -1100,56 +1104,106 @@ static void even(struct buf *b) { if (b->n & 1) put8(b, 0); }
 static void set16(struct buf *b, uint32_t at, unsigned v) { if (!b->bad) { b->b[at] = (uint8_t)(v >> 8); b->b[at + 1] = (uint8_t)v; } }
 static void set32(struct buf *b, uint32_t at, uint32_t v) { set16(b, at, v >> 16); set16(b, at + 2, v & 0xFFFF); }
 /* a String: its length word (with itself and the pad), the text, a 0 to make it even */
-static void put_string(struct buf *b, const char *s)
-{
-    size_t n = strlen(s);
-    put16(b, (unsigned)((2 + n + 1) & ~(size_t)1));
-    put(b, s, n);
-    even(b);
-}
-
 static uint32_t at(const struct buf *b) { return (uint32_t)b->n; }
-
-/* the team's block, the cartridge's format: 6 offsets, its palettes, .sr, .sodds, the lines, the
- * players, the names */
-static void put_block(struct buf *b, const struct team *T)
-{
-    uint32_t blk = at(b);
-    put16(b, 146);
-    put16(b, 12);
-    put16(b, 0);                                          /* (the names: after the players) */
-    put16(b, 82);
-    put16(b, 76);
-    put16(b, 80);
-    for (int p = PAL_HOME; p <= PAL_AWAY; p++)
-        for (int k = 0; k < 16; k++) put16(b, T->pal[p][k]);
-    int nd = T->players - T->goalies - T->forwards;
-    put8(b, (unsigned)(T->offense << 4 | T->defense));
-    put8(b, (unsigned)(T->pk << 4 | T->pp));
-    put8(b, (unsigned)(T->home << 4 | T->away));
-    put8(b, (unsigned)(T->forwards << 4 | nd));
-    unsigned odds = 0;
-    for (int g = 0; g < T->goalies; g++) odds |= (unsigned)T->pl[g].start << (12 - 4 * g);
-    put16(b, odds);
-    for (int l = 0; l < 8; l++) { put(b, T->line[l], 7); put8(b, 0); }
-    for (int i = 0; i < T->players; i++) {
-        const struct player *P = &T->pl[i];
-        put_string(b, P->name);
-        put8(b, (unsigned)((P->number / 10) << 4 | P->number % 10));
-        for (int k = 0; k < 14; k += 2) put8(b, (unsigned)(P->nib[k] << 4 | P->nib[k + 1]));
-    }
-    put16(b, 2);
-    set16(b, blk + 4, at(b) - blk);
-    put_string(b, T->city);
-    put_string(b, T->abbr);
-    put_string(b, T->nickname);
-    put_string(b, T->arena);
-}
 
 static uint64_t fnv64(uint64_t h, const void *p, size_t n)
 {
     for (const uint8_t *s = p; n--; s++) h = (h ^ *s) * 0x100000001B3ull;
     return h;
+}
+
+/* ---- the tables the game reads (league.h) ------------------------------------------------------ */
+
+/* text s as a String, as the cartridge keeps one (put_string's) */
+static void lg_string(struct LgText *d, const char *s)
+{
+    size_t n = strlen(s);
+    unsigned len = (unsigned)((2 + n + 1) & ~(size_t)1);
+    memset(d, 0, sizeof *d);
+    d->s[0] = (uint8_t)(len >> 8);
+    d->s[1] = (uint8_t)len;
+    memcpy(d->s + 2, s, n);
+}
+
+/* team t of L as the game reads it (what the cartridge's block and tables hold of a team; its
+ * pictures at photo_at for the folder's photos) */
+static void lg_team_of(const struct lg *L, int t, const uint32_t *photo_at, struct LgTeam *G)
+{
+    const struct team *T = &L->t[t];
+    memset(G, 0, sizeof *G);
+    G->data = LG_DATA(t);
+    lg_string(&G->city, T->city);
+    lg_string(&G->abbr, T->abbr);
+    lg_string(&G->nickname, T->nickname);
+    lg_string(&G->arena, T->arena);
+    memcpy(G->colours[0], T->pal[PAL_HOME], sizeof G->colours[0]);
+    memcpy(G->colours[1], T->pal[PAL_AWAY], sizeof G->colours[1]);
+    memcpy(G->matchup[0], T->pal[PAL_MATCHUP], sizeof G->matchup[0]);
+    memcpy(G->matchup[1], T->pal[PAL_MATCHUP2], sizeof G->matchup[1]);
+    G->offense = (uint8_t)T->offense;
+    G->defense = (uint8_t)T->defense;
+    G->pp = (uint8_t)T->pp;
+    G->pk = (uint8_t)T->pk;
+    G->home = (uint8_t)T->home;
+    G->away = (uint8_t)T->away;
+    G->forwards = (uint8_t)T->forwards;
+    G->defensemen = (uint8_t)(T->players - T->goalies - T->forwards);
+    for (int k = 0; k < T->goalies; k++) G->starts |= (uint16_t)(T->pl[k].start << (12 - 4 * k));
+    uint16_t w = G->starts;                               /* (as the game counts them) */
+    do G->goalies++; while ((w = (uint16_t)(w << 4)) != 0);
+    for (int l = 0; l < 8; l++) memcpy(G->lines[l], T->line[l], 7);
+    G->players = (uint8_t)T->players;
+    for (int i = 0; i < T->players; i++) {
+        const struct player *P = &T->pl[i];
+        lg_string(&G->player[i].name, P->name);
+        G->player[i].number = (uint8_t)((P->number / 10) << 4 | P->number % 10);
+        memcpy(G->player[i].rating, P->nib, sizeof G->player[i].rating);
+    }
+    G->rating = (uint8_t)T->rating;
+    for (int k = 0; k < 6; k++) G->songs[k] = (uint8_t)T->songs[k];
+    G->records = (uint16_t)(t < CART_TEAMS ? 26u * (unsigned)t : LEAGUE_SRAM_PLAYERS / 4 + 26u * (unsigned)(t - CART_TEAMS));   /* (save RAM: the cartridge's places, the rest where it has room) */
+    G->pictures = (uint8_t)T->pics;
+    for (int i = 0; i < T->pics; i++) {
+        G->picture[i].pic = T->pic[i].photo >= 0 ? photo_at[T->pic[i].photo] : T->pic[i].pic;
+        G->picture[i].slot = T->pic[i].slot;
+    }
+    /* the setup screen's name: its city, its whole name when another has its city (and the menu
+     * has room: else its nickname) */
+    int shared = 0;
+    for (int k = 0; k < L->teams; k++) shared += k != t && same_word(L->t[k].city, T->city);
+    char whole[LEN_CITY + LEN_NICK + 2];
+    snprintf(whole, sizeof whole, "%s %s", T->city, T->nickname);
+    lg_string(&G->option_name, !shared ? T->city : strlen(whole) <= OPTION_NAME ? whole : T->nickname);
+}
+
+/* the tables' part of a league's checksum, field by field */
+static uint64_t tables_hash(uint64_t h, const struct LgTeam *teams, int n, const uint8_t seats[][16], int rows)
+{
+    for (int t = 0; t < n; t++) {
+        const struct LgTeam *G = &teams[t];
+        const struct LgText *text[] = { &G->city, &G->abbr, &G->nickname, &G->arena, &G->option_name };
+        for (size_t k = 0; k < sizeof text / sizeof text[0]; k++) h = fnv64(h, text[k]->s, sizeof text[k]->s);
+        uint8_t b[4 * 16 * 2];
+        for (int k = 0; k < 64; k++) {
+            uint16_t c = k < 32 ? G->colours[k / 16][k % 16] : G->matchup[(k - 32) / 16][k % 16];
+            b[2 * k] = (uint8_t)(c >> 8);
+            b[2 * k + 1] = (uint8_t)c;
+        }
+        h = fnv64(h, b, sizeof b);
+        uint8_t v[] = { G->offense, G->defense, G->pp, G->pk, G->home, G->away, G->forwards, G->defensemen, G->goalies,
+                        (uint8_t)(G->starts >> 8), (uint8_t)G->starts, G->players, G->rating, (uint8_t)(G->records >> 8),
+                        (uint8_t)G->records, G->pictures };
+        h = fnv64(fnv64(fnv64(h, v, sizeof v), G->lines, sizeof G->lines), G->songs, sizeof G->songs);
+        for (int i = 0; i < G->players; i++)
+            h = fnv64(fnv64(fnv64(h, G->player[i].name.s, sizeof G->player[i].name.s), &G->player[i].number, 1),
+                      G->player[i].rating, sizeof G->player[i].rating);
+        for (int i = 0; i < G->pictures; i++) {
+            uint8_t p[6] = { (uint8_t)(G->picture[i].pic >> 24), (uint8_t)(G->picture[i].pic >> 16), (uint8_t)(G->picture[i].pic >> 8),
+                             (uint8_t)G->picture[i].pic, (uint8_t)(G->picture[i].slot >> 8), (uint8_t)G->picture[i].slot };
+            h = fnv64(h, p, sizeof p);
+        }
+    }
+    return fnv64(h, seats, 16u * (size_t)rows);
 }
 
 /* past the save RAM's addresses when the next size bytes would reach them: the VDP's DMA reads
@@ -1395,13 +1449,8 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
     put(&b, c, ROM_SIZE);
     struct league *lg = &B->league;
     memcpy(lg->asset, league_cartridge.asset, sizeof lg->asset);   /* (the shared art: the cartridge's, unless the league has its own) */
-    uint32_t list = at(&b);
-    lg->table[LG_TeamList] = list;
-    for (int t = 0; t < L->teams; t++) put32(&b, 0);
-    for (int t = 0; t < L->teams; t++) {
-        set32(&b, list + 4u * (uint32_t)t, at(&b));
-        put_block(&b, &L->t[t]);
-    }
+    B->tables = calloc(1, sizeof *B->tables);
+    if (!B->tables) { free(b.b); return fail("out of memory"); }
     /* the art of its own: each logo and centre ice not its art team's, each photo not the
      * cartridge's of its name (the tiles a logo or centre ice has are DMA'd: none across 128 KB) */
     uint32_t logo_at[LEAGUE_MAX], ice_at[LEAGUE_MAX], *photo_at = calloc((size_t)L->photos + 1, sizeof *photo_at);
@@ -1446,55 +1495,15 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
         photo_at[k] = at(&b);
         put(&b, asset, sizeof asset);
     }
-    lg->table[LG_TeamPalettes] = at(&b);
-    for (int t = 0; t < L->teams; t++)
-        for (int p = PAL_MATCHUP; p <= PAL_MATCHUP2; p++)
-            for (int k = 0; k < 16; k++) put16(&b, L->t[t].pal[p][k]);
     lg->table[LG_TeamLogoBitmaps] = at(&b);
     for (int t = 0; t < L->teams; t++) put32(&b, logo_at[t]);
     lg->table[LG_TeamGfxList] = at(&b);
     for (int t = 0; t < L->teams; t++) put32(&b, ice_at[t]);
-    lg->table[LG_TeamSongs] = at(&b);
-    for (int t = 0; t < L->teams; t++)
-        for (int k = 0; k < 6; k++) put8(&b, (unsigned)L->t[t].songs[k]);
-    even(&b);
-    lg->table[LG_TeamRatings] = at(&b);
-    for (int t = 0; t < L->teams; t++) put8(&b, (unsigned)L->t[t].rating);
-    even(&b);
     lg->table[LG_TeamLogoPalettes] = at(&b);
     for (int t = 0; t < L->teams; t++)
         for (int k = 0; k < 16; k++) put16(&b, L->t[t].pal[PAL_LOGO][k]);
-    uint32_t pics = lg->table[LG_FeaturedPictures] = at(&b);
-    for (int t = 0; t < L->teams; t++) put32(&b, 0);
-    for (int t = 0; t < L->teams; t++) {
-        set32(&b, pics + 4u * (uint32_t)t, at(&b));
-        for (int i = 0; i < L->t[t].pics; i++) {
-            put32(&b, L->t[t].pic[i].photo >= 0 ? photo_at[L->t[t].pic[i].photo] : L->t[t].pic[i].pic);
-            put16(&b, L->t[t].pic[i].slot);
-        }
-        put32(&b, 0);
-    }
-    lg->table[LG_playoffseats] = at(&b);
-    put(&b, L->seats, 16u * (uint32_t)L->rows);
-    /* the setup screen's names: a team's city, its whole name when another has its city (and the
-     * menu has room: else its nickname) */
-    uint32_t names = lg->table[LG_OptionTeamNames] = at(&b);
-    for (int t = 0; t < L->teams; t++) put32(&b, 0);
-    for (int t = 0; t < L->teams; t++) {
-        const struct team *T = &L->t[t];
-        int shared = 0;
-        for (int k = 0; k < L->teams; k++) shared += k != t && same_word(L->t[k].city, T->city);
-        if (b.bad) break;
-        uint32_t block = c32(b.b, list + 4u * (uint32_t)t);
-        if (!shared) { set32(&b, names + 4u * (uint32_t)t, block + c16(b.b, block + 4)); continue; }
-        char whole[LEN_CITY + LEN_NICK + 2];
-        snprintf(whole, sizeof whole, "%s %s", T->city, T->nickname);
-        set32(&b, names + 4u * (uint32_t)t, at(&b));
-        put_string(&b, strlen(whole) <= OPTION_NAME ? whole : T->nickname);
-    }
-    lg->table[LG_PlayerRecordOffsets] = at(&b);           /* (save RAM: the cartridge's places, the rest where it has room) */
-    for (int t = 0; t < L->teams; t++)
-        put16(&b, t < CART_TEAMS ? 26u * (unsigned)t : LEAGUE_SRAM_PLAYERS / 4 + 26u * (unsigned)(t - CART_TEAMS));
+    for (int t = 0; t < L->teams; t++) lg_team_of(L, t, photo_at, &B->tables->team[t]);   /* (the teams: tables, not in the image) */
+    memcpy(B->tables->seats, L->seats, 16u * (uint32_t)L->rows);
     lg->table[LG_Teamblocksmap] = SYM_Teamblocksmap;
     for (int t = 0; t < L->teams; t++) lg->block[t] = (uint8_t)L->t[t].art;
     /* banners drawn a team at a time (put_banners) when the league has its own, or a setup screen
@@ -1504,8 +1513,8 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
     int room = (c16(sb, setup + 8) & 0x7FFF) > (c16(c, SYM_GameSetUpMap + 8) & 0x7FFF);
     if (own || room) put_banners(&b, L, c, own_px, lg);
     free(photo_at);
-    if (b.bad) { free(b.b); return fail("out of memory"); }
-    if (at(&b) > IMAGE_MAX) { free(b.b); return fail("%u KB past the cartridge: a league holds %u KB at most", (unsigned)((at(&b) - ROM_SIZE - (at(&b) > SRAM_END ? SRAM_END - SRAM_START : 0)) >> 10), (IMAGE_MAX - ROM_SIZE - (SRAM_END - SRAM_START)) >> 10); }
+    if (b.bad) { free(b.b); free(B->tables); return fail("out of memory"); }
+    if (at(&b) > IMAGE_MAX) { free(b.b); free(B->tables); return fail("%u KB past the cartridge: a league holds %u KB at most", (unsigned)((at(&b) - ROM_SIZE - (at(&b) > SRAM_END ? SRAM_END - SRAM_START : 0)) >> 10), (IMAGE_MAX - ROM_SIZE - (SRAM_END - SRAM_START)) >> 10); }
     lg->teams = (uint16_t)L->teams;
     lg->playoff_teams = (uint16_t)L->playoff_teams;
     memcpy(lg->hiscore_at, L->hiscore_at, sizeof lg->hiscore_at);
@@ -1517,6 +1526,7 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
     uint8_t counts[6] = { (uint8_t)(lg->teams >> 8), (uint8_t)lg->teams, (uint8_t)(lg->playoff_teams >> 8), (uint8_t)lg->playoff_teams,
                           (uint8_t)(lg->playoff_rows >> 8), (uint8_t)lg->playoff_rows };
     h = fnv64(fnv64(fnv64(h, counts, sizeof counts), lg->art, sizeof lg->art), lg->block, sizeof lg->block);
+    h = tables_hash(h, B->tables->team, L->teams, B->tables->seats, L->rows);
     if (memcmp(lg->hiscore_at, league_cartridge.hiscore_at, sizeof lg->hiscore_at))   /* (a league with the cartridge's keeps its checksum) */
         h = fnv64(h, lg->hiscore_at, sizeof lg->hiscore_at);
     B->hash = h ? h : 1;                                  /* (0 is the cartridge's) */
@@ -1553,7 +1563,10 @@ static void use_built(struct built *B, const char *dir, const char *name)
     snprintf(now.dir, sizeof now.dir, "%s", dir);
     snprintf(now.name, sizeof now.name, "%s", name);
     free(old);
-    league_read();                                        /* (its tables, from what was built) */
+    memcpy(lg_team, B->tables->team, sizeof lg_team);    /* (its teams) */
+    memcpy(lg_seats, B->tables->seats, sizeof lg_seats);
+    free(B->tables);
+    B->tables = NULL;
 }
 
 /* dir's league built on the cartridge: 0, or -1 with league_error() */
@@ -1604,7 +1617,7 @@ int league_use(const char *dir, uint64_t hash)
     if (!hash) { use_cartridge(); return 0; }
     if (!dir || !*dir) return fail("a league with no folder");
     if (build_dir(dir, &B, name, sizeof name) < 0) return fail("its league, %s, is not there: %s", dir, err);
-    if (B.hash != hash) { free(B.img); return fail("its league, %s, has changed since", dir); }
+    if (B.hash != hash) { built_free(&B); return fail("its league, %s, has changed since", dir); }
     use_built(&B, dir, name);
     return 0;
 }
@@ -1617,7 +1630,7 @@ int league_check(const char *dir, int describe)
     if (describe) printf("%s: %s, %d teams (%d for the cup), %d playoff draws, %u bytes past the cartridge, checksum %016llx\n", dir, name, B.league.teams,
            B.league.playoff_teams, B.league.playoff_rows, (unsigned)(B.size - ROM_SIZE - (B.size > SRAM_END ? SRAM_END - SRAM_START : 0)),
            (unsigned long long)B.hash);                   /* (the save RAM's addresses left out) */
-    free(B.img);
+    built_free(&B);
     return 0;
 }
 
@@ -2225,7 +2238,7 @@ int league_pack(const char *dir, const char *zip_path)
     if (!is_package(zip_path)) return fail("%s: a package's name ends in .zip", zip_path);
     if (build_dir(dir, &B, name, sizeof name) < 0) return -1;   /* (it builds: else what is wrong) */
     uint64_t hash = B.hash;
-    free(B.img);
+    built_free(&B);
     mdrt_zip_writer w = { 0 };
     int count = 0;
     if (pack_files(dir, &w, &count) < 0) { mdrt_zip_writer_free(&w); return -1; }
@@ -2239,7 +2252,7 @@ int league_pack(const char *dir, const char *zip_path)
     free(zip);
     if (!ok) return fail("cannot write %s", zip_path);
     if (build_dir(zip_path, &B, NULL, 0) < 0) return -1;  /* (and the package builds the same league) */
-    free(B.img);
+    built_free(&B);
     if (B.hash != hash) return fail("%s builds another league than %s", zip_path, dir);
     printf("%s: %s, %d files, %u KB; the package's checksum %016llx, its league's %016llx\n", zip_path, name, count,
            (unsigned)((n + 1023) >> 10), (unsigned long long)pack_hash, (unsigned long long)hash);

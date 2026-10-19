@@ -275,8 +275,9 @@ records, and edited lines), in a file named after its folder (or package) beside
 `out/nhl94-my-league.srm`. Two leagues in folders of one name, in different places, share it.
 
 A saved state remembers its league's checksum and plays on only with that league: change the
-league's files (or extract it again) and its old states will not load. Quick resume is a state
-too. The checksum is also how the session tells that every player has the host's league, for the
+league's files (or extract it again) and its old states will not load. A new version of the game
+can reckon a league's checksum another way, and then its states from before will not load either
+(the cartridge's own league keeps its states). Quick resume is a state too. The checksum is also how the session tells that every player has the host's league, for the
 online play to come.
 
 ## The League page

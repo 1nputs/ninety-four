@@ -7,8 +7,8 @@ to change nothing it was not meant to. The runs use a fixed HV counter stand-in 
 changes to the runtime's HV model do not show; everything else must match bit for bit.
 
 The league runs play the cartridge's league exported and built again (out/leagues/cartridge: its
-tables past the cartridge, so only work RAM, which points into them, may differ from the
-original's run: LIKE) and a 32-team one (tools/leaguetest.py makes both).
+teams a league's own, so only work RAM may differ from the original's run, where a team struct
+keeps its data's number: LIKE) and a 32-team one (tools/leaguetest.py makes both).
 
 `check` also saves a native state in three of the runs (at the first game loop wait from a given
 frame on), loads it in a new process and runs on: the frames after it must be the same as the
