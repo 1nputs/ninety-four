@@ -161,8 +161,8 @@ void PlayerStatsScreen(struct Team *tm)
 static int more_stats(int playoff) { return rules[RULE_MORE_STATS] && !playoff; }
 static uint16_t first_column(int playoff) { return more_stats(playoff) && (int16_t)g.DispAttribCtr > 4 ? (uint16_t)(g.DispAttribCtr - 4) : 0; }
 #define STRING(s) "\x00" s                                /* (a String: its length, then the text) */
-static const uint8_t more_headers[2][6] = { STRING("\x06 +/-"), STRING("\x06 Chk") };
-static const uint8_t more_titles[3][22] = {                /* for columns 4 to 6 (4: more follow it now) */
+static const uint8_t more_headers[2][7] = { STRING("\x06 +/-"), STRING("\x06 Chk") };
+static const uint8_t more_titles[3][23] = {                /* for columns 4 to 6 (4: more follow it now) (22 bytes, the literal's 0) */
     STRING("\x16[ Penalty Minutes  ]"), STRING("\x16[    Plus/Minus    ]"), STRING("\x16[   Body Checks     "),
 };
 
@@ -270,7 +270,7 @@ void DrawStatsList(struct Team *tm, int playoff)
         for (uint16_t c = first_column(playoff); c < first_column(playoff) + 5; c++) {
             g.printa = g.DispAttribCtr == c ? 0xC000 : 0x8000;
             if (c < 5) printsmall(AdvanceStringPtr(SYM_StatColumnHeaders, (uint16_t)(c + 1)));
-            else printsmallz(more_headers[c - 5], sizeof more_headers[0]);
+            else printsmallz(more_headers[c - 5], 6);
         }
         col = 5;
     } else if ((int16_t)g.DispAttribCtr >= 0) {
@@ -285,7 +285,7 @@ void DrawStatsList(struct Team *tm, int playoff)
     printsmallz(str_DrawStatsList_2, sizeof str_DrawStatsList_2);
     Framer(0x16, 3);
     printz(str_DrawStatsList_3, sizeof str_DrawStatsList_3);
-    if (more_stats(playoff) && (int16_t)g.DispAttribCtr >= 4) printsmallz(more_titles[g.DispAttribCtr - 4], sizeof more_titles[0]);
+    if (more_stats(playoff) && (int16_t)g.DispAttribCtr >= 4) printsmallz(more_titles[g.DispAttribCtr - 4], 22);
     else PrintStringFromList(SYM_StatSortTitles, (uint16_t)(1 + g.DispAttribCtr));
     g.printfontset = 0;
     uint8_t *a3 = SATT;

@@ -20,6 +20,8 @@ frames after that must be a fresh power on's.
 
     tools/golden.py record [--force]     (make golden: the runs not yet recorded; --force: all of them)
     tools/golden.py check                (make golden-check)
+    tools/golden.py check --build B --out D   (make golden-cross: another compiler's build B checked
+                                         against the runs recorded here, its own runs kept in D)
 """
 import argparse
 import os
@@ -151,9 +153,14 @@ def main():
     ap.add_argument('--dir', default=os.path.join(ROOT, 'out', 'golden'))
     ap.add_argument('--force', action='store_true', help='record over existing golden runs')
     ap.add_argument('--jobs', type=int, default=4)
+    ap.add_argument('--build', help='the nhl94 to run (default build/nhl94)')
+    ap.add_argument('--out', help="check: where the build's own runs go (default DIR-new)")
     a = ap.parse_args()
+    global NHL94
+    if a.build:                                           # (it exports the leagues the runs play too)
+        NHL94 = leaguetest.NHL94 = os.path.abspath(a.build)
     if not os.path.exists(NHL94):
-        sys.exit('no build/nhl94 (make nhl94)')
+        sys.exit('no %s (make nhl94)' % os.path.relpath(NHL94, ROOT))
     leaguetest.export()                                   # (the leagues the runs play, from the ROM)
     leaguetest.thirty_two()
     if a.action == 'record':                              # (without --force: only the runs it has none of)
@@ -162,7 +169,7 @@ def main():
         ok = record(a.dir, a.jobs, missing=missing) is not None
         print('golden: %d runs recorded in %s' % (len(todo), os.path.relpath(a.dir, ROOT)) if ok else 'golden: FAILED')
         sys.exit(0 if ok else 1)
-    new = a.dir.rstrip('/') + '-new'
+    new = a.out or a.dir.rstrip('/') + '-new'
     saved = record(new, a.jobs, states=True)
     if saved is None:
         sys.exit('golden: FAILED')

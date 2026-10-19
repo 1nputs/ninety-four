@@ -20,7 +20,7 @@ static uint16_t option(uint16_t line) { return g.options[line / 2]; }   /* (line
 
 /* (rules: more period lengths) their names as the setup prints them, padded like PerLengthValues */
 #define LENGTH_TEXT(s) "\x00\x16" s                    /* (a String: its length, 22, then the text) */
-static const uint8_t more_lengths[7][22] = {
+static const uint8_t more_lengths[7][23] = {      /* (22 bytes each, and the literal's 0) */
     LENGTH_TEXT("5 Minutes           "), LENGTH_TEXT("7 Minutes           "), LENGTH_TEXT("10 Minutes          "),
     LENGTH_TEXT("15 Minutes          "), LENGTH_TEXT("20 Minutes          "), LENGTH_TEXT("2 Minutes           "),
     LENGTH_TEXT("3 Minutes           "),

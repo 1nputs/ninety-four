@@ -365,6 +365,8 @@ static void try_place(void);
 static void place_next(const char *how);
 static int in_game_logic(void);
 
+void __cyg_profile_func_enter(void *fn, void *site);       /* (the compiler's hooks: -finstrument-functions) */
+void __cyg_profile_func_exit(void *fn, void *site);
 void NI __cyg_profile_func_enter(void *fn, void *site)
 {
     (void)site;

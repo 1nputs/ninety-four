@@ -526,7 +526,7 @@ void uppads(struct Vid *v)
  * 7-4 and 3-0, $F = blank) and a letter by bits 10-8 (none while sflags7 bit 7 is set). */
 void QueuePadLabel(uint16_t code, struct RinkObj *pad, struct Vid *v)
 {
-    static const char letters[8] = " DDLCRX\xFF";
+    static const char letters[] = " DDLCRX\xFF";
     pad->Xfrac = 0;                                       /* (the label's x offset) */
     int16_t d2 = (int16_t)((code >> 4) & 0xF);
     if (d2 == 0) {

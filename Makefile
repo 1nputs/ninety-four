@@ -5,6 +5,7 @@
 #   make vectors        record the saved states, snapshots and test vectors that are missing
 #   make runtime-check  pulseman's tests on this game's vectors
 #   make golden         record the native game's golden runs (out/golden; make golden-check compares)
+#   make golden-cross   the native game built by another compiler (Clang), checked against them
 #   make runtime-selfcheck  pulseman's tests on the native game's own traces (nhl94 --record)
 #   make relaytest      the Z80 relay port against the sound traces
 #   make rulestest      the game rules on the game's routines (test/rules_test.c)
@@ -63,14 +64,26 @@ CXXLIB ?= -static-libgcc -Wl,-Bstatic -lstdc++ -Wl,--whole-archive -lwinpthread 
 endif
 # (pulseman's ymfm core is C++)
 CXXLIB ?= -lstdc++
-nhl94: build/nhl94$(EXE)
 # (Windows: SDL2's -mwindows is left out, so the game keeps its console; out/ is where save RAM
 # and states go)
 SDLLIBS := $(filter-out -mwindows,$(shell pkg-config --libs sdl2))
-build/nhl94$(EXE): $(SRC) $(HDR) $(NATIVE) native/native.h native/routines_gen.h mdrt
-	@mkdir -p build out
-	$(CC) $(CFLAGS) -O2 -Isrc -Inative -I$(MDRT)/include $(shell pkg-config --cflags sdl2) -finstrument-functions \
-	    -finstrument-functions-exclude-file-list=native/ -o $@ $(SRC) $(NATIVE) $(MDRTLIBS) $(SDLLIBS) -lm $(CXXLIB)
+# a file at a time into OBJ: the game's routines instrumented (the C side follows the routines the
+# game is in, so states know where it waits), the native side not
+BIN    ?= build/nhl94$(EXE)
+OBJ    ?= build/obj
+NOBJ   := $(SRC:%.c=$(OBJ)/%.o) $(NATIVE:%.c=$(OBJ)/%.o)
+NFLAGS  = $(CFLAGS) -O2 -Isrc -Inative -I$(MDRT)/include $(shell pkg-config --cflags sdl2)
+MDRTHDR := $(wildcard $(MDRT)/include/mdrt/*.h)
+nhl94: $(BIN)
+$(OBJ)/src/%.o: src/%.c $(HDR) $(MDRTHDR)
+	@mkdir -p $(dir $@)
+	$(CC) $(NFLAGS) -finstrument-functions -c $< -o $@
+$(OBJ)/native/%.o: native/%.c $(HDR) native/native.h native/routines_gen.h $(MDRTHDR)
+	@mkdir -p $(dir $@)
+	$(CC) $(NFLAGS) -c $< -o $@
+$(BIN): $(NOBJ) mdrt
+	@mkdir -p $(dir $@) out
+	$(CC) $(CFLAGS) -O2 -o $@ $(NOBJ) $(MDRTLIBS) $(SDLLIBS) -lm $(CXXLIB)
 mdrt:
 	@test -f $(MDRT)/Makefile || { echo "no pulseman at $(MDRT): git submodule update --init (or make MDRT=path/to/pulseman)"; exit 1; }
 	$(MAKE) -C $(MDRT) MODE=release B=$(MDRTB) sdl
@@ -93,6 +106,24 @@ golden: build/nhl94
 	$(PY) tools/golden.py record
 golden-check: build/nhl94
 	$(PY) tools/golden.py check
+# the native game and pulseman built by another compiler (XCC, XCXX, XAR: Clang's by default; or
+# ZIG=path/to/zig, its Clang) into build/cross, its golden runs checked against those recorded
+# here (out/golden-cross): the game plays bit for bit the same whatever compiles it, which netplay
+# between builds needs
+XCC     ?= clang
+XCXX    ?= clang++
+XAR     ?= ar
+XCXXLIB ?= -lstdc++
+ifdef ZIG
+XCC     := $(abspath $(ZIG)) cc
+XCXX    := $(abspath $(ZIG)) c++
+XAR     := $(abspath $(ZIG)) ar
+XCXXLIB := -lc++
+endif
+golden-cross:
+	$(MAKE) CC="$(XCC)" CXX="$(XCXX)" AR="$(XAR)" CXXLIB="$(XCXXLIB)" BIN=build/cross/nhl94$(EXE) OBJ=build/cross/obj \
+	    MDRTB=build/cross build/cross/nhl94$(EXE)
+	$(PY) tools/golden.py check --build build/cross/nhl94$(EXE) --out out/golden-cross
 
 # the Z80 relay port against sound traces
 relaytest: build/relaytest
@@ -131,5 +162,6 @@ gen:
 	@git status --short -- src/ram.h 'src/*_gen.h' native/routines_gen.h
 
 clean:
-	rm -rf build/captest build/oracle_shim.o build/nhl94 build/relaytest
-.PHONY: rulestest leaguetest test oracle clean nhl94 relaytest mdrt vectors lockstep runtime-check runtime-selfcheck golden golden-check gen
+	rm -rf build/captest build/oracle_shim.o build/nhl94 build/obj build/cross build/relaytest
+.PHONY: rulestest leaguetest test oracle clean nhl94 relaytest mdrt vectors lockstep runtime-check runtime-selfcheck golden golden-check \
+	golden-cross gen

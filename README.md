@@ -161,9 +161,11 @@ art's sizes and colours, what is and is not taken from a hack, packages, records
 The hardware side is [pulseman](https://github.com/1nputs/pulseman), our Mega Drive runtime,
 included as a git submodule in `ext/pulseman`: clone with `--recursive`, or after a plain clone
 run `git submodule update --init`. `make nhl94` builds it too. Besides that you need GCC (C and
-C++), `make`, `pkg-config` and SDL2. The game's own code builds with Clang as well (its capture
-test passes built either way), but the builds made and tested here use GCC. Your saves and
-states go to `out/` in this repository.
+C++), `make`, `pkg-config` and SDL2. The game builds with Clang as well and plays bit for bit
+the same: `make golden-cross` builds it and pulseman with Clang (`XCC=` and `XCXX=` name it, or
+`ZIG=path/to/zig` takes Zig's) and checks its golden runs against the GCC build's (Clang 22 here:
+every run identical). The builds made and tested here use GCC. Your saves and states go to `out/`
+in this repository.
 
 **Linux** (built and tested here, Debian 13, GCC 14):
 
@@ -214,7 +216,9 @@ tell us what it said.
   whole sessions against the oracle, checking work RAM and VDP at every vblank. `make
   golden-check` compares the native build's own output with a recorded build, bit for bit (20
   runs, about 227,000 frames, the rules' and leagues' own among them), plus save-state round
-  trips. `make rulestest` checks the game rules on the game's own routines (and the League page's
+  trips. `make golden-cross` builds the game and pulseman with Clang and checks the same runs
+  against it: the game plays bit for bit the same whatever compiles it, as netplay between
+  builds will need. `make rulestest` checks the game rules on the game's own routines (and the League page's
   ratings against the cards' for every player). `make leaguetest` checks the leagues: the
   cartridge's exported and built again, byte for byte; a 32-team one; 22 broken ones refused; and
   with hack ROMs in `../roms` (or `HACKS=`), each extracted, built to its teams, colours and art
@@ -340,8 +344,8 @@ Big, big greets to everyone whose work this stands on:
   [Plutiedev](https://plutiedev.com), [Sega Retro](https://segaretro.org),
   [SMS Power](https://www.smspower.org) (the SN76489) and the
   [SpritesMind](https://gendev.spritesmind.net) forum (Nemesis's YM2612 and VDP research).
-- **[Zig](https://ziglang.org)**, whose bundled Clang checks pulseman against a second
-  compiler.
+- **[Zig](https://ziglang.org)**, whose bundled Clang checks the game and pulseman against a
+  second compiler.
 
 ## License
 
