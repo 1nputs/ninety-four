@@ -11,7 +11,7 @@
 #include "rom.h"
 #include "symbols_gen.h"
 
-uint8_t rs8(const struct romsrc *s, uint32_t a) { return a < s->size ? s->b[a] : 0; }
+uint8_t rs8(const struct romsrc *s, uint32_t a) { return a < s->size ? (s->b ? s->b[a] : *rom_ptr(a)) : 0; }
 uint16_t rs16(const struct romsrc *s, uint32_t a) { return (uint16_t)(rs8(s, a) << 8 | rs8(s, a + 1)); }
 uint32_t rs32(const struct romsrc *s, uint32_t a) { return (uint32_t)rs16(s, a) << 16 | rs16(s, a + 2); }
 
@@ -52,6 +52,23 @@ void romsrc_cartridge(struct romsrc *s, const uint8_t *cart)
     s->photos = SYM_PicturePalette;
     memcpy(s->asset, league_cartridge.asset, sizeof s->asset);
     hiscore_places(s, cart);
+}
+
+/* what the game reads by number now: the cartridge, and past it the art of the league in play */
+void romsrc_game(struct romsrc *s)
+{
+    romsrc_cartridge(s, rom_cart);
+    s->b = NULL;                                          /* (rs8: through rom_ptr) */
+    s->size = rom_limit;
+    memcpy(s->table, league.table, sizeof s->table);
+    memcpy(s->asset, league.asset, sizeof s->asset);
+    s->teams = league.teams;
+    s->playoff_teams = league.playoff_teams;
+    s->rows = league.playoff_rows;
+    s->bitmaps = league.asset[ART_TeamBitmaps];
+    s->rink = league.asset[ART_Rinktilelist];
+    s->rink_tiles = league.asset[ART_Rinktiles];
+    s->photos = league.asset[ART_PicturePalette];
 }
 
 /* "movea.l #address,An" or "lea address,An": the instructions the cartridge's code reads its

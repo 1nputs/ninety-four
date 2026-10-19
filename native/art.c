@@ -780,3 +780,129 @@ size_t art_shared_make(const struct romsrc *s, int i, uint32_t a, const struct a
     *out = b;
     return tiles_len + pal_len + rest_len;
 }
+
+/* ---- the art map ------------------------------------------------------------------------------- */
+
+#define PIECES_MAX 512
+static struct art_piece pieces[PIECES_MAX];
+static int npieces, overlaps;
+static struct art_piece overlapped[8][2];               /* (the first: the piece left out, the one it overlapped) */
+
+/* a logo bitmap at a: to the end of its tiles and its map (6 x 6; its colours are its team's) */
+static uint32_t logo_size(const struct romsrc *s, uint32_t a)
+{
+    uint32_t end, map = a + rs32(s, a + 4);
+    if (tiles_at(s, a + 8, NULL, 64, &end) < 0) return 0;
+    return max_u32(end, map + 4 + 2 * 6 * 6) - a;
+}
+
+/* a team's banners (Teamblocksmap, TeamBitmaps, a league's own): to the end of their tiles and
+ * map (their colours are elsewhere: a league's own point back at the cartridge's) */
+static uint32_t banners_size(const struct romsrc *s, uint32_t a)
+{
+    uint32_t end, map = a + rs32(s, a + 4);
+    if (tiles_at(s, a + 8, NULL, TILES_MAX, &end) < 0) return 0;
+    return max_u32(end, map + 4 + 2u * rs16(s, map) * rs16(s, map + 2)) - a;
+}
+
+/* a photo at a (UnpackPicture's: 3 bits a pixel, 24 bytes a tile after its count at +8; a map of
+ * its own at +4, or the photos' common one) */
+static uint32_t photo_size(const struct romsrc *s, uint32_t a)
+{
+    uint32_t n = 10 + 24u * rs16(s, a + 8), map = rs32(s, a + 4);
+    return map ? max_u32(n, map + 4 + 2 * 6 * 6) : n;
+}
+
+static void piece(uint32_t at, uint32_t size, int kind, int which)
+{
+    if (!at || !size || npieces == PIECES_MAX) return;
+    for (int i = 0; i < npieces; i++) if (pieces[i].at == at) return;   /* (one piece many teams show) */
+    pieces[npieces++] = (struct art_piece){ at, size, (uint8_t)kind, (uint8_t)which };
+}
+
+static int by_at(const void *a, const void *b)
+{
+    const struct art_piece *x = a, *y = b;
+    return x->at < y->at ? -1 : x->at > y->at;
+}
+
+void art_map_make(void)
+{
+    struct romsrc s;
+    romsrc_game(&s);
+    npieces = overlaps = 0;
+    for (int i = 0; i < SHARED; i++) {
+        uint32_t a = league.asset[shared[i].art];
+        piece(a, art_shared_size(&s, i, a), PIECE_SHARED, shared[i].art);
+    }
+    piece(league.asset[ART_TeamBitmaps], banners_size(&s, league.asset[ART_TeamBitmaps]), PIECE_BANNERS, ART_TeamBitmaps);
+    piece(SYM_Teamblocksmap, banners_size(&s, SYM_Teamblocksmap), PIECE_BANNERS, 0);   /* (setupTeamBlocksMap: the cartridge's always) */
+    piece(league.table[LG_Teamblocksmap], banners_size(&s, league.table[LG_Teamblocksmap]), PIECE_BANNERS, 0);
+    for (int k = 0; k < 8; k++) {                         /* the arena animations' sprites (RunArenaAnim: the cartridge's ArenaAnims) */
+        uint32_t a = rs32(&s, SYM_ArenaAnims + 8u * (uint32_t)k + 4);
+        piece(a, sprites_size(&s, a), PIECE_ARENA, k);
+    }
+    uint32_t slots = league.table[LG_BannerSlotMap];
+    if (slots) piece(slots, 4 + 2u * rs16(&s, slots) * rs16(&s, slots + 2), PIECE_BANNER_SLOTS, 0);
+    for (int t = 0; t < league.teams && t < LEAGUE_MAX; t++) {
+        const struct LgTeam *T = &lg_team[t];
+        piece(T->logo, logo_size(&s, T->logo), PIECE_LOGO, t);
+        uint32_t end;
+        if (tiles_at(&s, T->ice + 8, NULL, 24, &end) == 24) piece(T->ice, end - T->ice, PIECE_ICE, t);
+        for (int k = 0; k < T->pictures; k++) piece(T->picture[k].pic, photo_size(&s, T->picture[k].pic), PIECE_PHOTO, t);
+        piece(league.banner_tiles[t], 22 * 32, PIECE_TEAM_BANNERS, t);
+    }
+    qsort(pieces, (size_t)npieces, sizeof pieces[0], by_at);
+    int n = 0;                                            /* (a piece inside the one before: left out, counted; across its end:
+                                                             the one before, its length reckoned, ends where it begins) */
+    for (int i = 0; i < npieces; i++) {
+        if (n && pieces[i].at < pieces[n - 1].at + pieces[n - 1].size) {
+            if (pieces[i].at + pieces[i].size > pieces[n - 1].at + pieces[n - 1].size) pieces[n - 1].size = pieces[i].at - pieces[n - 1].at;
+            else {
+                if (overlaps < 8) { overlapped[overlaps][0] = pieces[i]; overlapped[overlaps][1] = pieces[n - 1]; }
+                overlaps++;
+                continue;
+            }
+        }
+        pieces[n++] = pieces[i];
+    }
+    npieces = n;
+}
+
+const struct art_piece *art_map(int *n) { *n = npieces; return pieces; }
+int art_map_overlaps(void) { return overlaps; }
+
+void art_map_report(void)
+{
+    char a[80], b[80];
+    for (int k = 0; k < overlaps && k < 8; k++)
+        printf("  overlapping: %s at $%06X (%u bytes), inside %s at $%06X (%u bytes)\n", art_piece_name(&overlapped[k][0], a, sizeof a),
+               overlapped[k][0].at, overlapped[k][0].size, art_piece_name(&overlapped[k][1], b, sizeof b), overlapped[k][1].at, overlapped[k][1].size);
+}
+
+const struct art_piece *art_piece_at(uint32_t number)
+{
+    static int last;                                      /* (DMA reads go a piece at a time) */
+    if (last < npieces && number - pieces[last].at < pieces[last].size) return &pieces[last];
+    int lo = 0, hi = npieces - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (number < pieces[mid].at) hi = mid - 1;
+        else if (number - pieces[mid].at >= pieces[mid].size) lo = mid + 1;
+        else return &pieces[last = mid];
+    }
+    return NULL;
+}
+
+const char *art_piece_name(const struct art_piece *p, char *out, size_t size)
+{
+    static const char *const kinds[PIECES] = { "", "logo", "centre ice", "photo", "banners", "banner slots", "banner tiles", "" };
+    const char *shared_name = "?";
+    for (int i = 0; i < SHARED; i++) if (shared[i].art == p->which) shared_name = shared[i].name;
+    if (p->kind == PIECE_SHARED) snprintf(out, size, "%s", shared_name);
+    else if (p->kind == PIECE_BANNERS) snprintf(out, size, "%s", p->which ? "TeamBitmaps" : "Teamblocksmap");
+    else if (p->kind == PIECE_BANNER_SLOTS) snprintf(out, size, "BannerSlotMap");
+    else if (p->kind == PIECE_ARENA) snprintf(out, size, "arena animation %d", p->which + 1);
+    else snprintf(out, size, "team %d's %s", p->which, kinds[p->kind]);
+    return out;
+}

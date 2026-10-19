@@ -1552,6 +1552,7 @@ static void use_cartridge(void)
     now.art = NULL;
     now.dir[0] = now.name[0] = 0;
     now.hash = 0;
+    art_map_make();
 }
 
 static void use_built(struct built *B, const char *dir, const char *name)
@@ -1572,6 +1573,7 @@ static void use_built(struct built *B, const char *dir, const char *name)
     memcpy(lg_seats, B->tables->seats, sizeof lg_seats);
     free(B->tables);
     B->tables = NULL;
+    art_map_make();
 }
 
 /* dir's league built on the cartridge: 0, or -1 with league_error() */

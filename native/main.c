@@ -11,8 +11,12 @@
  *              [--fm-model ym2612|ym3438] [--watch ADDR,...] [--restart-at FRAME]
  *              [--four-way] [--input2 FILE] [--input3 FILE] [--input4 FILE]
  *              [--rule NAME=VALUE ...] [--league DIR] [--check-league DIR] [--export-league DIR]
- *              [--extract-rom HACK DIR] [--pack-league DIR FILE.zip]
+ *              [--extract-rom HACK DIR] [--pack-league DIR FILE.zip] [--art-check | --art-map]
  *
+ * --art-check (headless) counts every byte the VDP takes by DMA from the game's data and those in
+ * no piece of the art map (art.c: every piece of art the game reads by number, the cartridge's
+ * and the league's own), and says so at the end (tools/golden.py makes every run check it);
+ * --art-map prints the map too, a piece a line.
  * --headless runs without a window or pacing (as fast as it goes): with --frames it stops, --shot
  * writes the last picture, --wav the sound, --input plays pad 1 from a script (tools/oracle/scripts)
  * and --golden writes a line of hashes a frame (make golden). Keys: pulseman's
@@ -168,7 +172,31 @@ static void load_snapshot(mdrt *m)
 
 /* ---- the session ------------------------------------------------------------------------------ */
 
-static uint8_t read68k(void *user, uint32_t addr) { (void)user; return m8(addr); }
+/* the VDP's DMA reads (--art-check: each byte from the game's data counted, and those in no piece
+ * of the art map) */
+static int art_check, art_ranges;
+static unsigned long art_bytes, art_lost;
+static uint32_t art_first, art_range[8][2];             /* (the first stretches in no piece) */
+static uint8_t read68k(void *user, uint32_t addr)
+{
+    (void)user;
+    if (art_check && addr < 0xE00000u) {
+        art_bytes++;
+        if (!art_piece_at(addr)) {
+            if (!art_lost++) art_first = addr;
+            int k = 0;
+            while (k < art_ranges && !(addr + 1 >= art_range[k][0] && addr <= art_range[k][1])) k++;
+            if (k < art_ranges) {
+                if (addr < art_range[k][0]) art_range[k][0] = addr;
+                if (addr + 1 > art_range[k][1]) art_range[k][1] = addr + 1;
+            } else if (art_ranges < 8) {
+                art_range[art_ranges][0] = addr;
+                art_range[art_ranges++][1] = addr + 1;
+            }
+        }
+    }
+    return m8(addr);
+}
 
 /* the ROM in the window: pulseman's menu asks whether a file will do, then hands it over */
 #define ROM_CRC32 0x9438F5DDu                             /* "NHL 94 (UE) [!].gen" (SHA-1 7b1489ab...) */
@@ -556,6 +584,8 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--headless")) headless = 1;
         else if (!strcmp(argv[i], "--lockstep") && i + 1 < argc) { lockstep_path = argv[++i]; headless = 1; }
         else if (!strcmp(argv[i], "--golden") && i + 1 < argc) { golden_path = argv[++i]; headless = 1; }
+        else if (!strcmp(argv[i], "--art-check")) art_check = 1;
+        else if (!strcmp(argv[i], "--art-map")) art_check = 2;
         else if (!strcmp(argv[i], "--input") && i + 1 < argc) input_path[0] = argv[++i];
         else if (!strncmp(argv[i], "--input", 7) && argv[i][7] >= '2' && argv[i][7] <= '4' && !argv[i][8] && i + 1 < argc) { int pad = argv[i][7] - '1'; input_path[pad] = argv[++i]; }
         else if (!strcmp(argv[i], "--four-way")) four_way = 1;
@@ -584,7 +614,8 @@ int main(int argc, char **argv)
                             "       [--record DIR] [--fm-core nuked|ymfm] [--fm-model ym2612|ym3438] [--watch ADDR,...]\n"
                             "       [--restart-at FRAME] [--four-way] [--input2 FILE] [--input3 FILE] [--input4 FILE]\n"
                             "       [--rule NAME=VALUE ...] (the game rules: native/rules.c) [--league DIR] (league.c)\n"
-                            "       [--check-league DIR] [--export-league DIR] [--extract-rom HACK DIR] [--pack-league DIR FILE.zip]\n", argv[0]);
+                            "       [--check-league DIR] [--export-league DIR] [--extract-rom HACK DIR] [--pack-league DIR FILE.zip]\n"
+                            "       [--art-check | --art-map] (the art map: art.c)\n", argv[0]);
             return 2;
         }
     }
@@ -666,6 +697,18 @@ int main(int argc, char **argv)
     if (wav) { wav_header(c.audio_rate); fclose(wav); }
     if (golden) fclose(golden);
     mdrt_free(m);
+    if (art_check) {
+        printf("art check: %lu bytes taken by DMA from the game's data, %lu in no piece of art (the first at $%06X), %d pieces overlapping\n",
+               art_bytes, art_lost, art_first, art_map_overlaps());
+        for (int k = 0; k < art_ranges; k++) printf("  in no piece: $%06X-$%06X\n", art_range[k][0], art_range[k][1]);
+        art_map_report();
+        if (art_check == 2) {                             /* (--art-map: the map, a piece a line) */
+            int n;
+            const struct art_piece *p = art_map(&n);
+            char name[80];
+            for (int k = 0; k < n; k++) printf("  $%06X %6u %s\n", p[k].at, p[k].size, art_piece_name(&p[k], name, sizeof name));
+        }
+    }
     int ls = lockstep_result();                           /* (a run cut short by --frames is not a failure) */
     return ls == 1 || (ls == 2 && stop_after < 0) ? 1 : 0;
 }

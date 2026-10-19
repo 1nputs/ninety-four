@@ -89,6 +89,7 @@ struct romsrc {
     uint8_t hiscore_at[2][2];           /* HiScoreScreen's pictures' places (league.h) */
 };
 void romsrc_cartridge(struct romsrc *s, const uint8_t *cart);
+void romsrc_game(struct romsrc *s);     /* what the game reads by number now: the cartridge, the league in play's art */
 /* rom (size bytes), a hack read against the cartridge cart: 0, else -1 and why */
 int romsrc_hack(struct romsrc *s, const uint8_t *rom, uint32_t size, const uint8_t *cart, char *why, size_t why_size);
 int romsrc_block_ok(const struct romsrc *s, int t);    /* team t's block reads as the game reads it */
@@ -141,6 +142,21 @@ int art_view_same(const struct art_view *a, const struct art_view *b);
 void art_view_free(struct art_view *v);
 size_t art_shared_make(const struct romsrc *s, int i, uint32_t a, const struct art_view *v, uint8_t **out);
 size_t art_shared_copy(const struct romsrc *s, int i, uint32_t a, uint8_t **out);
+/* the art map: every piece of art the game can read by number in the league in play (the
+ * cartridge's and the league's own), what it is and how long: for a renderer that draws other
+ * art in a piece's place (texture packs), and for --art-check (every byte the VDP takes by DMA
+ * from the game's data in a piece) */
+enum { PIECE_SHARED, PIECE_LOGO, PIECE_ICE, PIECE_PHOTO, PIECE_BANNERS, PIECE_BANNER_SLOTS, PIECE_TEAM_BANNERS,
+       PIECE_ARENA, PIECES };                           /* (a team's own block tiles: in its league's Teamblocksmap) */
+/* which: the ART_ of a shared one, a team's team, an arena animation's number (ArenaAnims), else 0 */
+struct art_piece { uint32_t at, size; uint8_t kind, which; };
+void art_map_make(void);                                  /* (league.c: when a league is put in play) */
+const struct art_piece *art_map(int *n);                  /* sorted by at, none overlapping another */
+const struct art_piece *art_piece_at(uint32_t number);    /* the piece number is in, or NULL */
+const char *art_piece_name(const struct art_piece *p, char *out, size_t size);
+int art_map_overlaps(void);                               /* pieces inside another, left out (a piece whose
+                                                             length, reckoned, ran into the next ends where it begins) */
+void art_map_report(void);                                /* (those, on stdout) */
 /* the leagues/ folder's leagues for the menu (the cartridge's first): the count */
 int league_list(const char *const **names, const char *const **labels);
 /* what the League page says of league i of the list (0 the cartridge's): lines, a tab before each

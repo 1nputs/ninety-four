@@ -201,7 +201,7 @@ The C++ runtime is linked in, so outside the MSYS2 shell `build/nhl94.exe` needs
 If a compiler newer than these warns about something, `make WERROR= nhl94` builds anyway; please
 tell us what it said.
 
-## For agents: where this stands (18 October 2026)
+## For agents: where this stands (19 October 2026)
 
 - **What it is.** A hand-written C reimplementation of NHL '94 (Genesis, US/Europe retail, SHA-1
   `7b1489ab501258133bf03e5f0892b77d04312580`). `src/` has one C file per asm module of the
@@ -240,7 +240,11 @@ tell us what it said.
   the machine's own formats (Strings, the sprite table, the DMA list, records) are host bytes
   (`ram_bytes`). The console's big-endian view is made on demand (`src/mem.h`, `src/ram.c`'s map,
   `ram_pack`/`ram_unpack` for the checks and states); what still goes by 68000 address is listed
-  at the top of `src/mem.h`. Next: leagues as native tables.
+  at the top of `src/mem.h`. The league is native tables too (`src/league.h`'s `lg_team`: read
+  off the cartridge for its own league, made from a league's folder for another); its art stays in
+  the cartridge's formats, read by number (the cartridge's, or a league's own past it), and the art
+  map (`native/art.c`) says what every number is: `--art-map` prints it, and every golden run checks
+  that each byte the VDP takes by DMA is in a piece of it (`--art-check`), for texture packs later.
 - **Deferred by the owner.** WebAssembly (the game's code compiles for it now; a browser platform
   for pulseman is the job) and the cartridge's slowdown (it needs a 68k cost model).
 - **Read first.** `ext/pulseman/README.md` and `docs/API.md` there; the comments at the top

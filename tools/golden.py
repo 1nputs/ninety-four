@@ -10,6 +10,9 @@ The league runs play the cartridge's league exported and built again (out/league
 teams a league's own, so only work RAM may differ from the original's run, where a team struct
 keeps its data's number: LIKE) and a 32-team one (tools/leaguetest.py makes both).
 
+Every run also checks the art map (nhl94 --art-check): every byte the VDP takes by DMA from the
+game's data is in a piece of art the map knows (art.c: what a texture pack would replace).
+
 `check` also saves a native state in three of the runs (at the first game loop wait from a given
 frame on), loads it in a new process and runs on: the frames after it must be the same as the
 run's own (a state holds everything the game goes on from). And it plays the player's requests
@@ -72,12 +75,13 @@ STATES = {'full_game': 3000, 'playoff_game': 9000, 'faceoff': 6000, 'rules_faceo
           'league32_game': 3000, 'wide_faceoff': 6000}
 COLUMNS = ['work RAM', 'VDP state', 'Z80 RAM', 'picture', 'sound', 'samples']
 SAVED = re.compile(r'state saved at frame (\d+) \(golden line (\d+)\)')
+ART = re.compile(r'art check: (\d+) bytes .*?, (\d+) in no piece of art \(the first at (\$\w+)\), (\d+) pieces overlapping')
 
 
 def run(name, frames, opts, out, save=None, load=None):
     """nhl94 headless; save: (frame, path) saves a state; load: a state to start from. Returns
     (name, error or None, the golden line the state was saved after)."""
-    args = [NHL94, '--frames', str(frames), '--golden', out]
+    args = [NHL94, '--frames', str(frames), '--golden', out, '--art-check']
     if save:
         args += ['--save-state', '%d:%s' % save]
     if load:                                              # (the state brings its own rules and league: none given)
@@ -102,6 +106,9 @@ def run(name, frames, opts, out, save=None, load=None):
     r = subprocess.run(args, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if r.returncode != 0:
         return name, 'nhl94 failed (%d): %s' % (r.returncode, r.stderr.strip()[-300:]), None
+    a = ART.search(r.stdout)                              # (every byte DMA'd from the game's data in a piece of the art map)
+    if not a or int(a.group(2)) or int(a.group(4)):
+        return name, 'the art map: %s' % (a.group(0) if a else 'no art check'), None
     m = SAVED.search(r.stdout)
     if save and not m:
         return name, 'no state saved from frame %d' % save[0], None
