@@ -65,6 +65,7 @@ MDRTB  ?= build/release
 MDRTLIBS := $(MDRT)/$(MDRTB)/libmdrt_sdl2.a $(MDRT)/$(MDRTB)/libmdrt.a
 ifeq ($(OS),Windows_NT)
 EXE    ?= .exe
+NETLIB ?= -lws2_32                                       # (pulseman's online play: Winsock)
 # (Windows: the C++ runtime linked in, so the game needs only SDL2.dll beside it)
 CXXLIB ?= -static-libgcc -Wl,-Bstatic -lstdc++ -Wl,--whole-archive -lwinpthread -Wl,--no-whole-archive -Wl,-Bdynamic
 endif
@@ -89,7 +90,7 @@ $(OBJ)/native/%.o: native/%.c $(HDR) native/native.h native/routines_gen.h $(MDR
 	$(CC) $(NFLAGS) -c $< -o $@
 $(BIN): $(NOBJ) mdrt
 	@mkdir -p $(dir $@) out
-	$(CC) $(CFLAGS) -O2 -o $@ $(NOBJ) $(MDRTLIBS) $(SDLLIBS) -lm $(CXXLIB)
+	$(CC) $(CFLAGS) -O2 -o $@ $(NOBJ) $(MDRTLIBS) $(SDLLIBS) -lm $(CXXLIB) $(NETLIB)
 mdrt:
 	@test -f $(MDRT)/Makefile || { echo "no pulseman at $(MDRT): git submodule update --init (or make MDRT=path/to/pulseman)"; exit 1; }
 	$(MAKE) -C $(MDRT) MODE=release B=$(MDRTB) sdl
