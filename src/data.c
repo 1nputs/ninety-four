@@ -483,8 +483,8 @@ void FigureJoy(void)
                     g.Opt1Team = gs->team2;
                     break;
                 }
-                gs--;
                 if (n-- == 0) return;                     /* the playoff team is out */
+                gs = &g.matchups[n];
             }
             d0 = (uint16_t)((d0 + g.pojoy) << 2);
             g.gamenum = n;
@@ -675,16 +675,17 @@ void ResolveGames(void)
     gs->score2 = g.teams[1].score;
     uint16_t first;
     int16_t n = (int16_t)GetShifter(&first);
-    struct Matchup *a0 = &g.matchups[n];
     uint16_t won = 0;
     if (g.bosgames == 7) {                                /* best of one */
-        for (; n >= 0; n--, a0--) {
+        for (; n >= 0; n--) {
+            const struct Matchup *a0 = &g.matchups[n];
             if (!(a0->score1 > a0->score2)) won |= (uint16_t)(1u << n);
             if (a0->flags & MU_FLIPPED) won ^= (uint16_t)(1u << n);
         }
         goto winbits;
     }
-    for (; n >= 0; n--, a0--) {                           /* the series' wins */
+    for (; n >= 0; n--) {                                 /* the series' wins */
+        struct Matchup *a0 = &g.matchups[n];
         if (a0->topwins == 4 || a0->botwins == 4) continue;
         int bottom = (a0->flags & MU_FLIPPED) != 0;          /* (team1 the tree's bottom team) */
         if ((int16_t)(a0->score1 - a0->score2) < 0) bottom = !bottom;
@@ -695,8 +696,8 @@ void ResolveGames(void)
         if (gs->topwins != 4 && gs->botwins != 4) return;
         if ((int16_t)g.gamelevel < 3) {                   /* the user's series is over: the round's others */
             n = (int16_t)GetShifter(&first);
-            a0 = &g.matchups[n];
-            for (; n >= 0; n--, a0--) {
+            for (; n >= 0; n--) {
+                struct Matchup *a0 = &g.matchups[n];
                 if ((uint16_t)n == g.gamenum) continue;
                 while (a0->topwins != 4 && a0->botwins != 4) {
                     a0->topwins++;
@@ -712,8 +713,8 @@ void ResolveGames(void)
     }
     g.bosgames = 0;                                       /* the next round */
     n = (int16_t)GetShifter(&first);
-    a0 = &g.matchups[n];
-    for (; n >= 0; n--, a0--) {
+    for (; n >= 0; n--) {
+        struct Matchup *a0 = &g.matchups[n];
         if (a0->topwins != 4) won |= (uint16_t)(1u << n);
         a0->topwins = 0;
         a0->botwins = 0;

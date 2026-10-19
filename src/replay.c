@@ -9,9 +9,12 @@
 #include "rom.h"
 #include "replay_strings_gen.h"
 
-#define REPLAY_FRAME 0x62                 /* bytes per recorded frame */
+#define REPLAY_FRAME 0x62                 /* bytes per recorded frame (sizeof (struct ReplayFrame)) */
 #define REPLAYEND 0xFFFFAF54u             /* the replay buffer is work RAM from M68K_RAM up to here */
 #define M68K_RAM RAM_BASE
+
+/* the replay frame at a4 (the game keeps the frames' 68000 addresses: recbpr) */
+static struct ReplayFrame *replay_frame(uint32_t a4) { return RAM_AT(struct ReplayFrame, ram_at(a4)); }
 
 /* add.l d,pos: a 16.16 position update */
 #define ADD_POS32(o, P, F, d) do { int32_t p_ = POS32((o)->P, (o)->F) + (d); (o)->P = (int16_t)(p_ >> 16); (o)->F = (uint16_t)p_; } while (0)
@@ -163,16 +166,17 @@ uint16_t RevReplayAdj(uint32_t frame, rp cam)
  * Returns d7 = the frame's elapsed count. */
 uint16_t RestoreReplayFrame(uint32_t frame, rp cam)
 {
-    rp a0 = ram_at(frame);
+    const struct ReplayFrame *f = replay_frame(frame);
     const uint8_t *revtbl = rom_ptr(SYM_revframetbl);
     int rev = (g.sflags4 & HI(4)) != 0;
-    for (int d1 = 0xF; d1 >= 0; d1--, a0 = rp_add(a0, 4)) {
+    for (int d1 = 0xF; d1 >= 0; d1--) {
         struct SortObj *o = sortobj(0xF - d1);
-        int16_t d2 = (int16_t)(r16(a0, 2) & 0x3FF);
+        uint32_t l = f->obj[0xF - d1];
+        uint16_t hi = (uint16_t)(l >> 16);
+        int16_t d2 = (int16_t)(l & 0x3FF);
         if (d2 & 0x200) d2 = (int16_t)(d2 | 0xFC00);
         if (rev) d2 = (int16_t)-d2;
         o->Xpos = d2;
-        int32_t l = (int32_t)r32(a0, 0);
         d2 = (int16_t)((int16_t)(uint16_t)(l >> 4) >> 6);
         if (d2 & 0x200) d2 = (int16_t)(d2 | 0xFC00);
         if (rev) {
@@ -180,7 +184,7 @@ uint16_t RestoreReplayFrame(uint32_t frame, rp cam)
             if (d1 == 0) d2 = (int16_t)(d2 + 2);                 /* the puck shadow */
         }
         o->Ypos = d2;
-        int16_t raw = (int16_t)(((int16_t)r16(a0, 0) >> 4) & 0x3FF);
+        int16_t raw = (int16_t)(((int16_t)hi >> 4) & 0x3FF);
         d2 = raw;
         if (rev) {
             d2 = (int16_t)rd16(revtbl + d2 * 2);
@@ -189,33 +193,30 @@ uint16_t RestoreReplayFrame(uint32_t frame, rp cam)
         }
         o->frame = (uint16_t)d2;
         if (d2 >= (int16_t)SYM_SPFbglass && d2 < (int16_t)(SYM_SPFbglass + 5) && rev) o->Ypos = 0x190;
-        uint16_t attr = (uint16_t)(((int16_t)r16(a0, 0) >> 3) & 0x1800);
+        uint16_t attr = (uint16_t)(((int16_t)hi >> 3) & 0x1800);
         o->attribute = (uint16_t)((o->attribute & 0xE7FF) | attr);
         if (rev && (int16_t)o->frame >= (int16_t)SYM_SPFfight && (int16_t)o->frame < (int16_t)SYM_SPFPen)
             o->attribute ^= HI(3);                                /* the old fight frames face the other way */
     }
     for (int i = 0; i < 6; i++) {                                 /* roster numbers and positions, 2 players per 3 bytes */
         struct SortObj *a = sortobj(i * 2), *b = sortobj(i * 2 + 1);
-        a->rostnum = r8_next(&a0);
-        uint16_t d0 = r8(a0, 0) & 0xF;
+        const uint8_t *p = f->players[i];
+        a->rostnum = p[0];
+        uint16_t d0 = p[1] & 0xF;
         a->position = (int16_t)(d0 == 0xF ? -1 : d0);
-        b->rostnum = (uint8_t)(r8_next(&a0) >> 4);
-        b->rostnum |= (uint8_t)(r8(a0, 0) << 4);
-        d0 = (r8_next(&a0) >> 4) & 0xF;
+        b->rostnum = (uint8_t)(p[1] >> 4 | p[2] << 4);
+        d0 = (p[2] >> 4) & 0xF;
         b->position = (int16_t)(d0 == 0xF ? -1 : d0);
     }
-    g.puckz[0] = (uint16_t)(int16_t)(int8_t)r8_next(&a0);
-    sortobj(0xF)->Zpos = (int8_t)r8_next(&a0);
-    g.lastsfx = (uint16_t)(int16_t)(int8_t)r8_next(&a0);
-    uint16_t d7 = r8_next(&a0);
-    g.PadControlBits = (uint16_t)((g.PadControlBits & 0xF000) | (r16(a0, 0) & 0xFFF));
-    a0 = rp_add(a0, 2);
-    g.crowdframe = r16(a0, 0);
-    a0 = rp_add(a0, 2);
-    g.glovecords = r16(a0, 0);
-    a0 = rp_add(a0, 2);
-    g.PBnum = (uint16_t)((r8_next(&a0) << 8) | (g.PBnum & 0xFF));
-    g.PadControlBits34 = (uint16_t)((r8_next(&a0) << 4) | 0xF00F);
+    g.puckz[0] = (uint16_t)(int16_t)(int8_t)f->puckz;
+    sortobj(0xF)->Zpos = (int8_t)f->shadowz;
+    g.lastsfx = (uint16_t)(int16_t)(int8_t)f->lastsfx;
+    uint16_t d7 = f->elapsed;
+    g.PadControlBits = (uint16_t)((g.PadControlBits & 0xF000) | (f->padbits & 0xFFF));
+    g.crowdframe = f->crowdframe;
+    g.glovecords = f->glovecords;
+    g.PBnum = (uint16_t)((f->pbnum << 8) | (g.PBnum & 0xFF));
+    g.PadControlBits34 = (uint16_t)((f->padbits34 << 4) | 0xF00F);
     if (g.sflags & HI(sfscrl)) {
         const struct SortObj *o = obj_at(cam);
         if (g.sflags3 & 0x20) {
@@ -224,8 +225,8 @@ uint16_t RestoreReplayFrame(uint32_t frame, rp cam)
         }
         UpdateCameraPos(o, cam);
     } else {
-        g.Hpos = r16(a0, 0);
-        g.Vpos = r16(a0, 2);
+        g.Hpos = f->hpos;
+        g.Vpos = f->vpos;
         if (rev) {
             g.Hpos = (uint16_t)-g.Hpos;
             g.Vpos = (uint16_t)-g.Vpos;
@@ -268,44 +269,39 @@ void updatereplay(void)
             g.recbpr = M68K_RAM;
         }
     }
-    rp a0 = ram_at(g.recbpr);
-    for (int i = 0; i < 16; i++, a0 = rp_add(a0, 4)) {
+    struct ReplayFrame *f = replay_frame(g.recbpr);
+    for (int i = 0; i < 16; i++) {
         const struct SortObj *o = sortobj(i);
         uint32_t l = (uint32_t)(o->Xpos & 0x3FF);                 /* clr.l, then x at 2 */
         l |= (uint32_t)(uint16_t)((uint16_t)o->Ypos << 6) << 4;  /* asl.w #6 then asl.l #4 */
         uint16_t hi = (uint16_t)(l >> 16);
         hi |= (uint16_t)(o->frame << 4);
         hi |= (uint16_t)((o->attribute & 0x1800) << 3);
-        w32(a0, 0, ((uint32_t)hi << 16) | (l & 0xFFFF));
+        f->obj[i] = ((uint32_t)hi << 16) | (l & 0xFFFF);
     }
     for (int i = 0; i < 6; i++) {
         const struct SortObj *a = sortobj(i * 2), *b = sortobj(i * 2 + 1);
-        w8_next(&a0, a->rostnum);
+        uint8_t *p = f->players[i];
+        p[0] = a->rostnum;
         uint16_t d0 = (uint16_t)a->position;
         if ((int16_t)d0 < 0) d0 = 0xF;
-        w8(a0, 0, (uint8_t)(d0 & 0xF));
-        w8_next(&a0, (uint8_t)(r8(a0, 0) | (uint8_t)(b->rostnum << 4)));
-        w8(a0, 0, (uint8_t)(b->rostnum >> 4));
+        p[1] = (uint8_t)((d0 & 0xF) | b->rostnum << 4);
         d0 = (uint16_t)b->position;
         if ((int16_t)d0 < 0) d0 = 0xF;
-        w8_next(&a0, (uint8_t)(r8(a0, 0) | (uint8_t)(d0 << 4)));
+        p[2] = (uint8_t)(b->rostnum >> 4 | d0 << 4);
     }
-    w8_next(&a0, (uint8_t)g.puckz[0]);
-    w8_next(&a0, (uint8_t)sortobj(0xF)->Zpos);
-    w8_next(&a0, (uint8_t)g.lastsfx);
+    f->puckz = (uint8_t)g.puckz[0];
+    f->shadowz = (uint8_t)sortobj(0xF)->Zpos;
+    f->lastsfx = (uint8_t)g.lastsfx;
     g.lastsfx |= 0x80;
-    w8_next(&a0, (uint8_t)elapsed);
-    w16(a0, 0, g.PadControlBits);
-    a0 = rp_add(a0, 2);
-    w16(a0, 0, g.crowdframe);
-    a0 = rp_add(a0, 2);
-    w16(a0, 0, g.glovecords);
-    a0 = rp_add(a0, 2);
-    w8_next(&a0, (uint8_t)(g.PBnum >> 8));
-    w8_next(&a0, (uint8_t)(g.PadControlBits34 >> 4));
-    w16(a0, 0, g.Hpos);
-    a0 = rp_add(a0, 2);
-    w16(a0, 0, g.Vpos);
+    f->elapsed = (uint8_t)elapsed;
+    f->padbits = g.PadControlBits;
+    f->crowdframe = g.crowdframe;
+    f->glovecords = g.glovecords;
+    f->pbnum = (uint8_t)(g.PBnum >> 8);
+    f->padbits34 = (uint8_t)(g.PadControlBits34 >> 4);
+    f->hpos = g.Hpos;
+    f->vpos = g.Vpos;
 }
 
 /* the assignment dispatch table (data94.asm:asstab), indexed by asslist[assnum] */

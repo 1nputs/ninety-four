@@ -6,33 +6,32 @@
 
 struct Ram g;
 
-/* RAM's 16- and 32-bit scalars, as runs (first byte, count, size): struct Ram's fields, and struct
+/* RAM's 16- and 32-bit scalars, as runs (first byte, count, size; the run again reps times, stride
+ * bytes on: an array of structs): struct Ram's fields, and struct
  * SortObj's wherever the game reads one (the sorted objects, the pads block, sso) */
-static const struct { uint16_t at, n; uint8_t size; } runs[] = {
-    { 0xB000, 27, 2 }, { 0xB036, 2, 4 }, { 0xB03E, 11, 2 }, { 0xB05C, 19, 2 }, { 0xB08A, 15, 2 }, { 0xB0CA, 5, 2 },
-    { 0xB0DC, 19, 2 }, { 0xB10A, 15, 2 }, { 0xB14A, 5, 2 }, { 0xB15C, 19, 2 }, { 0xB18A, 15, 2 }, { 0xB1CA, 5, 2 },
-    { 0xB1DC, 19, 2 }, { 0xB20A, 15, 2 }, { 0xB24A, 5, 2 }, { 0xB25C, 19, 2 }, { 0xB28A, 15, 2 }, { 0xB2CA, 5, 2 },
-    { 0xB2DC, 19, 2 }, { 0xB30A, 15, 2 }, { 0xB34A, 5, 2 }, { 0xB35C, 19, 2 }, { 0xB38A, 15, 2 }, { 0xB3CA, 5, 2 },
-    { 0xB3DC, 19, 2 }, { 0xB40A, 15, 2 }, { 0xB44A, 5, 2 }, { 0xB45C, 19, 2 }, { 0xB48A, 15, 2 }, { 0xB4CA, 5, 2 },
-    { 0xB4DC, 19, 2 }, { 0xB50A, 15, 2 }, { 0xB54A, 5, 2 }, { 0xB55C, 19, 2 }, { 0xB58A, 15, 2 }, { 0xB5CA, 5, 2 },
-    { 0xB5DC, 19, 2 }, { 0xB60A, 15, 2 }, { 0xB64A, 5, 2 }, { 0xB65C, 19, 2 }, { 0xB68A, 15, 2 }, { 0xB6CA, 5, 2 },
-    { 0xB6DC, 19, 2 }, { 0xB70A, 15, 2 }, { 0xB74A, 5, 2 }, { 0xB75C, 19, 2 }, { 0xB78A, 15, 2 }, { 0xB7CA, 5, 2 },
-    { 0xB7DC, 19, 2 }, { 0xB80A, 15, 2 }, { 0xB84A, 32, 2 }, { 0xB89A, 7, 2 }, { 0xB8A8, 1, 4 }, { 0xB8AC, 4, 2 },
-    { 0xBD14, 1, 4 }, { 0xBD18, 72, 2 }, { 0xBDA8, 2, 4 }, { 0xBDB0, 1, 2 }, { 0xBDB4, 5, 2 }, { 0xBDC6, 10, 2 },
-    { 0xBDE2, 10, 2 }, { 0xBDFE, 10, 2 }, { 0xBE1A, 10, 2 }, { 0xBE36, 10, 2 }, { 0xBE52, 10, 2 }, { 0xBE6E, 6, 2 },
-    { 0xBE7A, 3, 4 }, { 0xBE86, 6, 2 }, { 0xBE9A, 6, 2 }, { 0xBEAE, 6, 2 }, { 0xBEC2, 6, 2 }, { 0xBED6, 9, 2 },
-    { 0xBEEA, 1, 2 }, { 0xBEEE, 4, 2 }, { 0xBEFA, 1, 2 }, { 0xBEFE, 13, 2 }, { 0xBF18, 1, 4 }, { 0xBF1C, 1, 2 },
-    { 0xBF48, 15, 2 }, { 0xBF66, 1, 4 }, { 0xBF6A, 11, 2 }, { 0xBF86, 65, 2 }, { 0xC010, 1, 2 }, { 0xC014, 2, 2 },
-    { 0xC2E8, 1, 2 }, { 0xC2EC, 2, 2 }, { 0xC2F2, 2, 2 }, { 0xC2F8, 2, 2 }, { 0xC304, 13, 2 }, { 0xC320, 10, 2 },
-    { 0xC3E6, 8, 2 }, { 0xC466, 2, 2 }, { 0xC46C, 4, 2 }, { 0xC5DC, 1, 2 }, { 0xC6CE, 15, 2 }, { 0xC6EC, 1, 4 },
-    { 0xC6F0, 4, 2 }, { 0xC6F8, 1, 4 }, { 0xC6FC, 1, 2 }, { 0xC700, 52, 2 }, { 0xC804, 26, 2 }, { 0xCA10, 32, 2 },
-    { 0xCA50, 1, 4 }, { 0xCA54, 4, 2 }, { 0xCA5C, 1, 4 }, { 0xCA60, 1, 2 }, { 0xCA64, 52, 2 }, { 0xCB68, 26, 2 },
-    { 0xCD74, 17, 2 }, { 0xCE66, 7, 2 }, { 0xCE76, 7, 2 }, { 0xCE86, 7, 2 }, { 0xCE96, 7, 2 }, { 0xCEA6, 7, 2 },
-    { 0xCEB6, 7, 2 }, { 0xCEC6, 7, 2 }, { 0xCED6, 7, 2 }, { 0xCEE6, 7, 2 }, { 0xCF20, 3, 4 }, { 0xCF2C, 1, 2 },
-    { 0xCF32, 1, 4 }, { 0xD036, 3, 4 }, { 0xD042, 18, 2 }, { 0xD066, 2, 4 }, { 0xD06E, 4, 2 }, { 0xD404, 43, 2 },
-    { 0xD4E8, 9, 2 }, { 0xD52E, 2, 2 }, { 0xD572, 4, 2 }, { 0xD586, 1, 2 }, { 0xD594, 1, 2 }, { 0xD598, 143, 2 },
-    { 0xD6B6, 2, 4 }, { 0xD6BE, 10, 2 }, { 0xDA12, 6, 2 }, { 0xDEA0, 5, 4 }, { 0xDEB4, 2, 2 }, { 0xDECC, 8, 2 },
-    { 0xDEDC, 2, 4 }, { 0xDEE4, 4, 2 }, { 0xDEEC, 1, 4 }, { 0xDEF0, 1, 2 }, { 0xFFFE, 1, 2 },
+static const struct { uint16_t at, n; uint8_t size; uint16_t reps, stride; } runs[] = {
+    { 0x0000, 16, 4, 458, 0x62 }, { 0x0056, 3, 2, 458, 0x62 }, { 0x005E, 2, 2, 458, 0x62 }, { 0xB000, 27, 2, 1, 0x0 },
+    { 0xB036, 2, 4, 1, 0x0 }, { 0xB03E, 11, 2, 1, 0x0 }, { 0xB05C, 19, 2, 15, 0x80 }, { 0xB08A, 15, 2, 15, 0x80 },
+    { 0xB0CA, 5, 2, 15, 0x80 }, { 0xB7DC, 19, 2, 1, 0x0 }, { 0xB80A, 15, 2, 1, 0x0 }, { 0xB84A, 32, 2, 1, 0x0 },
+    { 0xB89A, 7, 2, 1, 0x0 }, { 0xB8A8, 1, 4, 1, 0x0 }, { 0xB8AC, 4, 2, 1, 0x0 }, { 0xBD14, 1, 4, 1, 0x0 },
+    { 0xBD18, 72, 2, 1, 0x0 }, { 0xBDA8, 2, 4, 1, 0x0 }, { 0xBDB0, 1, 2, 1, 0x0 }, { 0xBDB4, 5, 2, 1, 0x0 },
+    { 0xBDC6, 10, 2, 6, 0x1C }, { 0xBE6E, 6, 2, 1, 0x0 }, { 0xBE7A, 3, 4, 1, 0x0 }, { 0xBE86, 6, 2, 4, 0x14 },
+    { 0xBED6, 9, 2, 1, 0x0 }, { 0xBEEA, 1, 2, 1, 0x0 }, { 0xBEEE, 4, 2, 1, 0x0 }, { 0xBEFA, 1, 2, 1, 0x0 },
+    { 0xBEFE, 13, 2, 1, 0x0 }, { 0xBF18, 1, 4, 1, 0x0 }, { 0xBF1C, 1, 2, 1, 0x0 }, { 0xBF48, 15, 2, 1, 0x0 },
+    { 0xBF66, 1, 4, 1, 0x0 }, { 0xBF6A, 11, 2, 1, 0x0 }, { 0xBF86, 65, 2, 1, 0x0 }, { 0xC010, 1, 2, 1, 0x0 },
+    { 0xC014, 2, 2, 1, 0x0 }, { 0xC2E8, 1, 2, 1, 0x0 }, { 0xC2EC, 2, 2, 3, 0x6 }, { 0xC304, 13, 2, 1, 0x0 },
+    { 0xC320, 10, 2, 1, 0x0 }, { 0xC3E6, 8, 2, 1, 0x0 }, { 0xC466, 2, 2, 1, 0x0 }, { 0xC46C, 4, 2, 1, 0x0 },
+    { 0xC5DC, 1, 2, 1, 0x0 }, { 0xC6CE, 15, 2, 1, 0x0 }, { 0xC6EC, 1, 4, 1, 0x0 }, { 0xC6F0, 4, 2, 1, 0x0 },
+    { 0xC6F8, 1, 4, 1, 0x0 }, { 0xC6FC, 1, 2, 1, 0x0 }, { 0xC700, 52, 2, 1, 0x0 }, { 0xC804, 26, 2, 1, 0x0 },
+    { 0xCA10, 32, 2, 1, 0x0 }, { 0xCA50, 1, 4, 1, 0x0 }, { 0xCA54, 4, 2, 1, 0x0 }, { 0xCA5C, 1, 4, 1, 0x0 },
+    { 0xCA60, 1, 2, 1, 0x0 }, { 0xCA64, 52, 2, 1, 0x0 }, { 0xCB68, 26, 2, 1, 0x0 }, { 0xCD74, 17, 2, 1, 0x0 },
+    { 0xCE66, 7, 2, 9, 0x10 }, { 0xCF20, 3, 4, 1, 0x0 }, { 0xCF2C, 1, 2, 1, 0x0 }, { 0xCF32, 1, 4, 1, 0x0 },
+    { 0xD036, 3, 4, 1, 0x0 }, { 0xD042, 18, 2, 1, 0x0 }, { 0xD066, 2, 4, 1, 0x0 }, { 0xD06E, 4, 2, 1, 0x0 },
+    { 0xD404, 43, 2, 1, 0x0 }, { 0xD4E8, 9, 2, 1, 0x0 }, { 0xD52E, 2, 2, 1, 0x0 }, { 0xD572, 4, 2, 1, 0x0 },
+    { 0xD586, 1, 2, 1, 0x0 }, { 0xD594, 1, 2, 1, 0x0 }, { 0xD598, 143, 2, 1, 0x0 }, { 0xD6B6, 2, 4, 1, 0x0 },
+    { 0xD6BE, 10, 2, 1, 0x0 }, { 0xDA12, 6, 2, 1, 0x0 }, { 0xDEA0, 5, 4, 1, 0x0 }, { 0xDEB4, 2, 2, 1, 0x0 },
+    { 0xDECC, 8, 2, 1, 0x0 }, { 0xDEDC, 2, 4, 1, 0x0 }, { 0xDEE4, 4, 2, 1, 0x0 }, { 0xDEEC, 1, 4, 1, 0x0 },
+    { 0xDEF0, 1, 2, 1, 0x0 }, { 0xFFFE, 1, 2, 1, 0x0 },
 };
 
 uint16_t ram_host_[RAM_SIZE];
@@ -43,10 +42,11 @@ __attribute__((constructor)) static void ram_map(void)
     for (uint32_t a = 0; a < RAM_SIZE; a++) ram_host_[a] = (uint16_t)a;
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     for (size_t r = 0; r < sizeof runs / sizeof runs[0]; r++)
-        for (uint32_t k = 0; k < runs[r].n; k++) {
-            uint32_t at = runs[r].at + k * runs[r].size;
-            for (uint32_t i = 0; i < runs[r].size; i++) ram_host_[at + i] = (uint16_t)(at + runs[r].size - 1 - i);
-        }
+        for (uint32_t j = 0; j < runs[r].reps; j++)
+            for (uint32_t k = 0; k < runs[r].n; k++) {
+                uint32_t at = runs[r].at + j * runs[r].stride + k * runs[r].size;
+                for (uint32_t i = 0; i < runs[r].size; i++) ram_host_[at + i] = (uint16_t)(at + runs[r].size - 1 - i);
+            }
 #endif
 }
 

@@ -1040,8 +1040,8 @@ void InitScores(void)
 {
     if ((int16_t)g.gamelevel > 1) return;
     int16_t d1 = (int16_t)GetShifter(NULL);
-    struct Matchup *a0 = &g.matchups[d1];
-    for (; d1 >= 0; d1--, a0--) {
+    for (; d1 >= 0; d1--) {
+        struct Matchup *a0 = &g.matchups[d1];
         if ((uint16_t)d1 == g.gamenum) continue;
         if (a0->flags & MU_SERIES_OVER) continue;
         a0->per = 0;
@@ -1054,8 +1054,8 @@ void UpdateScores(void)
 {
     int16_t d1 = (int16_t)GetShifter(NULL);
     g.TickerNum = (uint16_t)d1;
-    struct Matchup *a0 = &g.matchups[d1];
-    for (; d1 >= 0; d1--, a0--) {
+    for (; d1 >= 0; d1--) {
+        struct Matchup *a0 = &g.matchups[d1];
         if ((uint16_t)d1 == g.gamenum) continue;
         a0->flags &= (uint8_t)~MU_HIGHLIGHT;
         if (a0->flags & MU_SERIES_OVER) continue;
@@ -1329,14 +1329,13 @@ void StartHL(struct Matchup *gs, int16_t game) { StartHL2(gs, game); }
 void DoHiLights(void)
 {
     int16_t n = (int16_t)GetShifter(NULL);
-    struct Matchup *gs = &g.matchups[n];
     do {
+        struct Matchup *gs = &g.matchups[n];
         if (!(gs->flags & MU_SERIES_OVER)) {
             int hl = gs->flags & MU_HIGHLIGHT;
             gs->flags &= (uint8_t)~MU_HIGHLIGHT;
             if (hl) StartHL(gs, n);
         }
-        gs--;
     } while (n-- != 0);
 }
 

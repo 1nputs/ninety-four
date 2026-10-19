@@ -209,9 +209,39 @@ _Static_assert(offsetof(struct Matchup, score1) == 0x00A, "Matchup score1");
 _Static_assert(offsetof(struct Matchup, score2) == 0x00C, "Matchup score2");
 _Static_assert(offsetof(struct Matchup, flags) == 0x00E, "Matchup flags");
 
+/* one frame of the instant replay (updatereplay) */
+struct RAM_PACKED ReplayFrame {
+    uint32_t obj[16];  /* each sorted object: x (bits 0-9), y (10-19), frame (20-29), its attribute bits 11-12 (30-31) */
+    uint8_t players[6][3];  /* roster numbers and positions, two players in 3 bytes (a nibble a position, $F none) */
+    uint8_t puckz;  /* the puck's height */
+    uint8_t shadowz;  /* object 15's (its Zpos) */
+    uint8_t lastsfx;  /* the sound effect started */
+    uint8_t elapsed;  /* the frames it lasted */
+    uint16_t padbits;  /* PadControlBits (the low 12 bits) */
+    uint16_t crowdframe;
+    uint16_t glovecords;
+    uint8_t pbnum;  /* PBnum's high byte */
+    uint8_t padbits34;  /* PadControlBits34 >> 4 */
+    uint16_t hpos;  /* the view (Hpos, Vpos) */
+    uint16_t vpos;
+};
+_Static_assert(sizeof(struct ReplayFrame) == 0x62, "ReplayFrame size");
+_Static_assert(offsetof(struct ReplayFrame, obj) == 0x000, "ReplayFrame obj");
+_Static_assert(offsetof(struct ReplayFrame, players) == 0x040, "ReplayFrame players");
+_Static_assert(offsetof(struct ReplayFrame, puckz) == 0x052, "ReplayFrame puckz");
+_Static_assert(offsetof(struct ReplayFrame, shadowz) == 0x053, "ReplayFrame shadowz");
+_Static_assert(offsetof(struct ReplayFrame, lastsfx) == 0x054, "ReplayFrame lastsfx");
+_Static_assert(offsetof(struct ReplayFrame, elapsed) == 0x055, "ReplayFrame elapsed");
+_Static_assert(offsetof(struct ReplayFrame, padbits) == 0x056, "ReplayFrame padbits");
+_Static_assert(offsetof(struct ReplayFrame, crowdframe) == 0x058, "ReplayFrame crowdframe");
+_Static_assert(offsetof(struct ReplayFrame, glovecords) == 0x05A, "ReplayFrame glovecords");
+_Static_assert(offsetof(struct ReplayFrame, pbnum) == 0x05C, "ReplayFrame pbnum");
+_Static_assert(offsetof(struct ReplayFrame, padbits34) == 0x05D, "ReplayFrame padbits34");
+_Static_assert(offsetof(struct ReplayFrame, hpos) == 0x05E, "ReplayFrame hpos");
+_Static_assert(offsetof(struct ReplayFrame, vpos) == 0x060, "ReplayFrame vpos");
+
 struct RAM_PACKED Ram {
-    uint8_t M68K_RAM[0x1FFE];  /* $FFFF0000 */
-    uint8_t sramcleared[0x8F56];  /* $FFFF1FFE */
+    struct ReplayFrame replay[458];  /* $FFFF0000: the instant replay's frames, a ring to replayend; between games the save RAM's copy, and the game's RAM kept during a highlight: those by address (M68K_RAM) */
     uint8_t replayend[0xAC];  /* $FFFFAF54: end of the replay frames ($62 bytes each from M68K_RAM); suba4, adda43 and the record step wrap here */
     uint16_t VSCRLPM;  /* $FFFFB000 */
     uint16_t VSPRITES;  /* $FFFFB002 */
@@ -656,8 +686,8 @@ struct RAM_PACKED Ram {
     uint16_t Stack;  /* $FFFFFFFE */
 };
 _Static_assert(sizeof(struct Ram) == RAM_SIZE, "Ram size");
-_Static_assert(offsetof(struct Ram, M68K_RAM) == 0x0000, "M68K_RAM");
-_Static_assert(offsetof(struct Ram, sramcleared) == 0x1FFE, "sramcleared");
+_Static_assert(offsetof(struct Ram, replay) == 0x0000, "replay");
+/* sramcleared at 0x1FFE overlaps the previous field; use RAM_OFF_sramcleared */
 _Static_assert(offsetof(struct Ram, replayend) == 0xAF54, "replayend");
 _Static_assert(offsetof(struct Ram, VSCRLPM) == 0xB000, "VSCRLPM");
 _Static_assert(offsetof(struct Ram, VSPRITES) == 0xB002, "VSPRITES");
