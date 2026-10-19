@@ -208,11 +208,24 @@ static void src_close(void)
     memset(&src, 0, sizeof src);
 }
 
-/* the league at path (a folder, or a package: NAME.zip) is the one read now: 0, -1 */
+/* the next game's league as a package's bytes, under a name of its own (netplay: the session's,
+ * sent by its host) */
+static struct { char label[64]; uint8_t *b; size_t n; int version; } sent;   /* (kept for the run) */
+
+/* the league at path (a folder, or a package: NAME.zip; or the league sent, by its name) is the one
+ * read now: 0, -1 */
 static int src_open(const char *path)
 {
     src_close();
     snprintf(src.path, sizeof src.path, "%s", path);
+    if (sent.b && !strcmp(path, sent.label)) {           /* (the bytes copied: src_close frees them) */
+        char why[200];
+        if (!(src.bytes = malloc(sent.n))) return fail("out of memory");
+        memcpy(src.bytes, sent.b, sent.n);
+        if (mdrt_zip_open(&src.z, src.bytes, sent.n, why, sizeof why) < 0) return fail("%s: %s", path, why);
+        src.zip = 1;
+        return 0;
+    }
     if (!is_package(path)) return 0;
     long n = file_bytes(path, &src.bytes, MDRT_ZIP_MAX_TOTAL);
     char why[200];
@@ -1542,6 +1555,7 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
 /* ---- this game's league ------------------------------------------------------------------------ */
 
 static struct { char dir[512]; char name[64]; uint64_t hash; uint8_t *art; } now;
+static int pack_files(const char *dir, mdrt_zip_writer *w, int *count);
 static char next_dir[512];
 
 static void use_cartridge(void)
@@ -1599,6 +1613,48 @@ static int build_dir(const char *dir, struct built *B, char *name, size_t name_s
 }
 
 void league_next(const char *dir) { clean_dir(next_dir, sizeof next_dir, dir ? dir : ""); }
+
+int league_next_bytes(const uint8_t *b, size_t n)
+{
+    league_next(NULL);
+    if (!n) return 0;
+    while (atomic_flag_test_and_set(&reading)) {}        /* (the window may be reading it: league_session) */
+    if (!sent.b || sent.n != n || memcmp(sent.b, b, n)) { /* (kept for the run: another session's another) */
+        uint8_t *c = malloc(n);
+        if (!c) { atomic_flag_clear(&reading); return fail("out of memory"); }
+        memcpy(c, b, n);
+        free(sent.b);
+        sent.b = c;
+        sent.n = n;
+        sent.version++;
+        snprintf(sent.label, sizeof sent.label, "host-league");
+    }
+    atomic_flag_clear(&reading);
+    snprintf(next_dir, sizeof next_dir, "%s", sent.label);
+    return 0;
+}
+
+long league_next_package(uint8_t **out)
+{
+    *out = NULL;
+    err_file = NULL;
+    err_line = 0;
+    if (!next_dir[0]) return 0;
+    if (sent.b && !strcmp(next_dir, sent.label)) {        /* (the league a host sent: as it came) */
+        if (!(*out = malloc(sent.n))) return fail("out of memory");
+        memcpy(*out, sent.b, sent.n);
+        return (long)sent.n;
+    }
+    if (is_package(next_dir)) {                           /* (a package: its bytes as they are) */
+        long n = file_bytes(next_dir, out, MDRT_ZIP_MAX_TOTAL);
+        return n > 0 ? n : n < 0 ? -1 : fail("no package %s", next_dir);
+    }
+    mdrt_zip_writer w = { 0 };                            /* (a folder: its files packed, as --pack-league packs them) */
+    int count = 0;
+    if (pack_files(next_dir, &w, &count) < 0) { mdrt_zip_writer_free(&w); return -1; }
+    size_t n = mdrt_zip_finish(&w, out);
+    return n ? (long)n : fail("%s cannot be packed", next_dir);
+}
 int league_next_is_cartridge(void) { return !next_dir[0]; }
 uint64_t league_hash(void) { return now.hash; }
 const char *league_dir(void) { return now.dir; }

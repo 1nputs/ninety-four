@@ -293,8 +293,12 @@ records, and edited lines), in a file named after its folder (or package) beside
 A saved state remembers its league's checksum and plays on only with that league: change the
 league's files (or extract it again) and its old states will not load. A new version of the game
 can reckon a league's checksum another way, and then its states from before will not load either
-(the cartridge's own league keeps its states). Quick resume is a state too. The checksum is also how the session tells that every player has the host's league, for the
-online play to come.
+(the cartridge's own league keeps its states). Quick resume is a state too.
+
+Online (README.md, "Online play") the league is the host's: its package (a folder's files packed
+as `--pack-league` packs them, or the package as it is) goes to the other player before the game
+starts, and both build it from those bytes, so the other needs no copy and the two play the same
+league to the byte. The host's save RAM for it goes too; neither player's is written back.
 
 ## The League page
 

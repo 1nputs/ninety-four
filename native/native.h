@@ -50,12 +50,18 @@ long native_golden_lines(void);                      /* the golden run's lines s
 #define NATIVE_ROM_CRC32 0x9438F5DDu                      /* "NHL 94 (UE) [!].gen" (SHA-1 7b1489ab...) */
 typedef uint16_t (*native_input_fn)(int pad, int k);     /* the k-th pad this player plays (pad p + 1): its buttons now */
 const char *native_net_identity(const char *setup);     /* setup: the command line's options that change the game */
-int native_net_open(const mdrt_net_options *o, const char *setup, native_input_fn input, char *err, size_t errsize);
+int native_net_open(const mdrt_net_options *o, const char *setup, const void *settings, size_t settings_size, native_input_fn input,
+                    char *err, size_t errsize);
 int native_net_connect(void);                           /* headless: connected (0: refused, or gone; why on stderr) */
 void native_net_start(mdrt *m);                         /* at power on, the states' parts added */
 void native_net_stop_at(long frame);                    /* headless: the session ends at --frames */
 void native_net_wait(void);                             /* at each of the game's waits, before the handshake */
 int native_net_on(void);                                /* in a session (headless: from before power on) */
+/* the session's settings (the host's, sent to the guest before power on): the next game's rules,
+ * its league as a package, and its save RAM (sram: the file, NULL or missing: blank). Made by the
+ * player who may host (the window's Start, or the command line), applied by both at power on */
+const void *native_net_settings(const char *sram, size_t *size);
+void native_net_power_on(mdrt *m);                      /* in a session: its settings the next game's (before the rules and league power on) */
 mdrt_net *native_net(void);                             /* the command line's session, and its link */
 mdrt_udp *native_net_udp(void);
 void native_net_close(void);
@@ -64,6 +70,8 @@ void native_net_close(void);
  * options_use, or the command line's --rule NAME=VALUE), set at power on, and the state part */
 extern const mdrt_sdl_option rule_options[];
 void rules_next(const int *values, void *user);
+void rules_next_get(uint8_t *v);                         /* the next game's rules' values (RULE_COUNT of them) */
+int rules_next_set(const uint8_t *v, int count);         /* count of them (the rest Classic): 0, or -1 when one is out of range */
 /* the menu's page: a preset, then the rules (its options_use and options_changed) */
 const mdrt_sdl_option *rules_page(int *count);
 /* the menu's pages of them: League (who plays, and what the league chosen holds), Game rules */
@@ -83,6 +91,10 @@ int rules_state_load(void *user, const uint8_t *in, size_t size);
  * game's tables at power on (its art past the cartridge); the cartridge's own when none */
 const char *league_error(void);         /* why the last call failed */
 void league_next(const char *dir);      /* the next game's (NULL or "": the cartridge's) */
+/* the next game's league as a package's bytes (*out malloc'd: the caller's; a folder's files
+ * packed, a package's as they are): their size, 0 (*out NULL) for the cartridge's, -1 */
+long league_next_package(uint8_t **out);
+int league_next_bytes(const uint8_t *b, size_t n);   /* the next game's built from a package's bytes (0: the cartridge's): 0, -1 */
 int league_next_is_cartridge(void);
 void league_power_on(void);             /* (a league that will not build: the cartridge's, and why on stderr) */
 uint64_t league_hash(void);             /* this game's league: its checksum (0 the cartridge's) */

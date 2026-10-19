@@ -4,8 +4,11 @@
  * as a loaded state does (restart_at native_resume_game_loop). The game plays whatever session its
  * console has (mdrt_get_net): the window's, made on its Online page or from the command line, or a
  * headless run's own. The identity the peers compare: the build (its commit), the ROM, and what
- * changes the simulation on the command line (--rule, --league, --four-way). Each player's
- * buttons are their own controls' (the window's players in turn; headless, their pad's script).
+ * changes the simulation on the command line and is not sent (--four-way). What is sent, the
+ * host's for both (native_net_settings, made where the session is: the window's Start, or the
+ * command line): the next game's rules, its league (a package: a folder's files packed), and its
+ * save RAM; neither player's save RAM is written while the session lasts. Each player's buttons
+ * are their own controls' (the window's players in turn; headless, their pad's script).
  * Headless, a run that reaches --frames waits there until both have every button up to it, then a
  * second more for the other, then says goodbye.
  *
@@ -13,8 +16,10 @@
  * game code, then the session's turn, then the handshake reads the next frame's buttons. */
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "game.h"
 #include "native.h"
+#include "rules.h"
 #include "mdrt/net_udp.h"
 #include "build_id.h"
 
@@ -44,17 +49,89 @@ const char *native_net_identity(const char *setup)
     return identity;
 }
 
-int native_net_open(const mdrt_net_options *o, const char *setup, native_input_fn input, char *err, size_t errsize)
+/* ---- the session's settings: the host's, the next game's for both ----------------------------------
+ * "N94S", a version byte (1), then little-endian: the rules (a count byte, each rule's value), save
+ * RAM (a u16 size, 0 for blank or 0x2000, the bytes), the league (a u32 size, 0 for the cartridge's,
+ * a package's bytes) */
+static uint8_t *settings;
+
+const void *native_net_settings(const char *sram, size_t *size)
+{
+    static uint8_t s[0x2000];
+    uint8_t v[RULE_COUNT], *pkg;
+    long n = league_next_package(&pkg);
+    if (n < 0) { fprintf(stderr, "netplay: the league: %s: the session plays the cartridge's teams\n", league_error()); n = 0; }
+    FILE *f = sram ? fopen(sram, "rb") : NULL;            /* (none: blank, as a new cartridge's) */
+    size_t sn = f && fread(s, 1, sizeof s, f) == sizeof s ? sizeof s : 0;
+    if (f) fclose(f);
+    rules_next_get(v);
+    size_t total = 5 + 1 + RULE_COUNT + 2 + sn + 4 + (size_t)n;
+    free(settings);
+    if (!(settings = malloc(total))) { free(pkg); *size = 0; return NULL; }
+    uint8_t *o = settings;
+    memcpy(o, "N94S", 4); o[4] = 1; o += 5;
+    *o++ = RULE_COUNT; memcpy(o, v, RULE_COUNT); o += RULE_COUNT;
+    *o++ = (uint8_t)sn; *o++ = (uint8_t)(sn >> 8); memcpy(o, s, sn); o += sn;
+    for (int k = 0; k < 4; k++) *o++ = (uint8_t)((size_t)n >> 8 * k);
+    if (n) memcpy(o, pkg, (size_t)n);
+    free(pkg);
+    *size = total;
+    return settings;
+}
+
+/* the settings b (size bytes) the next game's: NULL, or what is wrong */
+static const char *settings_use(mdrt *m, const uint8_t *b, size_t size)
+{
+    if (!b || size < 6 || memcmp(b, "N94S", 4) || b[4] != 1) return "none from this build";
+    size_t at = 5, k = b[at++];
+    if (size < at + k + 2) return "cut short";
+    const uint8_t *v = b + at;
+    at += k;
+    size_t sn = (size_t)(b[at] | b[at + 1] << 8);
+    at += 2;
+    if ((sn && sn != 0x2000) || size < at + sn + 4) return "its save RAM cut short";
+    const uint8_t *s = b + at;
+    at += sn;
+    size_t n = (size_t)b[at] | (size_t)b[at + 1] << 8 | (size_t)b[at + 2] << 16 | (size_t)b[at + 3] << 24;
+    at += 4;
+    if (size != at + n) return "its league cut short";
+    if (rules_next_set(v, (int)k) < 0) return "a rule out of range";
+    if (league_next_bytes(b + at, n) < 0) return league_error();
+    mdrt_sram *r = mdrt_get_sram(m);
+    memset(r->bytes, 0, r->size);
+    if (sn) memcpy(r->bytes, s, sn < r->size ? sn : r->size);
+    return NULL;
+}
+
+void native_net_power_on(mdrt *m)
+{
+    mdrt_net *n = mdrt_get_net(m);
+    if (!n || mdrt_net_state(n) != MDRT_NET_GO) return;
+    size_t size;
+    const void *b = mdrt_net_settings(n, &size);
+    const char *why = settings_use(m, b, b ? size : 0);
+    if (!why) return;
+    fprintf(stderr, "netplay: the host's settings: %s: the session ends\n", why);   /* (the game alone, as it would have been) */
+    mdrt_net_quit(n);
+}
+
+int native_net_open(const mdrt_net_options *o, const char *setup, const void *set, size_t set_size, native_input_fn input,
+                    char *err, size_t errsize)
 {
     udp = mdrt_net_open_udp(o, err, errsize);
     if (!udp) return 0;
     mdrt_net_config c = { .role = o->role, .identity = native_net_identity(setup), .name = o->name, .delay = o->delay,
-                          .window = 8, .rollback = 30, .check_every = 60 };
+                          .window = 8, .rollback = 30, .check_every = 60, .settings = set, .settings_size = set ? set_size : 0 };
     c.link = mdrt_udp_link(udp);
     c.local_input = local_input;
     local_fn = input;
     net = mdrt_net_new(&c);
-    if (!net) { snprintf(err, errsize, "a bad configuration"); mdrt_udp_close(udp); udp = NULL; return 0; }
+    if (!net) {
+        snprintf(err, errsize, c.settings_size > MDRT_NET_MAX_SETTINGS ? "the game's settings are too big to send (its league)" : "a bad configuration");
+        mdrt_udp_close(udp);
+        udp = NULL;
+        return 0;
+    }
     return 1;
 }
 

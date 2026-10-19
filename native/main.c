@@ -51,7 +51,7 @@
  * players from power on, the host pad 1; in the window it connects first; headless, each plays
  * its pad's script and the run ends at --frames once both have every button), --delay the input
  * delay, --net-sim a simulated network for tests. --hashes FILE (headless) writes a line a frame
- * at its wait, the frame and hashes of work RAM, the VDP and Z80 RAM, frames a rollback plays
+ * at its wait, the frame and hashes of work RAM, the VDP, Z80 RAM and save RAM, frames a rollback plays
  * again included (tools/netplay_check.py compares the last of each with a solo run's). */
 #include <setjmp.h>
 #include <stdio.h>
@@ -231,6 +231,9 @@ static void rom_use(const uint8_t *b, size_t n, void *user) { (void)n; (void)use
 /* the save RAM's file for the game about to start: the league's own (the window's sram_file) */
 static const char *sram_base;
 static const char *sram_for(void *user) { (void)user; return league_sram(sram_base); }
+/* the window's Start on its Online page: the menu's rules and league (options_use has had them),
+ * the league's save RAM */
+static const void *window_settings(size_t *size, void *user) { return native_net_settings(sram_for(user), size); }
 
 /* --extract-rom HACK DIR: a hack's league (one made on the 32-team template) written as a folder,
  * read from it as data (romsrc.c): 0, -1 */
@@ -332,13 +335,14 @@ void native_game(mdrt *m, void *user)
     (void)user;
     native_m = m;
     native_tracking_reset();                              /* (the game may have run before: the window's reset) */
+    native_net_start(m);                                  /* (netplay: from power on, by the host's settings) */
+    native_net_power_on(m);
     rules_power_on();                                     /* (this game's rules and league; a state loaded brings its own) */
     league_power_on();
     if (setjmp(out)) { lockstep_report(); record(m, -1); return; }
     if (!load_state_path) record(m, MDRT_TRACE_SOUND);    /* (from the first frame: the chips' every write) */
     if (boot) { record(m, MDRT_TRACE_VDP); record(m, MDRT_TRACE_PADS); }
     if (states) native_states_init(m, rewind_states ? state_file : NULL, rewind_states);
-    native_net_start(m);                                  /* (netplay: from power on, the states' parts added) */
     if (save_state_path) native_save_state_at(save_state_frame, save_state_path);
     if (load_state_path) {                                /* a native state: the game loop from its wait */
         native_hal_start(m, 0);
@@ -536,9 +540,10 @@ void native_frame_done(long frame, int wait)
         mdrt_vdp_state v;
         mdrt_vdp_get_state(mdrt_get_vdp(native_m), &v);
         ram_pack(ram);
-        fprintf(hashes, "%ld %016llx %016llx %016llx\n", frame, (unsigned long long)fnv(FNV0, ram, 0x10000),
+        mdrt_sram *s = mdrt_get_sram(native_m);
+        fprintf(hashes, "%ld %016llx %016llx %016llx %016llx\n", frame, (unsigned long long)fnv(FNV0, ram, 0x10000),
                 (unsigned long long)fnv(fnv(fnv(fnv(FNV0, v.reg, 24), v.vram, 0x10000), v.cram, sizeof v.cram), v.vsram, sizeof v.vsram),
-                (unsigned long long)fnv(FNV0, z80_ram, 0x2000));
+                (unsigned long long)fnv(FNV0, z80_ram, 0x2000), (unsigned long long)fnv(FNV0, s->bytes, s->size));
     }
     for (int i = 0; i < nwatch; i++) {
         uint16_t v = r16(ram_at(watch[i]), 0);
@@ -622,7 +627,7 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--frames") && i + 1 < argc) stop_after = atol(argv[++i]);
         else if (!strcmp(argv[i], "--shot") && i + 1 < argc) shot_path = argv[++i];
         else if (!strcmp(argv[i], "--sram") && i + 1 < argc) { sram = argv[++i]; sram_given = 1; }
-        else if (!strcmp(argv[i], "--league") && i + 1 < argc) { league_arg = league_folder(argv[++i]); add_setup(setup, sizeof setup, "--league", argv[i]); }
+        else if (!strcmp(argv[i], "--league") && i + 1 < argc) league_arg = league_folder(argv[++i]);
         else if (!strcmp(argv[i], "--export-league") && i + 1 < argc) export_dir = argv[++i];
         else if (!strcmp(argv[i], "--check-league") && i + 1 < argc) check_dir = league_folder(argv[++i]);
         else if (!strcmp(argv[i], "--extract-rom") && i + 2 < argc) { extract_rom = argv[++i]; extract_dir = argv[++i]; }
@@ -641,7 +646,6 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--rule") && i + 1 < argc) {
             const char *why = rules_arg(argv[++i]);
             if (why) { fprintf(stderr, "--rule %s: %s\n", argv[i], why); return 2; }
-            add_setup(setup, sizeof setup, "--rule", argv[i]);
         }
         else if (!strcmp(argv[i], "--hashes") && i + 1 < argc) hashes_path = argv[++i];
         else if (!strcmp(argv[i], "--state") && i + 1 < argc) state_file = argv[++i];
@@ -681,7 +685,7 @@ int main(int argc, char **argv)
         return 0;
     }
     if (league_arg) {
-        if (!headless) fprintf(stderr, "--league: the window plays the league its menu's League page names\n");
+        if (!headless && !netopt.on) fprintf(stderr, "--league: the window plays the league its menu's League page names\n");
         else if (league_check(league_arg, 0) < 0) {
             fprintf(stderr, "--league %s: %s\n", league_arg, league_error());
             return 1;
@@ -725,8 +729,11 @@ int main(int argc, char **argv)
         o.options = rules_page(&o.noptions);
         o.pages = rules_pages(&o.npages);
         o.net_identity = native_net_identity("");        /* (the menu's Online page) */
-        if (netopt.on) {                                  /* (the window connects, then powers on) */
-            if (!native_net_open(&netopt, "", window_pad, err, sizeof err)) { fprintf(stderr, "netplay: %s\n", err); return 1; }
+        o.net_settings = window_settings;
+        if (netopt.on) {                                  /* (the window connects, then powers on: by the command line's rules and league) */
+            size_t n;
+            const void *set = native_net_settings(sram_for(NULL), &n);
+            if (!native_net_open(&netopt, "", set, n, window_pad, err, sizeof err)) { fprintf(stderr, "netplay: %s\n", err); return 1; }
             o.net = native_net();
             o.net_udp = native_net_udp();
         }
@@ -746,12 +753,14 @@ int main(int argc, char **argv)
     if (golden) mdrt_set_hv_source(m, golden_hv, m);
     if (inputs) mdrt_set_pad_source(m, script_source, m);
     if (four_way) mdrt_pads_set_adaptor(mdrt_get_pads(m), MDRT_ADAPTOR_EA4WAY);
-    if (lockstep_path || golden || netopt.on) sram = NULL;   /* lockstep, golden: save RAM blank, as the oracle's at power on (netplay: as the window's sessions) */
-    if (netopt.on) {                                      /* (from power on: the session's pads replace the scripts') */
-        if (!native_net_open(&netopt, setup, script_pad, err, sizeof err)) { fprintf(stderr, "netplay: %s\n", err); return 1; }
+    if (netopt.on) {                                      /* (from power on: the session's pads replace the scripts'; its save RAM the host's) */
+        size_t n;
+        const void *set = native_net_settings(sram, &n);
+        if (!native_net_open(&netopt, setup, set, n, script_pad, err, sizeof err)) { fprintf(stderr, "netplay: %s\n", err); return 1; }
         if (!native_net_connect()) return 1;
         native_net_stop_at(stop_after);
     }
+    if (lockstep_path || golden || netopt.on) sram = NULL;   /* lockstep, golden: save RAM blank, as the oracle's at power on (netplay: the host's, not written) */
     FILE *f = sram ? fopen(sram, "rb") : NULL;            /* save RAM: as the window's platform keeps it */
     if (f) { if (fread(mdrt_get_sram(m)->bytes, 1, 0x2000, f) != 0x2000) fprintf(stderr, "%s: short\n", sram); fclose(f); }
     native_game(m, NULL);

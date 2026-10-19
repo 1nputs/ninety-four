@@ -3,18 +3,20 @@
 playing its own pad's script (the host pad 1, the guest pad 2) through a simulated network
 (nhl94 --net-sim: delay, jitter, so packets overtake each other, loss, duplicates), against a solo
 run of the same buttons: the scripts moved later by the input delay (netplay's buttons reach the
-game delay + 1 frames after they are pressed, a solo script's one). Every frame each peer finally
+game delay + 1 frames after they are pressed, a solo run's one). Every frame each peer finally
 played (the last line --hashes wrote for it: a rollback plays frames again) must be the solo
-run's: work RAM, the VDP's state and the Z80's RAM, bit for bit. Each peer must play out its
-frames, its own desync checks agreeing. Save RAM is blank in all three, as in the window's
-sessions.
+run's: work RAM, the VDP's state, the Z80's RAM and save RAM, bit for bit. Each peer must play out
+its frames, its own desync checks agreeing. Only the host is given the game's settings (its
+league, rules and save RAM: user records, from a run of records_game_30s.txt), as the solo run is:
+the session sends them to the guest, whose own are none (no league, the Classic rules, blank save
+RAM).
 
 The game is Two - Head to Head from power on (pad 1 picks it on the setup screen, then plays as
 full_game_30s.txt does: 30 second periods); pad 2 plays at random (its own seed) from the faceoff.
 
-  h2h      host and join, 40 ms each way +-10, 5% lost, 1% twice, input delay 2: power on to the
-           second period
-  league   both connect (--peer), 25 ms +-25, 10% lost, delay 1: the 32-team league
+  h2h      both connect (--peer), 40 ms each way +-10, 5% lost, 1% twice, input delay 2: power on
+           to the second period (both given the settings: either may host)
+  league   host and join, 25 ms +-25, 10% lost, delay 1: the host's 32-team league
            (out/leagues/thirty-two, from make golden) by the Arcade preset, power on to the first
            intermission
   delay0   host and join, 15 ms +-5, 2% lost, delay 0 (a rollback for nearly every change of
@@ -25,6 +27,7 @@ full_game_30s.txt does: 30 second periods); pad 2 plays at random (its own seed)
 import os
 import random
 import re
+import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -34,10 +37,11 @@ NHL94 = os.path.join(ROOT, 'build', 'nhl94')
 SCRIPTS = os.path.join(ROOT, 'tools', 'oracle', 'scripts')
 OUT = os.path.join(ROOT, 'out', 'netplay')
 
-# name, frames, the game's options, how they connect, delay, the network (ms, ms, %, %), pad 2's seed
+# name, frames, the host's options (the game's settings), how they connect, delay, the network (ms, ms,
+# %, %), pad 2's seed
 SCENARIOS = [
-    ('h2h', 6000, [], 'join', 2, '40,10,5,1', 1),
-    ('league', 7000, ['--league', 'out/leagues/thirty-two', '--rule', 'preset=arcade'], 'peer', 1, '25,25,10,1', 2),
+    ('h2h', 6000, [], 'peer', 2, '40,10,5,1', 1),
+    ('league', 7000, ['--league', 'out/leagues/thirty-two', '--rule', 'preset=arcade'], 'join', 1, '25,25,10,1', 2),
     ('delay0', 16000, [], 'join', 0, '15,5,2,0', 3),
 ]
 NEEDS = {'league': 'out/leagues/thirty-two'}
@@ -84,14 +88,42 @@ def pad2(seed, last):
 
 
 def last_lines(path):
-    """the last line of each frame: work RAM, VDP, Z80 RAM"""
+    """the last line of each frame: work RAM, VDP, Z80 RAM, save RAM"""
     lines = {}
     with open(path) as f:
         for line in f:
             x = line.split()
-            if len(x) == 4:
-                lines[int(x[0])] = x[1:4]
+            if len(x) == 5:
+                lines[int(x[0])] = x[1:5]
     return lines
+
+
+RECORDS = os.path.join(OUT, 'records.srm')
+
+
+def records():
+    """save RAM with user records in it (records_game_30s.txt played), made once: None, or what failed"""
+    if os.path.exists(RECORDS):
+        return None
+    os.makedirs(OUT, exist_ok=True)
+    part = RECORDS + '.part'
+    if os.path.exists(part):
+        os.remove(part)
+    r = subprocess.run([NHL94, '--headless', '--frames', '15700', '--input', os.path.join(SCRIPTS, 'records_game_30s.txt'),
+                        '--sram', part], cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if r.returncode != 0 or not os.path.exists(part):
+        return 'records_game_30s.txt: ' + r.stderr[-200:]
+    os.replace(part, RECORDS)
+    return None
+
+
+def fresh(path, like=None):
+    """path as like is (a copy), or not there"""
+    if os.path.exists(path):
+        os.remove(path)
+    if like:
+        shutil.copyfile(like, path)
+    return path
 
 
 def scenario(k, s):
@@ -106,7 +138,10 @@ def scenario(k, s):
     write(os.path.join(d, 'solo1.txt'), p1, delay)
     write(os.path.join(d, 'solo2.txt'), p2, delay)
     base = [NHL94, '--headless', '--frames', str(frames), '--input', os.path.join(d, 'pad1.txt'),
-            '--input2', os.path.join(d, 'pad2.txt'), '--delay', str(delay), '--net-sim', sim] + opts
+            '--input2', os.path.join(d, 'pad2.txt'), '--delay', str(delay), '--net-sim', sim]
+    own = [opts + ['--sram', fresh(os.path.join(d, 'a.srm'), RECORDS)], ['--sram', fresh(os.path.join(d, 'b.srm'))]]
+    if how == 'peer':
+        own[1] = opts + ['--sram', fresh(os.path.join(d, 'b.srm'), RECORDS)]
     pa, pb = 7570 + 2 * k, 7571 + 2 * k
     if how == 'join':
         roles = [['--host', str(pa)], ['--join', '127.0.0.1:%d' % pa]]
@@ -114,13 +149,11 @@ def scenario(k, s):
         roles = [['--peer', '127.0.0.1:%d' % pb, '--port', str(pa)], ['--peer', '127.0.0.1:%d' % pa, '--port', str(pb)]]
     limit = frames / 20 + 120
     procs = []
-    for who, role in zip(('a', 'b'), roles):
+    for who, role, mine in zip(('a', 'b'), roles, own):     # (a: the host's settings; with --peer, whichever hosts sends its own)
         err = open(os.path.join(d, who + '.log'), 'w')
-        procs.append((subprocess.Popen(base + role + ['--hashes', os.path.join(d, who + '.hashes')], cwd=ROOT,
+        procs.append((subprocess.Popen(base + role + mine + ['--hashes', os.path.join(d, who + '.hashes')], cwd=ROOT,
                                        stdout=subprocess.DEVNULL, stderr=err), err))
-    srm = os.path.join(d, 'solo.srm')                     # (blank: none there before the run)
-    if os.path.exists(srm):
-        os.remove(srm)
+    srm = fresh(os.path.join(d, 'solo.srm'), RECORDS)
     solo = subprocess.run([NHL94, '--headless', '--frames', str(frames), '--input', os.path.join(d, 'solo1.txt'),
                            '--input2', os.path.join(d, 'solo2.txt'), '--sram', srm,
                            '--hashes', os.path.join(d, 'solo.hashes')] + opts, cwd=ROOT, stdout=subprocess.DEVNULL,
@@ -164,6 +197,9 @@ def scenario(k, s):
 def main():
     if not os.path.exists(NHL94):
         sys.exit('no build/nhl94 (make nhl94)')
+    why = records()
+    if why:
+        sys.exit('netplay: no save RAM with records: ' + why)
     names = sys.argv[1:] or [s[0] for s in SCENARIOS]
     todo = [(k, s) for k, s in enumerate(SCENARIOS) if s[0] in names]
     with ThreadPoolExecutor(len(todo)) as ex:

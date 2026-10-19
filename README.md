@@ -137,11 +137,12 @@ both: the host is pad 1, the one who joined pad 2 (choose Players: Two - Head to
 Teammates, on the setup screen). From the command line: `--host [PORT]`, `--join ADDR[:PORT]`,
 `--peer ADDR[:PORT]` (both connecting, `--port` your own), `--delay N`, `--name NAME`.
 
-While two play, the window's pause, slow motion, fast-forward, rewind, states, reset and 4 Way
-Play are not to be had, and save RAM (records, edited lines) is neither read nor written. Both
-players need the same build of the game and the US/Europe cartridge, or the other is refused. For
-now both choose the same league and rules on their pages too (sending the host's to the other is
-next): a difference ends the session as a desync.
+The game is the host's: its League and Game rules pages' choices and its save RAM (records,
+edited lines) go to the other player before the game starts, a league as its package (the NHL 2026
+edition's, every photo included, is about 1.7 MB), so the other needs no copy of it. Nothing is
+saved from the session: neither player's save RAM is written back. While two play, the window's
+pause, slow motion, fast-forward, rewind, states, reset and 4 Way Play are not to be had. Both
+players need the same build of the game and the US/Europe cartridge, or the other is refused.
 
 ## Leagues
 
@@ -342,7 +343,7 @@ From the least ambitious to the most.
 - [ ] Lua scripting: overlays, stats, bots
 - [ ] Python bindings: headless training environments, automated tests
 - [ ] Replays and spectating
-- [ ] Rollback netplay online
+- [x] Rollback netplay online: two players, the host's league, rules and save RAM sent to the other
 - [ ] The next game on the same method and runtime
 
 ## Greets

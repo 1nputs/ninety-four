@@ -197,6 +197,21 @@ void rules_next(const int *values, void *user)
 
 void rules_power_on(void) { memcpy(rules, next, sizeof rules); }
 
+void rules_next_get(uint8_t *v) { memcpy(v, next, sizeof next); }
+
+int rules_next_set(const uint8_t *v, int count)
+{
+    uint8_t x[RULE_COUNT];
+    if (count > RULE_COUNT) return -1;                    /* (a build with more rules: not this one) */
+    memcpy(x, rule_classic, sizeof x);
+    for (int i = 0; i < count; i++) {
+        if (valid(i, v[i]) < 0) return -1;
+        x[i] = v[i];
+    }
+    memcpy(next, x, sizeof next);
+    return 0;
+}
+
 int rules_classic(void) { return !memcmp(next, rule_classic, sizeof next); }
 
 /* names[0..count) joined with ", " into out */
