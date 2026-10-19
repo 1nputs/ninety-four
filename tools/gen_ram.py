@@ -18,7 +18,7 @@ RAM_BASE, RAM_SIZE = 0xFFFF0000, 0x10000
 
 CTYPE = {'b': 'uint8_t', 'w': 'uint16_t', 'l': 'uint32_t'}
 # symbols whose width the access scan cannot see (indexed through an address register)
-OVERRIDE = {'OOlistpos': 'w', 'Ylist': 'w', 'OOlist': 'b', 'padcont': 'w'}
+OVERRIDE = {'OOlistpos': 'w', 'Ylist': 'w', 'OOlist': 'b', 'padcont': 'w', 'per_channel_frequency_table': 'w'}
 # symbols kept inside another structure, so no field of their own (a byte area named name_): the
 # game reads and writes them by address, RAM(name), and their bytes follow that structure
 BY_ADDRESS = {'puckc': "the puck's sort object's newpos and newpnum, read by the 68000 as one word"}
@@ -203,6 +203,29 @@ REPLAY_DECL = [
     (0x60, 'uint16_t vpos;', ''),
 ]
 
+# ---- the sound driver's (sound94.asm) ------------------------------------------------------------
+TRACK_DECL = [
+    (0x0, 'uint32_t stream;', "the next event's address (negative: the slot is free)"),
+    (0x4, 'uint16_t delay;', 'frames to it'),
+]
+CHANNEL_DECL = [
+    (0x0, 'uint8_t key;', "the voice it plays (midi channel * 8 + track; $FF none)"),
+    (0x1, 'uint8_t note;', ''),
+    (0x2, 'uint8_t volume;', "the note's"),
+    (0x3, 'uint8_t patch;', '$60 and up: a PCM sample'),
+    (0x4, 'uint8_t out;', 'its output channel (0-2, 4-6)'),
+    (0x5, 'uint8_t age;', 'frames since its key on, held at $FF'),
+    (0x6, 'uint8_t flags;', 'bit 0: key on'),
+    (0x7, 'uint8_t _pad7;', ''),
+]
+VOICE_DECL = [
+    (0x0, 'int16_t bend;', 'pitch bend'),
+    (0x2, 'uint8_t unused2;', '(cleared, never read)'),
+    (0x3, 'uint8_t patch;', ''),
+    (0x4, 'uint16_t volume;', 'controller 7 (its low byte)'),
+    (0x6, 'uint16_t _pad6;', ''),
+]
+
 # ---- the game's structures (NATIVE-STATE.md, step 3) -------------------------------------
 # Each: its size, what it is, and its fields (offset, declaration, comment) at the 68000's offsets,
 # which the generator checks follow one another and the C asserts. TYPED gives a RAM region one.
@@ -210,12 +233,18 @@ STRUCTS = {
     'Team': (TMSIZE, "a team's struct (team_struct(away))", 'tmsize', TEAM_DECL),
     'Matchup': (0x10, "one of the night's games, a playoff matchup in the playoffs (gsstruct)", 'gssize', MATCHUP_DECL),
     'ReplayFrame': (0x62, "one frame of the instant replay (updatereplay)", None, REPLAY_DECL),
+    'TrackSlot': (6, "one of the sound driver's 8 track slots: a sound or song's event stream", None, TRACK_DECL),
+    'Channel': (8, "one of the sound driver's 6 channels (the sixth: PCM)", None, CHANNEL_DECL),
+    'Voice': (8, "the sound driver's voice of a key (midi channel * 8 + track)", None, VOICE_DECL),
 }
 # RAM regions of the game's structures: the symbol, the field's declaration, and its comment
 TYPED = {
     'tmstruct': ('struct Team teams[2]', 'the home and away team structs, AwShots the second'),
     'gsstruct': ('struct Matchup matchups[8]', "the night's games: the playoff tree's first round, then each round's"),
     'M68K_RAM': ('struct ReplayFrame replay[458]', "the instant replay's frames, a ring to replayend; between games the save RAM's copy, and the game's RAM kept during a highlight: those by address"),
+    'fm_voice_usage_table': ('struct Voice fm_voices[64]', "the voice of each key"),
+    'fm_channel_structs': ('struct Channel fm_channels[6]', "the channels (fm_channel_struct6 the sixth, PCM)"),
+    'fm_track_slots': ('struct TrackSlot fm_slots[8]', "the track slots (track 7 the first)"),
     'pads': ('struct RinkObj pads[7]', "the pads' markers (Joy1Struct the second; the fourth the replay camera, ReplayStarStruct), then the gloves (glovestruct)"),
     'sso': ('struct SpriteHead sso[4]', "the controlled players' off-screen arrows (x, y at Xfrac's place)"),
 }

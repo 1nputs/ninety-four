@@ -193,17 +193,17 @@ void ResetZ80Bus(void);
 void p_music_vblank(void);
 void z80_bus_release_delay(void);
 void UploadCommandBufferToZ80(void);
-void ProcessOneMusicTrack(rp slot, uint16_t track);              /* a5, d7 */
+void ProcessOneMusicTrack(struct TrackSlot *slot, uint16_t track);   /* a5, d7 */
 void handle_command_00(uint32_t ev, uint16_t track);             /* a0 = event, d7 */
 void handle_command_10(uint32_t ev, uint16_t track);
 void handle_command_30(uint32_t ev, uint16_t track);
 void handle_command_40(uint32_t ev, uint16_t track);
 void handle_command_60(uint32_t ev, uint16_t track);
 void handle_command_skip(uint32_t ev, uint16_t track);
-void ReleaseChannelAndNote(rp ch);                               /* a2 */
+void ReleaseChannelAndNote(struct Channel *ch);                  /* a2 */
 void StopPCMChannel(void);
-void UpdateChannelFrequencyAndVolume(rp ch, rp voices);                     /* a2, a3 */
-void SetChannelVolume(rp ch, rp voices);                                    /* a2, a3 */
+void UpdateChannelFrequencyAndVolume(struct Channel *ch, struct Voice *voices);   /* a2, a3 */
+void SetChannelVolume(struct Channel *ch, struct Voice *voices);            /* a2, a3 */
 void p_initialZ80(void);
 void ClearAllTrackAndSFXSlots(void);
 

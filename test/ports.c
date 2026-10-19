@@ -466,7 +466,7 @@ V(setupEASNmap) V(setupIceRinkPal) V(setplayercolors) V(ShootoutModeBox) V(Count
 
 
 /* ---- sound94 ---- */
-#define SLOT(reg) ram_at(r->regs_in[reg])
+#define AT(type, reg) RAM_AT(struct type, ram_at(r->regs_in[reg]))
 static void run_play_sfx_or_music_track(const Record *r) { play_sfx_or_music_track(R16(R_D0)); }
 static void run_ReadPad4Way1(const Record *r) { expect_reg16(r, R_D0, ReadPad4Way1(), "d0"); }
 static void run_ReadPad4Way2(const Record *r) { expect_reg16(r, R_D0, ReadPad4Way2(), "d0"); }
@@ -477,12 +477,12 @@ static void run_ReadPad1(const Record *r) { expect_reg16(r, R_D0, (r->regs_out[R
 static void run_ReadPad2(const Record *r) { expect_reg16(r, R_D0, (r->regs_out[R_D0] & 0xFF00) | ReadPad2(), "d0"); }
 static void run_ReadPadA0(const Record *r) { expect_reg16(r, R_D0, (r->regs_out[R_D0] & 0xFF00) | ReadPadA0(r->regs_in[R_A0] & 0xFFFFFF), "d0"); }
 static void run_ReadPad3Button(const Record *r) { expect_reg16(r, R_D0, (r->regs_out[R_D0] & 0xFF00) | ReadPad3Button(r->regs_in[R_A0] & 0xFFFFFF), "d0"); }
-static void run_ProcessOneMusicTrack(const Record *r) { ProcessOneMusicTrack(SLOT(R_A5), R16(R_D7)); }
+static void run_ProcessOneMusicTrack(const Record *r) { ProcessOneMusicTrack(AT(TrackSlot, R_A5), R16(R_D7)); }
 #define CMDH(name) static void run_##name(const Record *r) { name(r->regs_in[R_A0], R16(R_D7)); }
 CMDH(handle_command_00) CMDH(handle_command_10) CMDH(handle_command_30) CMDH(handle_command_40) CMDH(handle_command_60) CMDH(handle_command_skip)
-static void run_ReleaseChannelAndNote(const Record *r) { ReleaseChannelAndNote(SLOT(R_A2)); }
-static void run_UpdateChannelFrequencyAndVolume(const Record *r) { UpdateChannelFrequencyAndVolume(SLOT(R_A2), SLOT(R_A3)); }
-static void run_SetChannelVolume(const Record *r) { SetChannelVolume(SLOT(R_A2), SLOT(R_A3)); }
+static void run_ReleaseChannelAndNote(const Record *r) { ReleaseChannelAndNote(AT(Channel, R_A2)); }
+static void run_UpdateChannelFrequencyAndVolume(const Record *r) { UpdateChannelFrequencyAndVolume(AT(Channel, R_A2), AT(Voice, R_A3)); }
+static void run_SetChannelVolume(const Record *r) { SetChannelVolume(AT(Channel, R_A2), AT(Voice, R_A3)); }
 V(p_turnoff) V(rtsfx) V(rtscmd10) V(ReadJoyData)
 static void run_stop_current_song(const Record *r) { stop_current_song(R16(R_D0)); } V(ResetZ80Bus) V(p_music_vblank) V(z80_bus_release_delay)
 V(UploadCommandBufferToZ80) V(StopPCMChannel) V(p_initialZ80) V(ClearAllTrackAndSFXSlots)

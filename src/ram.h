@@ -349,6 +349,49 @@ _Static_assert(offsetof(struct ReplayFrame, padbits34) == 0x05D, "ReplayFrame pa
 _Static_assert(offsetof(struct ReplayFrame, hpos) == 0x05E, "ReplayFrame hpos");
 _Static_assert(offsetof(struct ReplayFrame, vpos) == 0x060, "ReplayFrame vpos");
 
+/* one of the sound driver's 8 track slots: a sound or song's event stream */
+struct RAM_PACKED TrackSlot {
+    uint32_t stream;  /* the next event's address (negative: the slot is free) */
+    uint16_t delay;  /* frames to it */
+};
+_Static_assert(sizeof(struct TrackSlot) == 0x6, "TrackSlot size");
+_Static_assert(offsetof(struct TrackSlot, stream) == 0x000, "TrackSlot stream");
+_Static_assert(offsetof(struct TrackSlot, delay) == 0x004, "TrackSlot delay");
+
+/* one of the sound driver's 6 channels (the sixth: PCM) */
+struct RAM_PACKED Channel {
+    uint8_t key;  /* the voice it plays (midi channel * 8 + track; $FF none) */
+    uint8_t note;
+    uint8_t volume;  /* the note's */
+    uint8_t patch;  /* $60 and up: a PCM sample */
+    uint8_t out;  /* its output channel (0-2, 4-6) */
+    uint8_t age;  /* frames since its key on, held at $FF */
+    uint8_t flags;  /* bit 0: key on */
+    uint8_t _pad7;
+};
+_Static_assert(sizeof(struct Channel) == 0x8, "Channel size");
+_Static_assert(offsetof(struct Channel, key) == 0x000, "Channel key");
+_Static_assert(offsetof(struct Channel, note) == 0x001, "Channel note");
+_Static_assert(offsetof(struct Channel, volume) == 0x002, "Channel volume");
+_Static_assert(offsetof(struct Channel, patch) == 0x003, "Channel patch");
+_Static_assert(offsetof(struct Channel, out) == 0x004, "Channel out");
+_Static_assert(offsetof(struct Channel, age) == 0x005, "Channel age");
+_Static_assert(offsetof(struct Channel, flags) == 0x006, "Channel flags");
+
+/* the sound driver's voice of a key (midi channel * 8 + track) */
+struct RAM_PACKED Voice {
+    int16_t bend;  /* pitch bend */
+    uint8_t unused2;  /* (cleared, never read) */
+    uint8_t patch;
+    uint16_t volume;  /* controller 7 (its low byte) */
+    uint16_t _pad6;
+};
+_Static_assert(sizeof(struct Voice) == 0x8, "Voice size");
+_Static_assert(offsetof(struct Voice, bend) == 0x000, "Voice bend");
+_Static_assert(offsetof(struct Voice, unused2) == 0x002, "Voice unused2");
+_Static_assert(offsetof(struct Voice, patch) == 0x003, "Voice patch");
+_Static_assert(offsetof(struct Voice, volume) == 0x004, "Voice volume");
+
 struct RAM_PACKED Ram {
     struct ReplayFrame replay[458];  /* $FFFF0000: the instant replay's frames, a ring to replayend; between games the save RAM's copy, and the game's RAM kept during a highlight: those by address (M68K_RAM) */
     uint8_t replayend[0xAC];  /* $FFFFAF54: end of the replay frames ($62 bytes each from M68K_RAM); suba4, adda43 and the record step wrap here */
@@ -640,12 +683,11 @@ struct RAM_PACKED Ram {
     uint8_t _padD181[0x1];
     uint8_t Z80_command_buffer[0x5];  /* $FFFFD182 */
     uint8_t per_channel_attenuation_table[0x7];  /* $FFFFD187 */
-    uint8_t per_channel_frequency_table[0xE];  /* $FFFFD18E */
+    uint16_t per_channel_frequency_table[0x7];  /* $FFFFD18E */
     uint8_t per_channel_patch_table[0x8];  /* $FFFFD19C */
-    uint8_t fm_voice_usage_table[0x200];  /* $FFFFD1A4 */
-    uint8_t fm_channel_structs[0x28];  /* $FFFFD3A4 */
-    uint8_t fm_channel_struct6[0x8];  /* $FFFFD3CC */
-    uint8_t fm_track_slots[0x30];  /* $FFFFD3D4 */
+    struct Voice fm_voices[64];  /* $FFFFD1A4: the voice of each key (fm_voice_usage_table) */
+    struct Channel fm_channels[6];  /* $FFFFD3A4: the channels (fm_channel_struct6 the sixth, PCM) (fm_channel_structs) */
+    struct TrackSlot fm_slots[8];  /* $FFFFD3D4: the track slots (track 7 the first) (fm_track_slots) */
     uint16_t BA_Team;  /* $FFFFD404 */
     uint16_t BA_Sktr_SCnum;  /* $FFFFD406 */
     uint16_t BA_Goalie_SCnum;  /* $FFFFD408 */
@@ -1076,10 +1118,10 @@ _Static_assert(offsetof(struct Ram, Z80_command_buffer) == 0xD182, "Z80_command_
 _Static_assert(offsetof(struct Ram, per_channel_attenuation_table) == 0xD187, "per_channel_attenuation_table");
 _Static_assert(offsetof(struct Ram, per_channel_frequency_table) == 0xD18E, "per_channel_frequency_table");
 _Static_assert(offsetof(struct Ram, per_channel_patch_table) == 0xD19C, "per_channel_patch_table");
-_Static_assert(offsetof(struct Ram, fm_voice_usage_table) == 0xD1A4, "fm_voice_usage_table");
-_Static_assert(offsetof(struct Ram, fm_channel_structs) == 0xD3A4, "fm_channel_structs");
-_Static_assert(offsetof(struct Ram, fm_channel_struct6) == 0xD3CC, "fm_channel_struct6");
-_Static_assert(offsetof(struct Ram, fm_track_slots) == 0xD3D4, "fm_track_slots");
+_Static_assert(offsetof(struct Ram, fm_voices) == 0xD1A4, "fm_voices");
+_Static_assert(offsetof(struct Ram, fm_channels) == 0xD3A4, "fm_channels");
+/* fm_channel_struct6 at 0xD3CC overlaps the previous field; use RAM_OFF_fm_channel_struct6 */
+_Static_assert(offsetof(struct Ram, fm_slots) == 0xD3D4, "fm_slots");
 _Static_assert(offsetof(struct Ram, BA_Team) == 0xD404, "BA_Team");
 _Static_assert(offsetof(struct Ram, BA_Sktr_SCnum) == 0xD406, "BA_Sktr_SCnum");
 _Static_assert(offsetof(struct Ram, BA_Goalie_SCnum) == 0xD408, "BA_Goalie_SCnum");
