@@ -725,6 +725,7 @@ int main(int argc, char **argv)
         o.net_identity = native_net_identity("");        /* (the menu's Online page) */
         o.net_settings = window_settings;
         o.options_session = rules_page_session;            /* (the pages in a session: the host's) */
+        o.net_pads = 2;                                   /* (two pads each: 4 Way Play, four players) */
         if (netopt.on) {                                  /* (the window connects, then powers on: by the command line's rules and league) */
             size_t n;
             const void *set = native_net_settings(sram_for(NULL), &n);
