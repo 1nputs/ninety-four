@@ -139,7 +139,7 @@ struct RAM_PACKED Team {
     uint16_t psattempts;  /* penalty shot (and shootout) attempts */
     uint16_t psgoals;  /* penalty shot goals */
 };
-_Static_assert(sizeof(struct Team) == tmsize, "Team size");
+_Static_assert(sizeof(struct Team) == 0x364, "Team size");
 _Static_assert(offsetof(struct Team, shots) == 0x000, "Team shots");
 _Static_assert(offsetof(struct Team, PwrGoals) == 0x002, "Team PwrGoals");
 _Static_assert(offsetof(struct Team, PwrPlays) == 0x004, "Team PwrPlays");
@@ -185,6 +185,29 @@ _Static_assert(offsetof(struct Team, onetimers) == 0x35C, "Team onetimers");
 _Static_assert(offsetof(struct Team, otgoals) == 0x35E, "Team otgoals");
 _Static_assert(offsetof(struct Team, psattempts) == 0x360, "Team psattempts");
 _Static_assert(offsetof(struct Team, psgoals) == 0x362, "Team psgoals");
+
+#define gssize 0x10
+/* one of the night's games, a playoff matchup in the playoffs (gsstruct) */
+struct RAM_PACKED Matchup {
+    uint16_t team1;  /* the teams (gst1, gst2: TeamList indexes; flags bit 0, the two flipped) */
+    uint16_t team2;
+    uint16_t topwins;  /* the playoff tree's top team's wins (gspotwins: best of 7, 4 wins it) */
+    uint16_t botwins;  /* the bottom team's (gspobwins) */
+    uint16_t per;  /* the period (gsper: 0 not started, 1-3, 4 overtime, 5 final) */
+    uint16_t score1;  /* team1's score (gss1) */
+    uint16_t score2;  /* team2's (gss2) */
+    uint8_t flags;  /* gsflags: MU_FLIPPED, MU_HIGHLIGHT, MU_SERIES_OVER */
+    uint8_t _padF;
+};
+_Static_assert(sizeof(struct Matchup) == 0x10, "Matchup size");
+_Static_assert(offsetof(struct Matchup, team1) == 0x000, "Matchup team1");
+_Static_assert(offsetof(struct Matchup, team2) == 0x002, "Matchup team2");
+_Static_assert(offsetof(struct Matchup, topwins) == 0x004, "Matchup topwins");
+_Static_assert(offsetof(struct Matchup, botwins) == 0x006, "Matchup botwins");
+_Static_assert(offsetof(struct Matchup, per) == 0x008, "Matchup per");
+_Static_assert(offsetof(struct Matchup, score1) == 0x00A, "Matchup score1");
+_Static_assert(offsetof(struct Matchup, score2) == 0x00C, "Matchup score2");
+_Static_assert(offsetof(struct Matchup, flags) == 0x00E, "Matchup flags");
 
 struct RAM_PACKED Ram {
     uint8_t M68K_RAM[0x1FFE];  /* $FFFF0000 */
@@ -428,9 +451,9 @@ struct RAM_PACKED Ram {
     uint8_t ScoreSum[0x168];  /* $FFFFC474 */
     uint16_t PenSumLength;  /* $FFFFC5DC */
     uint8_t PenSum[0xF0];  /* $FFFFC5DE */
-    struct Team teams[2];  /* $FFFFC6CE: the home and away team structs (tmstruct, AwShots) */
+    struct Team teams[2];  /* $FFFFC6CE: the home and away team structs, AwShots the second (tmstruct) */
     uint8_t statsbuffer[0xD0];  /* $FFFFCD96 */
-    uint8_t gsstruct[0x80];  /* $FFFFCE66 */
+    struct Matchup matchups[8];  /* $FFFFCE66: the night's games: the playoff tree's first round, then each round's (gsstruct) */
     uint16_t gamenum;  /* $FFFFCEE6 */
     uint16_t postarts;  /* $FFFFCEE8 */
     uint16_t bosgames;  /* $FFFFCEEA */
@@ -865,7 +888,7 @@ _Static_assert(offsetof(struct Ram, teams) == 0xC6CE, "teams");
 /* AwGoals at 0xCA3E overlaps the previous field; use RAM_OFF_AwGoals */
 /* AwayTeamRosterPtr at 0xCA50 overlaps the previous field; use RAM_OFF_AwayTeamRosterPtr */
 _Static_assert(offsetof(struct Ram, statsbuffer) == 0xCD96, "statsbuffer");
-_Static_assert(offsetof(struct Ram, gsstruct) == 0xCE66, "gsstruct");
+_Static_assert(offsetof(struct Ram, matchups) == 0xCE66, "matchups");
 _Static_assert(offsetof(struct Ram, gamenum) == 0xCEE6, "gamenum");
 _Static_assert(offsetof(struct Ram, postarts) == 0xCEE8, "postarts");
 _Static_assert(offsetof(struct Ram, bosgames) == 0xCEEA, "bosgames");

@@ -485,13 +485,13 @@ void UpdateVertScrollReg(void)
 void DisplayGameInfo(uint16_t n)
 {
     if (n == g.gamenum) return;
-    rp gs = rp_add(RAM(gsstruct), (int16_t)(uint16_t)(0x10 * n));
-    if (r8(gs, 0xE) & 6) return;
-    PrintGameInfo(r16(gs, 2), r16(gs, 0xC));
+    const struct Matchup *gs = &g.matchups[n];
+    if (gs->flags & (MU_HIGHLIGHT | MU_SERIES_OVER)) return;
+    PrintGameInfo(gs->team2, gs->score2);
     g.printy++;
-    PrintGameInfo(r16(gs, 0), r16(gs, 0xA));
+    PrintGameInfo(gs->team1, gs->score1);
     g.printx = 0x1C;
-    PrintStringFromList(SYM_PerLabels, (uint16_t)(r16(gs, 8) - 1));
+    PrintStringFromList(SYM_PerLabels, (uint16_t)(gs->per - 1));
     g.printy += 2;
 }
 

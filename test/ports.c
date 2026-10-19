@@ -50,6 +50,7 @@ static void run_setInjuryType(const Record *r) { setInjuryType(OBJ(R_A2), OBJ(R_
 
 #define TEAM(reg) team_at(ram_at(r->regs_in[reg]))
 #define PLACE(reg) ram_at(r->regs_in[reg])                  /* (a place a register holds) */
+#define MATCHUP(reg) RAM_AT(struct Matchup, ram_at(r->regs_in[reg]))
 #define BYTES_AT(reg) ((uint8_t *)&g + (uint16_t)r->regs_in[reg])   /* (a byte table inside a team struct: penbox, the goals) */
 static void run_checkwallcoll(const Record *r) { checkwallcoll((int16_t)r->regs_in[R_D2], (int16_t)r->regs_in[R_D3], OBJ(R_A3)); }
 static void run_checkgoal(const Record *r) { checkgoal(OBJ(R_A2), OBJ(R_A3), (int16_t)r->regs_in[R_D2], (int16_t)r->regs_in[R_D3]); }
@@ -216,11 +217,11 @@ static void run_getlinee(const Record *r) { expect_reg16(r, R_D0, getlinee((uint
 static void run_AvgCline(const Record *r) { expect_reg16(r, R_D0, AvgCline(TEAM(R_A2)), "d0"); }
 static void run_RestoreTeamEnergy(const Record *r) { RestoreTeamEnergy(TEAM(R_A2)); }
 static void run_reenergizeteam(const Record *r) { reenergizeteam(TEAM(R_A2)); }
-static void run_SetScore(const Record *r) { SetScore(ram_at(r->regs_in[R_A0])); }
-static void run_NewTicker(const Record *r) { rp gs = { 0 }; expect_reg16(r, R_D3, (uint16_t)NewTicker(&gs), "d3"); }
-static void run_NewTicker2(const Record *r) { rp gs = { 0 }; expect_reg16(r, R_D3, (uint16_t)NewTicker2(&gs), "d3"); }
-static void run_CheckGameTickerStatus(const Record *r) { rp gs = { 0 }; expect_reg16(r, R_D3, (uint16_t)CheckGameTickerStatus(D16(R_D3), &gs), "d3"); if (rp_addr(gs) != RAM_BASE) expect_reg16(r, R_A0, (uint16_t)rp_addr(gs), "a0"); }
-static void run_NewTicker3(const Record *r) { NewTicker3(D16(R_D3), ram_at(r->regs_in[R_A0])); }
+static void run_SetScore(const Record *r) { SetScore(MATCHUP(R_A0)); }
+static void run_NewTicker(const Record *r) { struct Matchup *gs = NULL; expect_reg16(r, R_D3, (uint16_t)NewTicker(&gs), "d3"); }
+static void run_NewTicker2(const Record *r) { struct Matchup *gs = NULL; expect_reg16(r, R_D3, (uint16_t)NewTicker2(&gs), "d3"); }
+static void run_CheckGameTickerStatus(const Record *r) { struct Matchup *gs = NULL; expect_reg16(r, R_D3, (uint16_t)CheckGameTickerStatus(D16(R_D3), &gs), "d3"); if (gs) expect_reg16(r, R_A0, (uint16_t)rp_addr(ram_place(gs)), "a0"); }
+static void run_NewTicker3(const Record *r) { NewTicker3(D16(R_D3), MATCHUP(R_A0)); }
 static void run_SetTickerAreaPosition(const Record *r) { uint16_t d0, d1; SetTickerAreaPosition(&d0, &d1); expect_reg16(r, R_D0, d0, "d0"); expect_reg16(r, R_D1, d1, "d1"); }
 static void run_PrintStringFromList(const Record *r) { PrintStringFromList(r->regs_in[R_A1], (uint16_t)r->regs_in[R_D0]); }
 static void run_AdvanceStringPtr(const Record *r) { uint32_t a1 = AdvanceStringPtr(r->regs_in[R_A1], (uint16_t)r->regs_in[R_D0]); if (a1 != r->regs_out[R_A1]) printf("    a1: got %06x, 68k %06x\n", a1, r->regs_out[R_A1]); }
@@ -501,8 +502,8 @@ V(DoGameFrame) V(Pausemode) V(setupice) V(setSlotBit)
 
 
 /* ---- the intermission, the highlights, the replay, the stats screens, the save records ---- */
-static void run_StartHL(const Record *r) { StartHL(PLACE(R_A0), D16(R_D1)); }
-static void run_StartHL2(const Record *r) { StartHL2(PLACE(R_A0), D16(R_D1)); }
+static void run_StartHL(const Record *r) { StartHL(MATCHUP(R_A0), D16(R_D1)); }
+static void run_StartHL2(const Record *r) { StartHL2(MATCHUP(R_A0), D16(R_D1)); }
 static void run_InitTeamStructure(const Record *r) { InitTeamStructure(R16(R_D0), TEAM(R_A2)); }
 static void run_ReloadRefTiles(const Record *r) { expect_reg16(r, R_D4, ReloadRefTiles(), "d4"); }
 static void run_ReloadFaceOffTiles(const Record *r) { expect_reg16(r, R_D4, ReloadFaceOffTiles(), "d4"); }
@@ -650,7 +651,7 @@ static void run_PlayoffScreen(const Record *r) { PlayoffScreen(); }
 static void run_HandlePlayoffInput(const Record *r) { HandlePlayoffInput(); }
 static void run_UpdatePlayoffScroll(const Record *r) { UpdatePlayoffScroll(); }
 static void run_PlayoffScreen_waitvsync(const Record *r) { PlayoffScreen_waitvsync(); }
-static void run_PrintSeriesScore(const Record *r) { PrintSeriesScore(ram_at(A(R_A2))); }
+static void run_PrintSeriesScore(const Record *r) { PrintSeriesScore(MATCHUP(R_A2)); }
 static void run_DrawTreeArrow(const Record *r) { DrawTreeArrow(R16(R_D0)); }
 static void run_DrawTeamBlocks(const Record *r) { DrawTeamBlocks(R16(R_D1)); }
 static void run_VBlank_Playoff(const Record *r) { VBlank_Playoff(); }

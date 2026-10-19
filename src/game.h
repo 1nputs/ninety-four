@@ -25,6 +25,7 @@ enum { dfok, df32c, dfng, dfclock };                                            
 enum { pfdoff, pfna, pfnc, pfjoycon, pfrev, pfalock, pfteam, pfgoal };                 /* pflags */
 enum { pf2fight, pf2aip };                                                             /* pflags2 */
 enum { pf3oside, pf3break, pf3gctrl, pf3onetimer, pf3wall, pf3fall };                  /* pflags3 */
+enum { MU_FLIPPED = 1, MU_HIGHLIGHT = 2, MU_SERIES_OVER = 4 };                       /* struct Matchup flags (gsflags): team1 the tree's bottom team, a highlight to show (gsfhl), the series won (gsfso) */
 
 /* the work RAM the tests and lockstep compare: every named variable lies below it, the 68k's stack
  * above (the native game's stack is C's). The oracle shim's lockstep hash uses the same bound. */
@@ -512,21 +513,21 @@ void ChkShotStat(void);
 void SetupTeamForIntermission(void);
 void RestoreTeamEnergy(struct Team *tm);                /* a2 */
 void reenergizeteam(struct Team *tm);                   /* a2 */
-void SetScore(rp a0);                                   /* a0 = gsstruct entry */
+void SetScore(struct Matchup *a0);                      /* a0 = gsstruct entry */
 void InitScores(void);
 void UpdateScores(void);
-int16_t NewTicker(rp *gs);                              /* -> d3, a0 */
-int16_t NewTicker2(rp *gs);
-int16_t CheckGameTickerStatus(int16_t d3, rp *gs);
-void NewTicker3(int16_t d3, rp gs);
+int16_t NewTicker(struct Matchup **gs);                 /* -> d3, a0 */
+int16_t NewTicker2(struct Matchup **gs);
+int16_t CheckGameTickerStatus(int16_t d3, struct Matchup **gs);
+void NewTicker3(int16_t d3, const struct Matchup *gs);
 void ClearTickerArea(void);
 void SetTickerAreaPosition(uint16_t *d0, uint16_t *d1);
 void PrintStringFromList(uint32_t list, uint16_t n);    /* a1, d0 */
 uint32_t AdvanceStringPtr(uint32_t list, uint16_t n);   /* a1, d0 -> a1 */
 void Intermission(void);
 void DoHiLights(void);
-void StartHL(rp gs, int16_t game);                      /* a0 = the game's gsstruct, d1 = its number */
-void StartHL2(rp gs, int16_t game);
+void StartHL(struct Matchup *gs, int16_t game);         /* a0 = the game's gsstruct, d1 = its number */
+void StartHL2(struct Matchup *gs, int16_t game);
 
 /* ---- goalie94.asm: Manual Goalie, arena and faceoff animations ---- */
 void ManualGoalieMenu(void);
@@ -710,7 +711,7 @@ int HandlePlayoffInput(void);                           /* -> 1: Start (PlayoffS
 void UpdatePlayoffScroll(void);
 void PlayoffScreenExit(void);
 void PlayoffScreen_waitvsync(void);
-void PrintSeriesScore(rp gs);                           /* a2 */
+void PrintSeriesScore(const struct Matchup *gs);        /* a2 */
 void DrawTreeArrow(uint16_t col);                       /* d0 */
 void DrawTeamBlocks(uint16_t row);                      /* d1 */
 void VBlank_Playoff(void);

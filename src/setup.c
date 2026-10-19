@@ -534,8 +534,8 @@ void PlayoffScreen(void)
     }
     printz(str_PlayoffScreen_6, sizeof str_PlayoffScreen_6);
     if (g.bosgames != 7 && !(*a0 & 0x80)) {               /* the series scores */
-        rp gs = RAM(gsstruct);
-        for (int16_t n = *a0++; n >= 0; n--, gs = rp_add(gs, 0x10)) {
+        const struct Matchup *gs = g.matchups;
+        for (int16_t n = *a0++; n >= 0; n--, gs++) {
             g.printx = (uint16_t)((g.printx & 0xFF00) | *a0++);
             g.printy = (uint16_t)((g.printy & 0xFF00) | *a0++);
             PrintSeriesScore(gs);
@@ -607,13 +607,13 @@ void PlayoffScreen_waitvsync(void)
 }
 
 /* setup94.asm:PrintSeriesScore. The best-of-7 wins "t-b" of game struct a2 at printx / printy. */
-void PrintSeriesScore(rp gs)
+void PrintSeriesScore(const struct Matchup *gs)
 {
     rp m = RAM(mesarea);
     w16(m, 0, 6);
-    w8(m, 2, (uint8_t)(r16(gs, 4) + '0'));
+    w8(m, 2, (uint8_t)(gs->topwins + '0'));
     w8(m, 3, '-');
-    w8(m, 4, (uint8_t)(r16(gs, 6) + '0'));
+    w8(m, 4, (uint8_t)(gs->botwins + '0'));
     w8(m, 5, 0);
     print(RAM_BASE + RAM_OFF_mesarea);
 }

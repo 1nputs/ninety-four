@@ -187,11 +187,10 @@ void clockcont_0(void)
     if (g.gamelevel == 3) {
         if (g.bosgames == 7) cup = 1;
         else {                                            /* the Stanley Cup after 3 series wins */
-            rp gs = rp_add(RAM(gsstruct), 0x10 * g.gamenum);
-            uint16_t d3 = 0;
-            if (r8(gs, 0xE) & 1) d3 ^= 2;
-            if ((int16_t)(g.teams[0].score - g.teams[1].score) < 0) d3 ^= 2;
-            if (r16(gs, 4 + d3) == 3) cup = 1;
+            const struct Matchup *gs = &g.matchups[g.gamenum];
+            int bottom = (gs->flags & MU_FLIPPED) != 0;  /* (the home team the tree's bottom team) */
+            if ((int16_t)(g.teams[0].score - g.teams[1].score) < 0) bottom = !bottom;
+            if ((bottom ? gs->botwins : gs->topwins) == 3) cup = 1;
         }
     }
     if (cup) {

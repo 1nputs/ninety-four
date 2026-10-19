@@ -391,8 +391,6 @@ void DefaultMenus(void)
 
 /* ---- the playoff tree (game setup) ---------------------------------------------------------- */
 
-#define GS(n) (rp_add(RAM(gsstruct), 0x10 * (n)))       /* gsstruct game n: gst1, gst2, gspotwins, gspobwins, gsper, gss1, gss2, gsflags (a byte) */
-enum { gst1 = 0, gst2 = 2, gspotwins = 4, gspobwins = 6, gsper = 8, gss1 = 0xA, gss2 = 0xC, gsflags = 0xE };
 
 /* data94.asm:SuperDiv. Divide the 5-word number at a3 by d0 in place -> the remainder. */
 uint16_t SuperDiv(rp bits, uint16_t div)
@@ -413,14 +411,14 @@ void ReadPassBits(rp bits)
     uint16_t saved[5];
     for (int i = 0; i < 5; i++) saved[i] = r16(bits, 2 * i);
     for (int n = 7; n >= 0; n--) {
-        rp gs = GS(n);
-        w8(gs, gsflags, (uint8_t)(r8(gs, gsflags) & (uint8_t)~4));
+        struct Matchup *gs = &g.matchups[n];
+        gs->flags &= (uint8_t)~MU_SERIES_OVER;
         uint16_t w = SuperDiv(bits, 5);
-        w16(gs, gspobwins, w);
-        if (w == 4) w8(gs, gsflags, (uint8_t)(r8(gs, gsflags) | 4));
+        gs->botwins = w;
+        if (w == 4) gs->flags |= MU_SERIES_OVER;
         w = SuperDiv(bits, 5);
-        w16(gs, gspotwins, w);
-        if (w == 4) w8(gs, gsflags, (uint8_t)(r8(gs, gsflags) | 4));
+        gs->topwins = w;
+        if (w == 4) gs->flags |= MU_SERIES_OVER;
     }
     g.WinBits = SuperDiv(bits, 0x4000);
     g.pojoy = SuperDiv(bits, 8);
@@ -452,8 +450,8 @@ void InitializeGameStructures(void)
     uint32_t used = 1u << (g.HomeTeam & 31);
     used |= 1u << (g.VisTeam & 31);
     for (int n = 0; n < 8; n++) {
-        w16(GS(n), gst1, GetRandomUnusedTeam(&used));
-        w16(GS(n), gst2, GetRandomUnusedTeam(&used));
+        g.matchups[n].team1 = GetRandomUnusedTeam(&used);
+        g.matchups[n].team2 = GetRandomUnusedTeam(&used);
     }
 }
 
@@ -469,29 +467,29 @@ void FigureJoy(void)
         if (g.OptPlayMode != 0 && !(g.gmode2 & HI(0))) {
             uint16_t first, n = GetShifter(&first);       /* (games this round - 1) */
             uint16_t team = g.potree[g.potreeteam];
-            rp gs = rp_add(RAM(gsstruct), (int16_t)(uint16_t)(0x10 * n));
+            struct Matchup *gs = &g.matchups[n];
             uint16_t d0;
             ST_W(g.gamenum);
             for (;;) {
-                if (r16(gs, gst1) == team) {
+                if (gs->team1 == team) {
                     d0 = 0;
-                    g.Opt2Team = r16(gs, gst2);
-                    g.Opt1Team = r16(gs, gst1);
+                    g.Opt2Team = gs->team2;
+                    g.Opt1Team = gs->team1;
                     break;
                 }
-                if (r16(gs, gst2) == team) {
+                if (gs->team2 == team) {
                     d0 = g.FourWayPlay ? 5 : 4;
-                    g.Opt2Team = r16(gs, gst1);
-                    g.Opt1Team = r16(gs, gst2);
+                    g.Opt2Team = gs->team1;
+                    g.Opt1Team = gs->team2;
                     break;
                 }
-                gs = rp_add(gs, -0x10);
+                gs--;
                 if (n-- == 0) return;                     /* the playoff team is out */
             }
             d0 = (uint16_t)((d0 + g.pojoy) << 2);
             g.gamenum = n;
-            g.HomeTeam = r16(gs, gst1);
-            g.VisTeam = r16(gs, gst2);
+            g.HomeTeam = gs->team1;
+            g.VisTeam = gs->team2;
             uint32_t list = rom_find(SYM_FigureJoy, SYM_InitializeGameStructures, pojoylist, 8);
             if (g.FourWayPlay) list += 0x20;              /* .pojoylist2 follows */
             g.cont1team = rd16(rom_ptr(list + d0));
@@ -537,19 +535,19 @@ void maketree(void)
     int16_t n = (int16_t)GetShifter(&first);
     if (n < 0) return;                                    /* the playoffs are over */
     a0 = rp_add(tree, (int16_t)(first * 2));
-    for (rp gs = RAM(gsstruct); n >= 0; n--, gs = rp_add(gs, 0x10)) {
-        w16(gs, gss1, 0);
-        w16(gs, gss2, 0);
-        w16(gs, gsper, 0);
-        w8(gs, gsflags, (uint8_t)(r8(gs, gsflags) & (uint8_t)~2));
+    for (struct Matchup *gs = g.matchups; n >= 0; n--, gs++) {
+        gs->score1 = 0;
+        gs->score2 = 0;
+        gs->per = 0;
+        gs->flags &= (uint8_t)~MU_HIGHLIGHT;
         if (g.bosgames == 2 || g.bosgames == 3 || g.bosgames == 5) {
-            w8(gs, gsflags, (uint8_t)(r8(gs, gsflags) & (uint8_t)~1));
-            w8(gs, gst1 + 1, r8_next(&a0));
-            w8(gs, gst2 + 1, r8_next(&a0));
+            gs->flags &= (uint8_t)~MU_FLIPPED;
+            gs->team1 = (uint16_t)((gs->team1 & 0xFF00) | (uint8_t)r8_next(&a0));
+            gs->team2 = (uint16_t)((gs->team2 & 0xFF00) | (uint8_t)r8_next(&a0));
         } else {
-            w8(gs, gsflags, (uint8_t)(r8(gs, gsflags) | 1));   /* the teams flipped */
-            w8(gs, gst2 + 1, r8_next(&a0));
-            w8(gs, gst1 + 1, r8_next(&a0));
+            gs->flags |= MU_FLIPPED;
+            gs->team2 = (uint16_t)((gs->team2 & 0xFF00) | (uint8_t)r8_next(&a0));
+            gs->team1 = (uint16_t)((gs->team1 & 0xFF00) | (uint8_t)r8_next(&a0));
         }
     }
     FigureJoy();
@@ -576,8 +574,8 @@ void NewPO(void)
     if (g.OptPlayMode != 2) {
         g.bosgames = 0;
         for (int n = 0; n < 8; n++) {
-            w16(GS(n), gspotwins, 0);
-            w16(GS(n), gspobwins, 0);
+            g.matchups[n].topwins = 0;
+            g.matchups[n].botwins = 0;
         }
     }
     maketree();
@@ -660,8 +658,8 @@ void WritePassBits(rp bits)
     PushBits(bits, g.pojoy, 8);
     PushBits(bits, g.WinBits, 0x4000);
     for (int n = 0; n < 8; n++) {
-        PushBits(bits, r16(GS(n), gspotwins), 5);
-        PushBits(bits, r16(GS(n), gspobwins), 5);
+        PushBits(bits, g.matchups[n].topwins, 5);
+        PushBits(bits, g.matchups[n].botwins, 5);
     }
 }
 
@@ -672,39 +670,39 @@ void WritePassBits(rp bits)
  * one: WinBits from the scores (by the games' flipped flags). */
 void ResolveGames(void)
 {
-    rp gs = rp_add(RAM(gsstruct), (int16_t)(uint16_t)(g.gamenum * 0x10));
-    w16(gs, gss1, g.teams[0].score);
-    w16(gs, gss2, g.teams[1].score);
+    struct Matchup *gs = &g.matchups[g.gamenum];
+    gs->score1 = g.teams[0].score;
+    gs->score2 = g.teams[1].score;
     uint16_t first;
     int16_t n = (int16_t)GetShifter(&first);
-    rp a0 = rp_add(RAM(gsstruct), (int16_t)(uint16_t)(0x10 * (uint16_t)n));
+    struct Matchup *a0 = &g.matchups[n];
     uint16_t won = 0;
     if (g.bosgames == 7) {                                /* best of one */
-        for (; n >= 0; n--, a0 = rp_add(a0, -0x10)) {
-            if (!(r16(a0, gss1) > r16(a0, gss2))) won |= (uint16_t)(1u << n);
-            if (r8(a0, gsflags) & 1) won ^= (uint16_t)(1u << n);
+        for (; n >= 0; n--, a0--) {
+            if (!(a0->score1 > a0->score2)) won |= (uint16_t)(1u << n);
+            if (a0->flags & MU_FLIPPED) won ^= (uint16_t)(1u << n);
         }
         goto winbits;
     }
-    for (; n >= 0; n--, a0 = rp_add(a0, -0x10)) {         /* the series' wins */
-        if (r16(a0, gspotwins) == 4 || r16(a0, gspobwins) == 4) continue;
-        uint16_t side = (r8(a0, gsflags) & 1) ? 2 : 0;
-        if ((int16_t)(r16(a0, gss1) - r16(a0, gss2)) < 0) side ^= 2;
-        w16(a0, gspotwins + side, (uint16_t)(r16(a0, gspotwins + side) + 1));
+    for (; n >= 0; n--, a0--) {                           /* the series' wins */
+        if (a0->topwins == 4 || a0->botwins == 4) continue;
+        int bottom = (a0->flags & MU_FLIPPED) != 0;          /* (team1 the tree's bottom team) */
+        if ((int16_t)(a0->score1 - a0->score2) < 0) bottom = !bottom;
+        if (bottom) a0->botwins++; else a0->topwins++;
     }
     if (++g.bosgames != 7) {
-        gs = rp_add(RAM(gsstruct), (int16_t)(uint16_t)(g.gamenum * 0x10));
-        if (r16(gs, gspotwins) != 4 && r16(gs, gspobwins) != 4) return;
+        gs = &g.matchups[g.gamenum];
+        if (gs->topwins != 4 && gs->botwins != 4) return;
         if ((int16_t)g.gamelevel < 3) {                   /* the user's series is over: the round's others */
             n = (int16_t)GetShifter(&first);
-            a0 = rp_add(RAM(gsstruct), (int16_t)(uint16_t)(0x10 * (uint16_t)n));
-            for (; n >= 0; n--, a0 = rp_add(a0, -0x10)) {
+            a0 = &g.matchups[n];
+            for (; n >= 0; n--, a0--) {
                 if ((uint16_t)n == g.gamenum) continue;
-                while (r16(a0, gspotwins) != 4 && r16(a0, gspobwins) != 4) {
-                    w16(a0, gspotwins, (uint16_t)(r16(a0, gspotwins) + 1));
+                while (a0->topwins != 4 && a0->botwins != 4) {
+                    a0->topwins++;
                     if (randomd0(0xC8) & 1) {
-                        w16(a0, gspotwins, (uint16_t)(r16(a0, gspotwins) - 1));
-                        w16(a0, gspobwins, (uint16_t)(r16(a0, gspobwins) + 1));
+                        a0->topwins--;
+                        a0->botwins++;
                     }
                 }
             }
@@ -714,11 +712,11 @@ void ResolveGames(void)
     }
     g.bosgames = 0;                                       /* the next round */
     n = (int16_t)GetShifter(&first);
-    a0 = rp_add(RAM(gsstruct), (int16_t)(uint16_t)(0x10 * (uint16_t)n));
-    for (; n >= 0; n--, a0 = rp_add(a0, -0x10)) {
-        if (r16(a0, gspotwins) != 4) won |= (uint16_t)(1u << n);
-        w16(a0, gspotwins, 0);
-        w16(a0, gspobwins, 0);
+    a0 = &g.matchups[n];
+    for (; n >= 0; n--, a0--) {
+        if (a0->topwins != 4) won |= (uint16_t)(1u << n);
+        a0->topwins = 0;
+        a0->botwins = 0;
     }
 winbits:
     g.WinBits &= (uint16_t)((uint16_t)(1u << first) - 1);

@@ -119,7 +119,7 @@ cont:
     g.vcount = vc;
     SetHor();
     DecompressGraphicsPlain(ART(RefMap2) + 8, g.ExtraChars);   /* the horizontal ref tiles */
-    rp gs = { 0 };
+    struct Matchup *gs = NULL;
     int16_t d3 = NewTicker(&gs);
     NewTicker3(d3, gs);
     w8(RAM(puckc), 0, 0xFF);
@@ -1016,23 +1016,23 @@ static uint16_t getscore(uint16_t d0, uint16_t d1)
 
 /* penalty94.asm:SetScore. Add to the score of the ticker game a0. After period 3 a game
  * within one goal goes to overtime and asks for a highlight. */
-void SetScore(rp a0)
+void SetScore(struct Matchup *a0)
 {
-    if ((int16_t)r16(a0, 8) >= 4) return;
-    if (r16(a0, 8) == 3) {
-        w16(a0, 8, 5);                                    /* final */
-        int16_t d0 = (int16_t)(r16(a0, 0xA) - r16(a0, 0xC));
+    if ((int16_t)a0->per >= 4) return;
+    if (a0->per == 3) {
+        a0->per = 5;                                      /* final */
+        int16_t d0 = (int16_t)(a0->score1 - a0->score2);
         if (d0 > 1) return;
         if (d0 < -1) return;
-        w16(a0, 8, 3);                                    /* close game: overtime */
-        w8(a0, 0xE, (uint8_t)(r8(a0, 0xE) | 2));          /* gsfhl */
+        a0->per = 3;                                      /* close game: overtime */
+        a0->flags |= MU_HIGHLIGHT;
         return;
     }
-    w16(a0, 8, (uint16_t)(r16(a0, 8) + 1));
-    uint16_t s = getscore(r16(a0, 0), r16(a0, 2));
-    w16(a0, 0xA, (uint16_t)(r16(a0, 0xA) + s));
-    s = getscore(r16(a0, 2), r16(a0, 0));
-    w16(a0, 0xC, (uint16_t)(r16(a0, 0xC) + s));
+    a0->per++;
+    uint16_t s = getscore(a0->team1, a0->team2);
+    a0->score1 += s;
+    s = getscore(a0->team2, a0->team1);
+    a0->score2 += s;
 }
 
 /* penalty94.asm:InitScores. Initialize the other games' scores / period in the playoffs. */
@@ -1040,11 +1040,11 @@ void InitScores(void)
 {
     if ((int16_t)g.gamelevel > 1) return;
     int16_t d1 = (int16_t)GetShifter(NULL);
-    rp a0 = rp_add(RAM(gsstruct), 0x10 * d1);
-    for (; d1 >= 0; d1--, a0 = rp_add(a0, -0x10)) {
+    struct Matchup *a0 = &g.matchups[d1];
+    for (; d1 >= 0; d1--, a0--) {
         if ((uint16_t)d1 == g.gamenum) continue;
-        if (r8(a0, 0xE) & 4) continue;                    /* gsfso */
-        w16(a0, 8, 0);
+        if (a0->flags & MU_SERIES_OVER) continue;
+        a0->per = 0;
         for (int16_t d0 = (int16_t)randomd0(3); d0 > 0; d0--) SetScore(a0);
     }
 }
@@ -1054,25 +1054,25 @@ void UpdateScores(void)
 {
     int16_t d1 = (int16_t)GetShifter(NULL);
     g.TickerNum = (uint16_t)d1;
-    rp a0 = rp_add(RAM(gsstruct), 0x10 * d1);
-    for (; d1 >= 0; d1--, a0 = rp_add(a0, -0x10)) {
+    struct Matchup *a0 = &g.matchups[d1];
+    for (; d1 >= 0; d1--, a0--) {
         if ((uint16_t)d1 == g.gamenum) continue;
-        w8(a0, 0xE, (uint8_t)(r8(a0, 0xE) & (uint8_t)~2));
-        if (r8(a0, 0xE) & 4) continue;
+        a0->flags &= (uint8_t)~MU_HIGHLIGHT;
+        if (a0->flags & MU_SERIES_OVER) continue;
         SetScore(a0);
     }
 }
 
 /* penalty94.asm:NewTicker. Show the next ticker score once the clock is at 8:00 or less.
  * Returns d3 = the game, negative for none. */
-int16_t NewTicker(rp *gs)
+int16_t NewTicker(struct Matchup **gs)
 {
     if ((int16_t)g.gameclock > 0x1E0) return -1;
     return NewTicker2(gs);
 }
 
 /* penalty94.asm:NewTicker2. The next ticker game, skipping this game. */
-int16_t NewTicker2(rp *gs)
+int16_t NewTicker2(struct Matchup **gs)
 {
     int16_t d3 = (int16_t)g.TickerNum;
     if (d3 < 0) return d3;
@@ -1083,11 +1083,11 @@ int16_t NewTicker2(rp *gs)
 
 /* penalty94.asm:CheckGameTickerStatus. d3 = game. Returns a0 = its gstruct, skipping to the
  * next ticker game if a highlight is coming up or the series is over. */
-int16_t CheckGameTickerStatus(int16_t d3, rp *gs)
+int16_t CheckGameTickerStatus(int16_t d3, struct Matchup **gs)
 {
-    rp a0 = rp_add(RAM(gsstruct), 0x10 * d3);
-    if (r8(a0, 0xE) & 2) return NewTicker2(gs);           /* a highlight is coming */
-    if (r8(a0, 0xE) & 4) return NewTicker2(gs);           /* the series is over */
+    struct Matchup *a0 = &g.matchups[d3];
+    if (a0->flags & MU_HIGHLIGHT) return NewTicker2(gs);  /* a highlight is coming */
+    if (a0->flags & MU_SERIES_OVER) return NewTicker2(gs);   /* the series is over */
     *gs = a0;
     return d3;
 }
@@ -1106,7 +1106,7 @@ static void ticker_team(uint16_t team, uint16_t score, uint16_t x)
 
 /* penalty94.asm:NewTicker3. Display the ticker score for game d3 (a0 = its gstruct); nothing
  * for a negative d3. */
-void NewTicker3(int16_t d3, rp gs)
+void NewTicker3(int16_t d3, const struct Matchup *gs)
 {
     if (d3 < 0) return;
     uint16_t d0, d1;
@@ -1122,13 +1122,13 @@ void NewTicker3(int16_t d3, rp gs)
     d0 = (uint16_t)(1 + g.gamelevel);
     if (g.OptPlayMode == 0) d0 = 0;                       /* not the playoffs: 'EA Hockey Night' */
     PrintStringFromList(SYM_GameLabels, d0);
-    uint32_t a1 = AdvanceStringPtr(SYM_PerLabels, (uint16_t)(r16(gs, 8) - 1));
+    uint32_t a1 = AdvanceStringPtr(SYM_PerLabels, (uint16_t)(gs->per - 1));
     d0 = rd16(rom_ptr(a1)) >> 1;                          /* the period name centered on x + $17 */
     g.printx = (uint16_t)(x + 0x17 - d0);
     print(a1);
     g.printa = 0x8000;
-    ticker_team(r16(gs, 2), r16(gs, 0xC), x);
-    ticker_team(r16(gs, 0), r16(gs, 0xA), x);
+    ticker_team(gs->team2, gs->score2, x);
+    ticker_team(gs->team1, gs->score1, x);
 }
 
 /* penalty94.asm:ClearTickerArea. Erase the ticker box. */
@@ -1182,14 +1182,14 @@ static void hl_restore(void)
 }
 
 /* StartHL2's .ranres: settle highlight game a0 at random when tied, and mark it final */
-static void hl_random_result(rp gs)
+static void hl_random_result(struct Matchup *gs)
 {
-    if (r16(gs, 0xA) == r16(gs, 0xC)) {
+    if (gs->score1 == gs->score2) {
         uint16_t d0 = vdp_hv16() & 1;
-        w16(gs, 0xA, (uint16_t)(r16(gs, 0xA) + d0));
-        w16(gs, 0xC, (uint16_t)(r16(gs, 0xC) + (d0 ^ 1)));
+        gs->score1 += d0;
+        gs->score2 += d0 ^ 1;
     }
-    w16(gs, 8, 5);                                        /* gsper: final */
+    gs->per = 5;                                        /* final */
 }
 
 /* StartHL2's .setteam: refill the energy, personnel and player data of team a2 */
@@ -1209,13 +1209,13 @@ static void hl_set_team(struct Team *tm)
  * computer playing until 180 frames after the clock stops or C / start (a tie is settled at
  * random); the game's RAM is kept aside meanwhile. Still tied: another highlight. Start skips
  * it with a random result (sf3sbut). */
-void StartHL2(rp gs, int16_t game)
+void StartHL2(struct Matchup *gs, int16_t game)
 {
     for (;;) {
-        rp a0 = gs;
+        struct Matchup *a0 = gs;
         if (g.sflags3 & (1 << sf3sbut)) { hl_random_result(a0); return; }
         hl_save();
-        rp t = a0;
+        struct Matchup *t = a0;
         int16_t d3 = CheckGameTickerStatus(game, &t);
         a0 = t;
         NewTicker3(d3, a0);
@@ -1229,8 +1229,8 @@ void StartHL2(rp gs, int16_t game)
         if (waitxsr(0xB4) & 0x80) { hl_restore(); hl_random_result(a0); g.sflags3 |= 1 << sf3sbut; return; }
         ST_W(g.zamx);
         g.CwdExciteLvl = 0;
-        g.HomeTeam = r16(a0, 0);
-        g.VisTeam = r16(a0, 2);
+        g.HomeTeam = a0->team1;
+        g.VisTeam = a0->team2;
         struct Team *home = team_struct(0), *away = team_struct(1);
         home->goalie = 0;
         away->goalie = 0;
@@ -1241,9 +1241,9 @@ void StartHL2(rp gs, int16_t game)
         g.cont1team = 0;
         g.cont2team = 0;
         g.gameclock = (uint16_t)(randomd0(0x78) + 0x3C);
-        g.gsp = (uint16_t)(r16(a0, 8) - 1);
-        home->score = r16(a0, 0xA);
-        away->score = r16(a0, 0xC);
+        g.gsp = (uint16_t)(a0->per - 1);
+        home->score = a0->score1;
+        away->score = a0->score2;
         g.gmode = 1 << gmhl;
         if (g.gsp & 1) g.gmode |= 1 << gmdir;
         g.sflags &= 0x00FF;                               /* clr.b: the high byte */
@@ -1296,8 +1296,8 @@ void StartHL2(rp gs, int16_t game)
         }
         KillCrowd();                                      /* the scores go to a0 as pushed: CheckGameTickerStatus's */
         p_turnoff();
-        w16(a0, 0xA, home->score);
-        w16(a0, 0xC, away->score);
+        a0->score1 = home->score;
+        a0->score2 = away->score;
         forceblack();
         for (int i = 0; i < 0x10; i++) sortobj(i)->Xpos = 0;
         hl_restore();
@@ -1308,9 +1308,9 @@ void StartHL2(rp gs, int16_t game)
         DrawMenuScreen();
         g.palcount = 0x18;
         song(SYM_SngEOG);
-        w16(gs, 8, 4);                                    /* gsper: overtime */
-        if (r16(gs, 0xA) == r16(gs, 0xC)) continue;       /* still tied: another highlight */
-        w16(gs, 8, 5);                                    /* final */
+        gs->per = 4;                                    /* overtime */
+        if (gs->score1 == gs->score2) continue;           /* still tied: another highlight */
+        gs->per = 5;                                      /* final */
         t = gs;
         d3 = CheckGameTickerStatus(game, &t);
         NewTicker3(d3, t);
@@ -1322,21 +1322,21 @@ void StartHL2(rp gs, int16_t game)
 }
 
 /* penalty94.asm:StartHL. Play the highlight of game a0 (d1 = its number): StartHL2. */
-void StartHL(rp gs, int16_t game) { StartHL2(gs, game); }
+void StartHL(struct Matchup *gs, int16_t game) { StartHL2(gs, game); }
 
 /* penalty94.asm:DoHiLights. The highlights: each game of the round (GetShifter, last first)
  * whose highlight flag is set (gsfhl, cleared here), unless the series is over (gsfso). */
 void DoHiLights(void)
 {
     int16_t n = (int16_t)GetShifter(NULL);
-    rp gs = rp_add(RAM(gsstruct), (uint16_t)(n * 0x10));
+    struct Matchup *gs = &g.matchups[n];
     do {
-        if (!(r8(gs, 0xE) & 4)) {
-            int hl = r8(gs, 0xE) & 2;
-            w8(gs, 0xE, (uint8_t)(r8(gs, 0xE) & (uint8_t)~2));
+        if (!(gs->flags & MU_SERIES_OVER)) {
+            int hl = gs->flags & MU_HIGHLIGHT;
+            gs->flags &= (uint8_t)~MU_HIGHLIGHT;
             if (hl) StartHL(gs, n);
         }
-        gs = rp_add(gs, -0x10);
+        gs--;
     } while (n-- != 0);
 }
 
@@ -1368,7 +1368,7 @@ void Intermission(void)
     g.TickerNum = GetShifter(NULL);
     int skip = 0;
     while ((int16_t)g.TickerNum >= 0) {
-        rp gs = { 0 };
+        struct Matchup *gs = NULL;
         int16_t d3 = NewTicker2(&gs);
         NewTicker3(d3, gs);
         if (waitxsr(0x96) & 0x80) { skip = 1; break; }

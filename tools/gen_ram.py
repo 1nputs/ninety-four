@@ -172,12 +172,68 @@ TEAM_DECL = [
     (0x360, 'uint16_t psattempts;', 'penalty shot (and shootout) attempts'),
     (0x362, 'uint16_t psgoals;', 'penalty shot goals'),
 ]
-team_fields, team_asserts = [], []
-for off, decl, com in TEAM_DECL:
-    team_fields.append('    ' + decl + ('  /* ' + com + ' */' if com else ''))
-    fname = re.match(r'\w+ (\w+)', decl).group(1)
-    if not fname.startswith('_pad'):
-        team_asserts.append(f'_Static_assert(offsetof(struct Team, {fname}) == 0x{off:03X}, "Team {fname}");')
+
+# ---- the night's games and the playoff matchups (gsstruct, gssize $10 apart) --------------------
+MATCHUP_DECL = [
+    (0x0, 'uint16_t team1;', 'the teams (gst1, gst2: TeamList indexes; flags bit 0, the two flipped)'),
+    (0x2, 'uint16_t team2;', ''),
+    (0x4, 'uint16_t topwins;', "the playoff tree's top team's wins (gspotwins: best of 7, 4 wins it)"),
+    (0x6, 'uint16_t botwins;', "the bottom team's (gspobwins)"),
+    (0x8, 'uint16_t per;', 'the period (gsper: 0 not started, 1-3, 4 overtime, 5 final)'),
+    (0xA, 'uint16_t score1;', "team1's score (gss1)"),
+    (0xC, 'uint16_t score2;', "team2's (gss2)"),
+    (0xE, 'uint8_t flags;', 'gsflags: MU_FLIPPED, MU_HIGHLIGHT, MU_SERIES_OVER'),
+    (0xF, 'uint8_t _padF;', ''),
+]
+
+# ---- the game's structures (NATIVE-STATE.md, step 3) -------------------------------------
+# Each: its size, what it is, and its fields (offset, declaration, comment) at the 68000's offsets,
+# which the generator checks follow one another and the C asserts. TYPED gives a RAM region one.
+STRUCTS = {
+    'Team': (TMSIZE, "a team's struct (team_struct(away))", 'tmsize', TEAM_DECL),
+    'Matchup': (0x10, "one of the night's games, a playoff matchup in the playoffs (gsstruct)", 'gssize', MATCHUP_DECL),
+}
+# RAM regions of the game's structures: the symbol, the field's declaration, and its comment
+TYPED = {
+    'tmstruct': ('struct Team teams[2]', 'the home and away team structs, AwShots the second'),
+    'gsstruct': ('struct Matchup matchups[8]', "the night's games: the playoff tree's first round, then each round's"),
+}
+SZ = {'uint8_t': 1, 'int8_t': 1, 'uint16_t': 2, 'int16_t': 2, 'uint32_t': 4, 'int32_t': 4}
+
+
+def decl_size(decl):
+    """(type, name, element size, element count) of a declaration such as 'uint8_t lines[7][8]'"""
+    m = re.match(r'\s*(struct \w+|u?int(?:8|16|32)_t)\s+(\w+)((?:\[(?:0x[0-9A-Fa-f]+|\d+)\])*);?', decl)
+    t = m.group(1)
+    size = SZ[t] if t in SZ else (SCSTRUCT if t == 'struct SortObj' else STRUCTS[t[7:]][0])
+    count = 1
+    for d in re.findall(r'\[(0x[0-9A-Fa-f]+|\d+)\]', m.group(3)):
+        count *= int(d, 0)
+    return t, m.group(2), size, count
+
+
+struct_text, struct_scalars = [], {}
+for sname, (ssize, sdoc, size_name, sdecl) in STRUCTS.items():
+    lines, sasserts, at, flat = [], [], 0, []
+    for off, decl, com in sdecl:
+        if off != at:
+            raise SystemExit(f'struct {sname}: {decl} at ${off:X}, but the fields before end at ${at:X}')
+        t, fname, esize, count = decl_size(decl)
+        lines.append('    ' + decl + ('  /* ' + com + ' */' if com else ''))
+        if not fname.startswith('_pad'):
+            sasserts.append(f'_Static_assert(offsetof(struct {sname}, {fname}) == 0x{off:03X}, "{sname} {fname}");')
+            for e in range(count):
+                if t in SZ:
+                    flat.append((off + e * esize, esize, f'{fname}'))
+                else:
+                    flat += [(off + e * esize + o, z, f'{fname}.{n}') for o, z, n in struct_scalars[t[7:]]]
+        at = off + esize * count
+    if at != ssize:
+        raise SystemExit(f'struct {sname}: fields end at ${at:X}, not its size ${ssize:X}')
+    struct_scalars[sname] = flat
+    size_def = f'#define {size_name} 0x{ssize:X}\n' if size_name else ''
+    struct_text.append(f'{size_def}/* {sdoc} */\nstruct RAM_PACKED {sname} {{\n' + '\n'.join(lines) + '\n};\n'
+                       f'_Static_assert(sizeof(struct {sname}) == 0x{ssize:X}, "{sname} size");\n' + '\n'.join(sasserts) + '\n')
 
 # ---- RAM struct ---------------------------------------------------------------------------
 fields, asserts = [], []
@@ -197,9 +253,11 @@ for i, r in enumerate(inram):
     gap = nxt - off
     com = r.get('comment', '').replace('*/', '* /')
     cm = f'  /* ${r["addr"]:08X}{": " + com if com else ""} */'
-    if name == 'tmstruct':
-        fields.append(f'    struct Team teams[2];  /* ${r["addr"]:08X}: the home and away team structs (tmstruct, AwShots) */')
-        name, pos = 'teams', off + 2 * TMSIZE
+    if r['name'] in TYPED:
+        decl, tcom = TYPED[r['name']]
+        _, name, esize, count = decl_size(decl)
+        fields.append(f'    {decl};  /* ${r["addr"]:08X}: {tcom} ({r["name"]}) */')
+        pos = off + esize * count
     elif name == 'SortCords':
         n = gap // SCSTRUCT
         fields.append(f'    struct SortObj SortCords[{n}];{cm}')
@@ -272,20 +330,14 @@ void ram_unpack(const uint8_t in[RAM_SIZE])
 # scalar the game names, as g.puckvz[0]: the rest of such an array is the object's own fields),
 # which must agree; elsewhere every element. No two views may disagree.
 SORT_VIEWS = [('SortCords', 16, SCSTRUCT), ('pads', 7, 0x1C), ('sso', 4, 0x14)]
-SZ = {'uint8_t': 1, 'int8_t': 1, 'uint16_t': 2, 'int16_t': 2, 'uint32_t': 4, 'int32_t': 4}
-
-
 def layout(lines):
     """(name, offset, size, count) of each declared field, in order"""
     out, at = [], 0
     for l in lines:
-        m = re.match(r'\s+(struct SortObj|struct Team|u?int(?:8|16|32)_t)\s+(\w+)((?:\[(?:0x[0-9A-Fa-f]+|\d+)\])*);', l)
+        m = re.match(r'\s+((?:struct \w+|u?int(?:8|16|32)_t)\s+\w+(?:\[(?:0x[0-9A-Fa-f]+|\d+)\])*;)', l)
         if m:
-            size = {'struct SortObj': SCSTRUCT, 'struct Team': TMSIZE}.get(m.group(1)) or SZ[m.group(1)]
-            count = 1
-            for d in re.findall(r'\[(0x[0-9A-Fa-f]+|\d+)\]', m.group(3)):
-                count *= int(d, 0)
-            out.append((m.group(2), at, size, count))
+            t, n, size, count = decl_size(m.group(1))
+            out.append((n, at, size, count, t))
             at += size * count
     return out
 
@@ -301,19 +353,24 @@ def unit(start, size, what):
         unit_of[b] = (start, size, what)
 
 
-sortobj, teamobj = layout(sort_fields), layout(team_fields)
+sortobj = layout(sort_fields)
 base_of = {r['name']: r['addr'] - RAM_BASE for r in inram}
 in_view = set()
-for region, count, stride in SORT_VIEWS + [('tmstruct', 2, TMSIZE)]:
+for region, count, stride in SORT_VIEWS:
     in_view.update(range(base_of[region], base_of[region] + count * stride))
     for k in range(count):
-        for n, at, size, cnt in (teamobj if region == 'tmstruct' else sortobj):
+        for n, at, size, cnt, _ in sortobj:
             for e in range(cnt):
                 if at + (e + 1) * size <= stride:
                     unit(base_of[region] + k * stride + at + e * size, size, f'{region} {k} {n}')
-for n, at, size, count in layout(fields):
-    if size in (SCSTRUCT, TMSIZE) or n.startswith('_pad'):
-        continue                                          # (padding: nothing names it)
+for n, at, size, count, t in layout(fields):
+    if t.startswith('struct ') and t != 'struct SortObj':  # (a region of the game's structures: every scalar)
+        for k in range(count):
+            for o, z, sn in struct_scalars[t[7:]]:
+                unit(at + k * size + o, z, f'{n}[{k}].{sn}')
+        continue
+    if t == 'struct SortObj' or n.startswith('_pad'):
+        continue                                          # (the sort objects: their view; padding: nothing names it)
     if at in in_view and n not in NAMED:
         continue                                          # (reached by address only: the view's layout)
     for k in range(1 if at in in_view else count):
@@ -358,14 +415,7 @@ struct RAM_PACKED SortObj {{
 }};
 _Static_assert(sizeof(struct SortObj) == SCSTRUCT, "SortObj size");
 
-#define tmsize 0x{TMSIZE:X}
-/* a team's struct (team_struct(away)) */
-struct RAM_PACKED Team {{
-{chr(10).join(team_fields)}
-}};
-_Static_assert(sizeof(struct Team) == tmsize, "Team size");
-{chr(10).join(team_asserts)}
-
+{chr(10).join(struct_text)}
 struct RAM_PACKED Ram {{
 {chr(10).join(fields)}
 }};
