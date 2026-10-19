@@ -69,13 +69,6 @@ static inline uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[
 static inline void wr16(uint8_t *p, uint16_t v) { p[0] = (uint8_t)(v >> 8); p[1] = (uint8_t)v; }
 static inline uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]; }
 static inline void wr32(uint8_t *p, uint32_t v) { p[0] = (uint8_t)(v >> 24); p[1] = (uint8_t)(v >> 16); p[2] = (uint8_t)(v >> 8); p[3] = (uint8_t)v; }
-/* a 68k address in ROM or work RAM as a host pointer, and back */
-static inline uint8_t *mem_ptr(uint32_t a) { a &= 0xFFFFFF; return a >= 0xE00000 ? ram_ptr(a) : (uint8_t *)rom_ptr(a); }
-static inline uint32_t mem_addr(const uint8_t *p)
-{
-    if (p >= (const uint8_t *)&g && p < (const uint8_t *)&g + RAM_SIZE) return RAM_BASE + (uint32_t)(p - (const uint8_t *)&g);
-    return (uint32_t)(p - rom_image);
-}
 /* the 68k address of something in work RAM, for pointers the game stores (move.l a2,(x)) */
 #define ram_addr(p) (RAM_BASE + (uint32_t)((const uint8_t *)(p) - (const uint8_t *)&g))
 
@@ -160,8 +153,13 @@ int CopyBackwardRun(struct Unpack *u, uint16_t count, uint8_t dist);        /* d
 int CopyBackwardReverseRun(struct Unpack *u, uint16_t count, uint8_t dist);
 void FlushOutputBuffer(struct Unpack *u);
 void xyVmMap(void);
+/* a String's bytes read one at a time: the code's own (host bytes) or at a 68000 address, the
+ * cartridge's or RAM's */
+struct Text { const uint8_t *host; uint32_t at; };
+static inline uint8_t text_next(struct Text *t) { return t->host ? *t->host++ : m8(t->at++); }
+static inline uint16_t text_word(struct Text *t) { uint16_t hi = text_next(t); return (uint16_t)(hi << 8 | text_next(t)); }
 /* printsmall's registers: a1 = string, d2 = attribute, d3 = bytes left */
-struct PrintState { const uint8_t *p; uint16_t attr; uint16_t count; };
+struct PrintState { struct Text p; uint16_t attr; uint16_t count; };
 void ControlCode_SetMapAndPosition(struct PrintState *st);
 void ControlCode_SetMap(struct PrintState *st);
 void ControlCode_SetAttribute(struct PrintState *st);

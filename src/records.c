@@ -388,10 +388,10 @@ void GetNameLength(void)
 /* records94.asm:PrintNameField. The 12-character name field from a1, '-' past namelength. */
 void PrintNameField(uint32_t name)
 {
-    const uint8_t *src = mem_ptr(name);
+    uint32_t src = name;
     rp s = RAM(ThreeStars);
     w16(s, 0, 0xE);
-    for (int16_t i = 0; i < 0xC; i++) w8(s, 2 + i, i < (int16_t)g.namelength ? src[i] : '-');
+    for (int16_t i = 0; i < 0xC; i++) w8(s, 2 + i, i < (int16_t)g.namelength ? m8(src + i) : '-');
     print(RAM_BASE + RAM_OFF_ThreeStars);
 }
 
@@ -408,13 +408,13 @@ void NameEntryFramer(uint16_t w, uint16_t h)
  * letters. */
 void GetLogName(uint32_t dst)
 {
-    uint8_t *d = mem_ptr(dst);
+    rp d = ram_at(dst);
     uint16_t at = (uint16_t)(g.namelogsel * 0xC);
     g.namelength = 0;
     for (int i = 0; i < 12; i++, at++) {
         uint8_t c = g.namelog[(int16_t)at];
         if (c == 0) { c = '-'; g.namelength--; }
-        *d++ = c;
+        w8_next(&d, c);
         g.namelength++;
     }
 }

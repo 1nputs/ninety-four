@@ -754,10 +754,10 @@ roster:                                                   /* player d1's name in
 append:
     g.PlayerScrollCtr++;
     {
-        const uint8_t *s = mem_ptr(str);
-        d0 = (int16_t)(d0 + rd16(s) - 1);
-        d1 = (uint16_t)(rd16(s) - 2);
-        if (s[1 + (int16_t)d1] == 0) d1--;                /* (not its pad byte) */
+        uint32_t s = str;
+        d0 = (int16_t)(d0 + m16(s) - 1);
+        d1 = (uint16_t)(m16(s) - 2);
+        if (m8(s + 1 + (int16_t)d1) == 0) d1--;           /* (not its pad byte) */
     }
 put:
     if (d0 > 0x1D) ScrollDisplayUp();                     /* not on this line: the next */

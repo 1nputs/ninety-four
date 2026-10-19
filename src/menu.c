@@ -15,7 +15,7 @@ static uint16_t menu_item(void) { return r16(RAM(menuitem), 0); }
 static void set_menu_item(uint16_t v) { w16(RAM(menuitem), 0, v); }
 /* the menu list: a title String, the marker String, then the items (a String and a handler long
  * each; an item whose text word is negative ends the list) */
-static uint32_t skip_string(uint32_t a) { return a + (int16_t)rd16(mem_ptr(a)); }
+static uint32_t skip_string(uint32_t a) { return a + (int16_t)m16(a); }
 
 /* menu94.asm:SetMenuPrintX. printx = the left edge of the menu box: 5 in 32 column mode, else 9. */
 void SetMenuPrintX(void)
@@ -29,7 +29,7 @@ void SetMenuPrintX(void)
  * 'x' is the goalie option: "Manual Goalie" or "Auto Goalie" by the pause pad's goalie mode. */
 uint32_t PrintMenuItem(uint32_t item)
 {
-    if (mem_ptr(item)[2] != 'x') return printsmall(item);
+    if (m8(item + 2) != 'x') return printsmall(item);
     static const uint8_t manual[] = "  Manual Goalie   ", automatic[] = "   Auto Goalie    ";
     uint16_t mode = g.sflags & HI(sfpj) ? g.goaliemode2 : g.goaliemode1;
     const uint8_t *text = mode ? automatic : manual;
@@ -48,7 +48,7 @@ uint16_t UpdateMenuSelection(void)
     int16_t left = sel;
     while (--left != -1) {                               /* dbmi: stop at the last item */
         a = skip_string(a) + 4;
-        if ((int16_t)rd16(mem_ptr(a) + 2) < 0) break;
+        if ((int16_t)m16(a + 2) < 0) break;
     }
     set_menu_item((uint16_t)(menu_item() - (left + 1)));
     int16_t d0 = (int16_t)menu_item();
@@ -76,7 +76,7 @@ uint16_t UpdateMenuSelection(void)
         item = PrintMenuItem(item);
         row++;
         item += 4;
-        last = (int16_t)rd16(mem_ptr(item) + 2) < 0;
+        last = (int16_t)m16(item + 2) < 0;
     } while (!last && rows-- != 0);
     if (!last) {
         SetMenuPrintX();
@@ -123,7 +123,7 @@ int HandleMenuInput(uint16_t *d1)
     uint32_t a = skip_string(skip_string(g.menulist));
     a = skip_string(a);
     for (uint16_t n = menu_item(); n; n--) a = skip_string(a + 4);
-    call68k(rd32(mem_ptr(a)));
+    call68k(m32(a));
     int keep = (g.sflags5 & 2) != 0;
     g.sflags5 &= (uint8_t)~2;
     if (!keep) *d1 = DrawMenuScreen();

@@ -306,7 +306,7 @@ static void run_checkwindow(const Record *r) { checkwindow(); }
 #define R16(reg) ((uint16_t)r->regs_in[reg])
 static uint16_t stack_word(const Record *r, int off) { const uint8_t *sp = r->ram_in + ((r->regs_in[R_A7] + off) & 0xFFFF); return (uint16_t)(sp[0] << 8 | sp[1]); }
 static uint32_t ret_addr(const Record *r) { const uint8_t *sp = r->ram_in + (r->regs_in[R_A7] & 0xFFFF); return be32(sp); }
-static const uint8_t *inline_string(const Record *r) { return mem_ptr(ret_addr(r)); }
+static const uint8_t *inline_string(const Record *r) { return rom_ptr(ret_addr(r)); }   /* (the code after the call: the cartridge) */
 static void run_randomd0s(const Record *r) { expect_reg16(r, R_D0, randomd0s(R16(R_D0)), "d0"); }
 static void run_sroot(const Record *r) { expect_reg16(r, R_D0, sroot(r->regs_in[R_D0]), "d0"); }
 static void run_sfx(const Record *r) { sfx((int16_t)stack_word(r, 4)); }
@@ -361,8 +361,8 @@ static void run_printsmall(const Record *r) { expect_reg16(r, R_A1, printsmall(r
 static void run_print(const Record *r) { expect_reg16(r, R_A1, print(r->regs_in[R_A1]), "a1"); }
 static void run_printbig(const Record *r) { printbig(r->regs_in[R_A1]); }
 static void run_appstring(const Record *r) { appstring(r->regs_in[R_A1], r->regs_in[R_A3]); }
-#define CC(name) static void run_##name(const Record *r) { struct PrintState st = { mem_ptr(r->regs_in[R_A1]), R16(R_D2), R16(R_D3) }; name(&st); \
-    expect_reg16(r, R_A1, (uint16_t)mem_addr(st.p), "a1"); expect_reg16(r, R_D2, st.attr, "d2"); expect_reg16(r, R_D3, st.count, "d3"); }
+#define CC(name) static void run_##name(const Record *r) { struct PrintState st = { { NULL, r->regs_in[R_A1] }, R16(R_D2), R16(R_D3) }; name(&st); \
+    expect_reg16(r, R_A1, (uint16_t)st.p.at, "a1"); expect_reg16(r, R_D2, st.attr, "d2"); expect_reg16(r, R_D3, st.count, "d3"); }
 CC(ControlCode_SetMapAndPosition) CC(ControlCode_SetMap) CC(ControlCode_SetAttribute) CC(ControlCode_SetX) CC(ControlCode_SetY)
 CC(ControlCode_AddX) CC(ControlCode_AddY) CC(ControlCode_SetFont)
 static void run_FormatAndPrintTime(const Record *r) { FormatAndPrintTime(R16(R_D0)); }
@@ -797,7 +797,7 @@ static void run_PrintRecordTitles(const Record *r) { PrintRecordTitles(); }
 static void run_PrintWinRecords(const Record *r) { PrintWinRecords(); }
 static void run_ClearRecordArea(const Record *r) { ClearRecordArea(R16(R_D2)); }
 static void run_PrintPlayerRecords(const Record *r) { PrintPlayerRecords(); }
-static void run_PrintRecordName(const Record *r) { PrintRecordName(R16(R_D7), *mem_ptr(A(R_A0) - 1)); }
+static void run_PrintRecordName(const Record *r) { PrintRecordName(R16(R_D7), m8(A(R_A0) - 1)); }
 static void run_CalcWinPercents(const Record *r) { CalcWinPercents(); }
 static void run_ReadTeamRecords(const Record *r) { ReadTeamRecords(); }
 static void run_ShootoutShooters(const Record *r) { ShootoutShooters(TEAM(R_A2)); }

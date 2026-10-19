@@ -365,8 +365,8 @@ struct Picture { uint32_t pal, map, tiles; uint16_t w, h; };
 static struct Picture picture(uint32_t img)
 {
     struct Picture p = { img + rd32(rom_ptr(img)), img + rd32(rom_ptr(img + 4)), img + 8, 0, 0 };
-    p.w = rd16(mem_ptr(p.map));
-    p.h = rd16(mem_ptr(p.map) + 2);
+    p.w = m16(p.map);
+    p.h = m16(p.map + 2);
     return p;
 }
 
@@ -498,10 +498,10 @@ uint32_t CreditsPrintRow(uint32_t a1)
     eraser(0x20, 6, 0x7FF);
     g.printy = row;
     do {
-        g.printx = (uint16_t)(0x11 - ((int16_t)rd16(mem_ptr(a1)) >> 1));
+        g.printx = (uint16_t)(0x11 - ((int16_t)m16(a1) >> 1));
         a1 = print(a1);
         g.printy = (g.printy + 1) & 0x1F;
-    } while ((int16_t)rd16(mem_ptr(a1 + 2)) >= 0);
+    } while ((int16_t)m16(a1 + 2) >= 0);
     return a1;
 }
 
@@ -582,15 +582,15 @@ void CreditsScrollStep(void)
  * each) to 4-bit tiles at picturebuf (the count first), each pixel + 5. */
 void UnpackPicture(uint32_t pic)
 {
-    const uint8_t *in = mem_ptr(pic);
+    uint32_t in = pic;
     rp out = RAM(picturebuf);
-    uint16_t n = rd16(in);
+    uint16_t n = m16(in);
     in += 2;
     w16(out, 0, n);
     out = rp_add(out, 2);
     uint16_t rows = (uint16_t)((uint16_t)(n << 3) - 1);
     do {
-        uint32_t b = (uint32_t)in[0] << 24 | in[1] << 16 | in[2] << 8, v = 0;
+        uint32_t b = (uint32_t)m8(in) << 24 | m8(in + 1) << 16 | m8(in + 2) << 8, v = 0;
         in += 3;
         g.picturebits = b;
         for (int px = 0; px < 8; px++)                    /* pixel px: bits 31-3px .. 29-3px to nibble 7-px */

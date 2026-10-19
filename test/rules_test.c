@@ -165,14 +165,14 @@ static void stats_list(void)
     CHECK(GetStatColumn(0, 5, tm, 0) == 0 && GetStatColumn(0, 6, tm, 0) == 0);   /* (goalies: none) */
     g.DispAttribCtr = 5;
     DrawStatsList(tm, 0);
-    const uint8_t *order = ram_ptr(RAM_BASE + RAM_OFF_Satt);
+    rp order = RAM(Satt);
     int listed = 0, sorted = 1;
-    for (int i = 0; i < 32 && !(order[i] & 0x80); i++) {
+    for (int i = 0; i < 32 && !(r8(order, i) & 0x80); i++) {
         listed++;
-        if (i && (int16_t)GetStatColumn(order[i], 5, tm, 0) > (int16_t)GetStatColumn(order[i - 1], 5, tm, 0)) sorted = 0;
+        if (i && (int16_t)GetStatColumn(r8(order, i), 5, tm, 0) > (int16_t)GetStatColumn(r8(order, i - 1), 5, tm, 0)) sorted = 0;
     }
     printf("  stats list: %d of %d players by plus/minus, the first %+d, the last %+d\n", listed, players,
-           (int16_t)GetStatColumn(order[0], 5, tm, 0), (int16_t)GetStatColumn(order[listed - 1], 5, tm, 0));
+           (int16_t)GetStatColumn(r8(order, 0), 5, tm, 0), (int16_t)GetStatColumn(r8(order, listed - 1), 5, tm, 0));
     CHECK(listed == players && sorted);
     classic_rules();
 }

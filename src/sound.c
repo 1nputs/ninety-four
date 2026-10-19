@@ -117,7 +117,7 @@ void play_sfx_or_music_track(uint16_t n)
     uint32_t stream = rd32(rom_ptr(SYM_SoundStreamTable + (uint16_t)(n << 2)));
     w32(slot, 0, stream);
     w16(slot, 4, 0);
-    w8(slot, 5, *mem_ptr(stream));                       /* the first delay */
+    w8(slot, 5, m8(stream));                             /* the first delay */
     rp v = rp_add(VOICES, (uint16_t)(track << 3));
     for (int i = 0; i < 8; i++, v = rp_add(v, 0x40)) {
         w16(v, 0, 0);
@@ -293,15 +293,15 @@ void ProcessOneMusicTrack(rp slot, uint16_t track)
             if ((int16_t)r16(slot, 0) < 0) { rtsfx(); return; }
             ev = r32(slot, 0);
             w32(slot, 0, ev + 4);
-            const uint8_t *e = mem_ptr(ev);
+            uint32_t e = ev;
             w16(slot, 4, 0);
-            w8(slot, 5, e[4]);
-            if (e[1] != 0) break;
+            w8(slot, 5, m8(e + 4));
+            if (m8(e + 1) != 0) break;
             w8(slot, 0, 0xFF);                           /* end of the stream */
-            if ((int16_t)rd16(e + 2) < 0) { rtsfx(); return; }
-            w32(slot, 0, rd32(e + 2));                   /* loop */
+            if ((int16_t)m16(e + 2) < 0) { rtsfx(); return; }
+            w32(slot, 0, m32(e + 2));                    /* loop */
         }
-        command_jump_table[(mem_ptr(ev)[1] & 0x70) >> 4](ev, track);
+        command_jump_table[(m8(ev + 1) & 0x70) >> 4](ev, track);
     }
 }
 
@@ -309,8 +309,8 @@ void ProcessOneMusicTrack(rp slot, uint16_t track)
  * track: the first channel struct playing that key and note that is on. */
 void handle_command_00(uint32_t ev, uint16_t track)
 {
-    const uint8_t *e = mem_ptr(ev);
-    uint16_t key = (uint16_t)(voice_key(e[1], track) << 8 | e[2]);
+    uint32_t e = ev;
+    uint16_t key = (uint16_t)(voice_key(m8(e + 1), track) << 8 | m8(e + 2));
     rp ch = SLOTS;
     int16_t n = 5;
     for (;;) {
@@ -351,10 +351,10 @@ void StopPCMChannel(void)
  * struct 0, though it set the patch of the oldest: kept.) */
 void handle_command_10(uint32_t ev, uint16_t track)
 {
-    const uint8_t *e = mem_ptr(ev);
-    if (e[3] == 0) { handle_command_00(ev, track); return; }
+    uint32_t e = ev;
+    if (m8(e + 3) == 0) { handle_command_00(ev, track); return; }
     rp ch = CHAN6, voices = VOICES;
-    uint16_t key = voice_key(e[1], track);
+    uint16_t key = voice_key(m8(e + 1), track);
     uint8_t patch = r8(voices, (uint16_t)(key << 3) + 3);
     if ((int8_t)patch >= 0x60) {                          /* PCM */
         int on = r8(ch, 6) & 1;
@@ -363,8 +363,8 @@ void handle_command_10(uint32_t ev, uint16_t track)
         w8(ch, 3, patch);
         w8(ch, 5, 0);
         w8(ch, 0, (uint8_t)key);
-        w8(ch, 1, e[2]);
-        w8(ch, 2, e[3]);
+        w8(ch, 1, m8(e + 2));
+        w8(ch, 2, m8(e + 3));
         const uint8_t *t = rom_ptr(SYM_pcm_sample_table + (uint16_t)(((int8_t)patch - 0x60) << 3));
         uint32_t start = rd32(t), end = rd32(t + 4);
         take_bus();
@@ -408,8 +408,8 @@ void handle_command_10(uint32_t ev, uint16_t track)
     w8(ch, 5, 0);                                         /* .keyon */
     w8(ch, 6, (uint8_t)(r8(ch, 6) | 1));
     w8(ch, 0, (uint8_t)key);
-    w8(ch, 1, e[2]);
-    w8(ch, 2, e[3]);
+    w8(ch, 1, m8(e + 2));
+    w8(ch, 2, m8(e + 3));
     bset(CMD(0), r8(ch, 4));
     bset(CMD(1), r8(ch, 4));
     SetChannelVolume(ch, voices);
@@ -474,17 +474,17 @@ void SetChannelVolume(rp ch, rp voices)
 /* sound94.asm:handle_command_40. Event $4x: the patch of the key (voice table +3) = +2. */
 void handle_command_40(uint32_t ev, uint16_t track)
 {
-    const uint8_t *e = mem_ptr(ev);
-    w8(VOICES, (uint16_t)(voice_key(e[1], track) << 3) + 3, e[2]);
+    uint32_t e = ev;
+    w8(VOICES, (uint16_t)(voice_key(m8(e + 1), track) << 3) + 3, m8(e + 2));
 }
 
 /* sound94.asm:handle_command_60. Event $6x: the pitch bend of the key = word +2 - $2000, and a
  * new frequency for every channel playing that key. */
 void handle_command_60(uint32_t ev, uint16_t track)
 {
-    const uint8_t *e = mem_ptr(ev);
-    uint16_t key = voice_key(e[1], track);
-    w16(VOICES, (uint16_t)(key << 3), (uint16_t)(rd16(e + 2) - 0x2000));
+    uint32_t e = ev;
+    uint16_t key = voice_key(m8(e + 1), track);
+    w16(VOICES, (uint16_t)(key << 3), (uint16_t)(m16(e + 2) - 0x2000));
     rp ch = CHAN0;
     for (int i = 0; i < 6; i++, ch = rp_add(ch, 8))
         if (r8(ch, 0) == (uint8_t)key) UpdateChannelFrequencyAndVolume(ch, VOICES);
@@ -494,10 +494,10 @@ void handle_command_60(uint32_t ev, uint16_t track)
  * the voice volume (voice table +5) and a new volume for every channel playing that key. */
 void handle_command_30(uint32_t ev, uint16_t track)
 {
-    const uint8_t *e = mem_ptr(ev);
-    if (e[2] != 7) return;
-    uint16_t key = voice_key(e[1], track);
-    w8(VOICES, (uint16_t)(key << 3) + 5, e[3]);
+    uint32_t e = ev;
+    if (m8(e + 2) != 7) return;
+    uint16_t key = voice_key(m8(e + 1), track);
+    w8(VOICES, (uint16_t)(key << 3) + 5, m8(e + 3));
     rp ch = CHAN0;
     for (int i = 0; i < 6; i++, ch = rp_add(ch, 8))
         if (r8(ch, 0) == (uint8_t)key) SetChannelVolume(ch, VOICES);

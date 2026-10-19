@@ -315,7 +315,7 @@ void PrintShooterBox(rp tm)
     printsmallz(str_PrintShooterBox_2, sizeof str_PrintShooterBox_2);
     uint16_t p = r16(shooters(tm), (int16_t)(uint16_t)(g.TestList[0] << 1));
     uint32_t a1 = getname(p, tm);
-    g.printx -= (uint16_t)(rd16(mem_ptr(a1)) >> 1);
+    g.printx -= (uint16_t)(m16(a1) >> 1);
     printsmall(a1);
     g.printfontset = 0;
 }

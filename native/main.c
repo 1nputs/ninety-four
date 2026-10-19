@@ -168,7 +168,7 @@ static void load_snapshot(mdrt *m)
 
 /* ---- the session ------------------------------------------------------------------------------ */
 
-static uint8_t read68k(void *user, uint32_t addr) { (void)user; return *mem_ptr(addr); }
+static uint8_t read68k(void *user, uint32_t addr) { (void)user; return m8(addr); }
 
 /* the ROM in the window: pulseman's menu asks whether a file will do, then hands it over */
 #define ROM_CRC32 0x9438F5DDu                             /* "NHL 94 (UE) [!].gen" (SHA-1 7b1489ab...) */

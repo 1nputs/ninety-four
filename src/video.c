@@ -4,7 +4,7 @@
  *
  * Every VDP access goes through the HAL (hal.h), one call per 68k port access, in the order the
  * 68k made them. Source addresses (DMA sources, strings, graphics) are 68k addresses: ROM or
- * work RAM, read through mem_ptr(). */
+ * work RAM, read through m8() and its kin. */
 #include "game.h"
 #include "hal.h"
 #include "rom.h"
@@ -18,11 +18,11 @@ static uint32_t vram_write_cmd(uint16_t a) { return (uint32_t)(0x4000 | (a & 0x3
  * nibble first) into words at nibblebuffer. */
 void UnpackNibbles(uint32_t src, uint16_t count)
 {
-    const uint8_t *p = mem_ptr(src);
+    uint32_t p = src;
     rp out = RAM(nibblebuffer);
     int lo = 0;
     while (count--) {
-        uint8_t b = *p;
+        uint8_t b = m8(p);
         if (lo) p++; else b >>= 4;
         lo ^= 1;
         w16(out, 0, b & 0xF); out = rp_add(out, 2);
@@ -50,13 +50,13 @@ void remap(uint32_t src, uint32_t table, uint16_t words, uint16_t vram)
 {
     uint16_t saved = g.disflags;
     g.disflags |= HI(dfng);
-    const uint8_t *p = mem_ptr(src), *tab = mem_ptr(table);
+    uint32_t p = src, tab = table;
     Vmaddr(vram);
     do {
-        uint16_t in = rd16(p), out = 0;
+        uint16_t in = m16(p), out = 0;
         p += 2;
         for (int i = 0; i < 4; i++) {
-            uint8_t c = tab[(in & 0xF) >> 1];
+            uint8_t c = m8(tab + ((in & 0xF) >> 1));
             if (!(in & 1)) c >>= 4;
             out = (uint16_t)(out | (c & 0xF));
             out = (uint16_t)(out >> 4 | out << 12);   /* ror.w #4 */
@@ -416,7 +416,7 @@ static void dma_68k(uint32_t src, uint16_t words, uint16_t vram)
     z80_busreq(0);
     if ((int32_t)src < 0) {
         vdp_ctrl(vram_write_cmd(vram));
-        vdp_data(rd16(mem_ptr(src)));
+        vdp_data(m16(src));
     }
     cpu_set_sr(sr);
 }
@@ -539,16 +539,16 @@ uint16_t dobitmap(uint32_t pal, uint32_t map, uint32_t tiles, uint16_t x, uint16
     g.disflags |= HI(dfng);
     rp dst = RAM(palfadenew);
     for (; palbits; palbits >>= 1, pal += 0x20, dst = rp_add(dst, 0x20))
-        if (palbits & 1) for (int i = 0x1F; i >= 0; i--) w8(dst, i, mem_ptr(pal)[i]);
+        if (palbits & 1) for (int i = 0x1F; i >= 0; i--) w8(dst, i, m8(pal + i));
     uint16_t attr = g.printa & 0xF800;
-    const uint8_t *m = mem_ptr(map);
+    uint32_t m = map;
     uint16_t row = y, rows = h;
     do {
         xyVmMap();
-        uint16_t off = (uint16_t)(((uint16_t)(row * rd16(m)) + x) << 1);
+        uint16_t off = (uint16_t)(((uint16_t)(row * m16(m)) + x) << 1);
         uint16_t cols = w;
         do {
-            vdp_data((uint16_t)((rd16(m + 4 + (int16_t)off) + start) ^ attr));
+            vdp_data((uint16_t)((m16(m + 4 + (int16_t)off) + start) ^ attr));
             off += 2;
         } while (--cols != 0);
         g.printy++;
@@ -581,7 +581,7 @@ uint16_t DecompressGraphicsPlain(uint32_t tiles, uint16_t start)
 uint16_t DecompressGraphics(uint32_t tiles, uint16_t start)
 {
     uint16_t vram = (uint16_t)(start << 5);
-    uint16_t n = rd16(mem_ptr(tiles));
+    uint16_t n = m16(tiles);
     uint32_t data = tiles + 2;
     if (n == 0) return start;
     if (n & 0x8000) {
@@ -614,7 +614,7 @@ void DecompressBytecode(uint32_t src, uint16_t vram)
     };
     struct Unpack u = { src, 0, vram };
     for (;;) {
-        uint8_t op = *mem_ptr(u.src++);
+        uint8_t op = m8(u.src++);
         if (jump_table[op >> 4](&u)) return;
     }
 }
@@ -625,8 +625,8 @@ static void ring_put(struct Unpack *u, uint8_t b)
     w8(ring(u->idx), 0, b);
     if (++u->idx == 0) FlushOutputBuffer(u);
 }
-static uint8_t op_byte(const struct Unpack *u) { return mem_ptr(u->src)[-1]; }   /* -1(a0) */
-static uint8_t next_byte(struct Unpack *u) { return *mem_ptr(u->src++); }        /* (a0)+ */
+static uint8_t op_byte(const struct Unpack *u) { return m8(u->src - 1); }        /* -1(a0) */
+static uint8_t next_byte(struct Unpack *u) { return m8(u->src++); }              /* (a0)+ */
 
 /* video94.asm:Opcode_CopyLiteral. Opcodes 0-1: copy (low 5 bits)+1 bytes from the data. */
 int Opcode_CopyLiteral(struct Unpack *u)
@@ -685,7 +685,7 @@ int Opcode_CopyBackwardMedium(struct Unpack *u)
  * distance = the next byte's low 7 bits + 1 */
 static uint16_t long_count(const struct Unpack *u)
 {
-    uint8_t next = *mem_ptr(u->src);
+    uint8_t next = m8(u->src);
     return (uint16_t)((((op_byte(u) << 1) | (next >> 7)) & 0x1F) + 2);
 }
 
@@ -699,7 +699,7 @@ int Opcode_CopyBackwardLong(struct Unpack *u)
 /* video94.asm:Opcode_CopyBackwardExtended1. Opcode A: 6-bit count, 6-bit distance. */
 int Opcode_CopyBackwardExtended1(struct Unpack *u)
 {
-    uint16_t w = (uint16_t)(op_byte(u) << 8 | *mem_ptr(u->src));
+    uint16_t w = (uint16_t)(op_byte(u) << 8 | m8(u->src));
     uint16_t count = (uint16_t)(((w >> 6) & 0x3F) + 2);
     return CopyBackwardRun(u, count, (uint8_t)((next_byte(u) & 0x3F) + 1));
 }
@@ -707,7 +707,7 @@ int Opcode_CopyBackwardExtended1(struct Unpack *u)
 /* video94.asm:Opcode_CopyBackwardExtended2. Opcode B: 7-bit count, 5-bit distance. */
 int Opcode_CopyBackwardExtended2(struct Unpack *u)
 {
-    uint16_t w = (uint16_t)(op_byte(u) << 8 | *mem_ptr(u->src));
+    uint16_t w = (uint16_t)(op_byte(u) << 8 | m8(u->src));
     uint16_t count = (uint16_t)(((w >> 5) & 0x7F) + 2);
     return CopyBackwardRun(u, count, (uint8_t)((next_byte(u) & 0x1F) + 1));
 }
@@ -825,7 +825,7 @@ static uint16_t font_char(uint8_t c)
 /* video94.asm:printsmall. Print a String with control codes (negative bytes,
  * ControlCodeJumpTable) at printx/printy/printm with printa; the char set is printfontset
  * (smallfontchars, or setupfontchars when sflags6 bit 3). -> a1 = past the string. */
-static const uint8_t *printsmall_p(const uint8_t *s)
+static struct Text printsmall_p(struct Text s)
 {
     static void (*const codes[9])(struct PrintState *) = {
         NULL, ControlCode_SetMap, ControlCode_SetAttribute, ControlCode_SetX, ControlCode_SetY,
@@ -835,9 +835,10 @@ static const uint8_t *printsmall_p(const uint8_t *s)
     g.disflags |= HI(dfng);
     uint16_t chars = g.sflags6 & HI(3) ? RAM_OFF_setupfontchars : RAM_OFF_smallfontchars;
     xyVmMap();
-    struct PrintState st = { s + 2, g.printa, (uint16_t)(rd16(s) - 2) };
+    uint16_t len = text_word(&s);
+    struct PrintState st = { s, g.printa, (uint16_t)(len - 2) };
     while (st.count-- != 0) {
-        int8_t c = (int8_t)*st.p++;
+        int8_t c = (int8_t)text_next(&st.p);
         if (c <= 0) {
             if (codes[-c]) codes[-c](&st);
             continue;
@@ -853,10 +854,13 @@ static const uint8_t *printsmall_p(const uint8_t *s)
     return st.p;
 }
 
-uint32_t printsmall(uint32_t str) { return mem_addr(printsmall_p(mem_ptr(str))); }
+/* the address past a String as the game holds it: RAM's from $FFFF0000, the cartridge's 24 bits */
+static uint32_t past(struct Text t) { uint32_t a = t.at & 0xFFFFFF; return is_ram(a) ? RAM_BASE + (a & 0xFFFF) : a; }
+
+uint32_t printsmall(uint32_t str) { return past(printsmall_p((struct Text){ NULL, str })); }
 
 /* video94.asm:printsmallz. printsmall of the String that follows the call. */
-void printsmallz(const uint8_t *s, unsigned n) { (void)n; printsmall_p(s); }
+void printsmallz(const uint8_t *s, unsigned n) { (void)n; printsmall_p((struct Text){ s, 0 }); }
 
 /* video94.asm:ControlCode_SetMapAndPosition. Code -8: attribute, map, x, y. */
 void ControlCode_SetMapAndPosition(struct PrintState *st)
@@ -870,7 +874,7 @@ void ControlCode_SetMapAndPosition(struct PrintState *st)
 /* video94.asm:ControlCode_SetMap. Code -1: the next byte is the map (1-3) -> printm. */
 void ControlCode_SetMap(struct PrintState *st)
 {
-    uint8_t m = *st->p++;
+    uint8_t m = text_next(&st->p);
     st->count--;
     g.printm = (uint16_t)(((m & 3) << 2) - 4);
     xyVmMap();
@@ -879,43 +883,42 @@ void ControlCode_SetMap(struct PrintState *st)
 /* video94.asm:ControlCode_SetAttribute. Code -2: the next byte is palette / priority -> printa. */
 void ControlCode_SetAttribute(struct PrintState *st)
 {
-    st->attr = (uint16_t)((*st->p++ & 7) << 13);
+    st->attr = (uint16_t)((text_next(&st->p) & 7) << 13);
     st->count--;
     g.printa = st->attr;
 }
 
 /* video94.asm:ControlCode_SetX. Code -3: printx = the next byte. */
-void ControlCode_SetX(struct PrintState *st) { g.printx = *st->p++; st->count--; xyVmMap(); }
+void ControlCode_SetX(struct PrintState *st) { g.printx = text_next(&st->p); st->count--; xyVmMap(); }
 /* video94.asm:ControlCode_SetY. Code -4: printy = the next byte. */
-void ControlCode_SetY(struct PrintState *st) { g.printy = *st->p++; st->count--; xyVmMap(); }
+void ControlCode_SetY(struct PrintState *st) { g.printy = text_next(&st->p); st->count--; xyVmMap(); }
 /* video94.asm:ControlCode_AddX. Code -5: printx += the next (signed) byte. */
-void ControlCode_AddX(struct PrintState *st) { g.printx = (uint16_t)(g.printx + (int8_t)*st->p++); st->count--; xyVmMap(); }
+void ControlCode_AddX(struct PrintState *st) { g.printx = (uint16_t)(g.printx + (int8_t)text_next(&st->p)); st->count--; xyVmMap(); }
 /* video94.asm:ControlCode_AddY. Code -6: printy += the next (signed) byte. */
-void ControlCode_AddY(struct PrintState *st) { g.printy = (uint16_t)(g.printy + (int8_t)*st->p++); st->count--; xyVmMap(); }
+void ControlCode_AddY(struct PrintState *st) { g.printy = (uint16_t)(g.printy + (int8_t)text_next(&st->p)); st->count--; xyVmMap(); }
 /* video94.asm:ControlCode_SetFont. Code -7: printfontset = the next byte (char set index). */
-void ControlCode_SetFont(struct PrintState *st) { g.printfontset = (uint16_t)(*st->p++ << 1); st->count--; }
+void ControlCode_SetFont(struct PrintState *st) { g.printfontset = (uint16_t)(text_next(&st->p) << 1); st->count--; }
 
 /* video94.asm:print. Print a String at printx/printy/printm with printa. A negative byte -$ab
  * starts a new position: map a, palette / priority b, then x and y bytes; $40 is a blank tile,
  * $5E skips a column, 0 is padding. -> a1 = past the string. */
-static const uint8_t *print_p(const uint8_t *s)
+static struct Text print_p(struct Text s)
 {
     uint16_t saved = g.disflags;
     g.disflags |= HI(dfng);
     xyVmMap();
     uint16_t attr = g.printa;
-    uint16_t n = (uint16_t)(rd16(s) - 2);
-    s += 2;
+    uint16_t n = (uint16_t)(text_word(&s) - 2);
     while (n-- != 0) {
-        int8_t c = (int8_t)*s++;
+        int8_t c = (int8_t)text_next(&s);
         if (c == 0) continue;
         if (c < 0) {
             uint16_t code = (uint16_t)-c;
             attr = (uint16_t)((code << 9) & 0xF800);
             g.printa = attr;
             g.printm = (uint16_t)(((code & 3) << 2) - 4);
-            g.printx = (uint16_t)(int8_t)*s++;
-            g.printy = (uint16_t)(int8_t)*s++;
+            g.printx = (uint16_t)(int8_t)text_next(&s);
+            g.printy = (uint16_t)(int8_t)text_next(&s);
             xyVmMap();
             n -= 2;
             continue;
@@ -931,10 +934,10 @@ static const uint8_t *print_p(const uint8_t *s)
     return s;
 }
 
-uint32_t print(uint32_t str) { return mem_addr(print_p(mem_ptr(str))); }
+uint32_t print(uint32_t str) { return past(print_p((struct Text){ NULL, str })); }
 
 /* video94.asm:printz. print the String that follows the call. */
-void printz(const uint8_t *s, unsigned n) { (void)n; print_p(s); }
+void printz(const uint8_t *s, unsigned n) { (void)n; print_p((struct Text){ s, 0 }); }
 
 /* video94.asm:FormatAndPrintTime. d0 = period (bits 14-15) and seconds (bits 0-13): print the
  * period label (" 1", " 2", " 3", "OT"), two columns on, the time as m:ss. */
@@ -1009,18 +1012,17 @@ uint32_t PushNumberWidth(uint16_t n, uint16_t width)
 
 /* video94.asm:appstring. a1 = String, a3 = String in RAM: append the first to the second (the
  * text of a3 ends at its first zero byte after the first character). */
-static void appstring_p(const uint8_t *src, uint32_t buf)
+static void appstring_p(struct Text src, uint32_t buf)
 {
     rp dst = ram_at(buf), a0 = rp_add(dst, 2);
     int16_t n = (int16_t)(r16(dst, 0) - 3);
     if (n >= 0) {
         do a0 = rp_add(a0, 1); while (r8(a0, 0) != 0 && n-- != 0);
     }
-    n = (int16_t)(rd16(src) - 3);
-    src += 2;
+    n = (int16_t)(text_word(&src) - 3);
     if (n < 0) return;
     do {
-        uint8_t b = *src++;
+        uint8_t b = text_next(&src);
         w8_next(&a0, b);
         if (b == 0) a0 = rp_add(a0, -1);
     } while (n-- != 0);
@@ -1028,31 +1030,30 @@ static void appstring_p(const uint8_t *src, uint32_t buf)
     w16(dst, 0, (uint16_t)(rp_diff(a0, dst)));
 }
 
-void appstring(uint32_t src, uint32_t buf) { appstring_p(mem_ptr(src), buf); }
+void appstring(uint32_t src, uint32_t buf) { appstring_p((struct Text){ NULL, src }, buf); }
 
 /* video94.asm:appendz. appstring of the String that follows the call onto a3. */
-void appendz(const uint8_t *s, unsigned n, uint32_t buf) { (void)n; appstring_p(s, buf); }
+void appendz(const uint8_t *s, unsigned n, uint32_t buf) { (void)n; appstring_p((struct Text){ s, 0 }, buf); }
 
 /* video94.asm:printbig. Print a String in the big font (two rows high, chars one or two
  * columns wide) at printx/printy; a negative byte starts a new position as in print. printx /
  * printy end past the text. */
-static const uint8_t *printbig_p(const uint8_t *s)
+static struct Text printbig_p(struct Text s)
 {
     uint16_t saved = g.disflags;
     g.disflags |= HI(dfng);
     struct BigPen pen = { g.printx, g.printy, (uint16_t)(g.printa + g.BigFontChars) };
-    uint16_t n = (uint16_t)(rd16(s) - 2);
-    s += 2;
+    uint16_t n = (uint16_t)(text_word(&s) - 2);
     while (n-- != 0) {
-        int8_t c = (int8_t)*s++;
+        int8_t c = (int8_t)text_next(&s);
         if (c == 0) continue;
         if (c < 0) {
             uint16_t code = (uint16_t)-c;
             g.printa = (uint16_t)((code << 9) & 0xF800);
             pen.attr = (uint16_t)(g.printa + g.BigFontChars);
             g.printm = (uint16_t)(((code & 3) << 2) - 4);
-            g.printx = pen.x = (uint16_t)(int8_t)*s++;
-            g.printy = pen.y = (uint16_t)(int8_t)*s++;
+            g.printx = pen.x = (uint16_t)(int8_t)text_next(&s);
+            g.printy = pen.y = (uint16_t)(int8_t)text_next(&s);
             n -= 2;
             continue;
         }
@@ -1065,10 +1066,10 @@ static const uint8_t *printbig_p(const uint8_t *s)
     return s;
 }
 
-void printbig(uint32_t str) { printbig_p(mem_ptr(str)); }
+void printbig(uint32_t str) { printbig_p((struct Text){ NULL, str }); }
 
 /* video94.asm:printbigz. printbig of the String that follows the call. */
-void printbigz(const uint8_t *s, unsigned n) { (void)n; printbig_p(s); }
+void printbigz(const uint8_t *s, unsigned n) { (void)n; printbig_p((struct Text){ s, 0 }); }
 
 /* video94.asm:PrintBigChar. d0 = ASCII: put its big font tiles (bfasciicon: map column, negative
  * for a one-column char) at d4/d5, top and bottom, and advance d4. */

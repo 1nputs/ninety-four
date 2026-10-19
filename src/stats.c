@@ -691,7 +691,7 @@ void DrawLineIcons(rp tm)
     Framer(0x18, 3);
     printsmallz(str_DrawLineIcons_2, sizeof str_DrawLineIcons_2);
     uint32_t name = getname(le_player, tm);
-    g.printx -= (uint16_t)(rd16(mem_ptr(name)) >> 1);
+    g.printx -= (uint16_t)(m16(name) >> 1);
     g.printa = le_attr;
     printsmall(name);
     g.printfontset = 0;
