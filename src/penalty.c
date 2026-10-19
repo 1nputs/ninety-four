@@ -1177,15 +1177,15 @@ uint32_t AdvanceStringPtr(uint32_t list, uint16_t n)
  * a highlight game uses it */
 static void hl_save(void)
 {
-    uint8_t *ram = (uint8_t *)&g;
-    memcpy(ram, ram + RAM_OFF_gmode, 2 * GS_SAVE_WORDS);
-    wr16(ram + 2 * GS_SAVE_WORDS, g.ScoreSumbytes);
+    rp ram = ram_at(RAM_BASE);
+    ram_copy(ram, RAM(gmode), 2 * GS_SAVE_WORDS);
+    w16(ram, 2 * GS_SAVE_WORDS, g.ScoreSumbytes);
 }
 static void hl_restore(void)
 {
-    uint8_t *ram = (uint8_t *)&g;
-    memcpy(ram + RAM_OFF_gmode, ram, 2 * GS_SAVE_WORDS);
-    g.ScoreSumbytes = rd16(ram + 2 * GS_SAVE_WORDS);
+    rp ram = ram_at(RAM_BASE);
+    ram_copy(RAM(gmode), ram, 2 * GS_SAVE_WORDS);
+    g.ScoreSumbytes = r16(ram, 2 * GS_SAVE_WORDS);
 }
 
 /* StartHL2's .ranres: settle highlight game a0 at random when tied, and mark it final */

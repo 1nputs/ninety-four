@@ -143,7 +143,7 @@ uint16_t defaultsprites(uint16_t chars)
     rp a3 = RAM(sso);
     const uint16_t *t = listsso;
     for (int i = 0; i < 4; i++, a3 = rp_add(a3, 0x14)) {
-        struct SortObj *o = (struct SortObj *)ptr_of(a3);
+        struct SortObj *o = obj_at(a3);
         o->oldframe = 0xFFFF;                             /* not locked to the rink scroll */
         o->Xpos = (int16_t)*t++;
         o->Xfrac = *t++;
@@ -155,7 +155,7 @@ uint16_t defaultsprites(uint16_t chars)
     a3 = RAM(pads);
     t = listffo;
     for (int i = 0; i < 7; i++, a3 = rp_add(a3, 0x1C)) {
-        struct SortObj *o = (struct SortObj *)ptr_of(a3);
+        struct SortObj *o = obj_at(a3);
         ST_W(o->oldframe);                                /* tied to the rink scroll */
         o->Xpos = (int16_t)*t++;
         o->Ypos = (int16_t)*t++;
@@ -177,7 +177,7 @@ uint16_t defaultsprites2(uint16_t chars)
     const uint16_t *t = dslist;
     for (uint16_t n = 0; n < 0x10; n++) {
         struct SortObj *o = sortobj(n);
-        memset(o, 0, 0x80);
+        memset(o, 0, sizeof *o);
         o->SCnum = (int16_t)n;
         ST_W(o->oldframe);
         o->pnum = 0xFF;
@@ -322,7 +322,7 @@ void setupice(void)
     ST_W(g.c2playernum);
     struct Vid v = { RAM(DMAList), RAM(Satt), 1 };
     rp a3 = RAM(pads);
-    for (int i = 0; i < 6; i++, a3 = rp_add(a3, 0x1C)) addframe2(0, 0, (struct SortObj *)ptr_of(a3), &v);   /* pads, logo, gloves */
+    for (int i = 0; i < 6; i++, a3 = rp_add(a3, 0x1C)) addframe2(0, 0, obj_at(a3), &v);   /* pads, logo, gloves */
     g.DMAlistend = rp_addr(v.dma);
     DoDMAList();
     g.disflags = saved;
@@ -418,7 +418,7 @@ void setupice_highlight(void)
     setupEASNmap();
     struct Vid v = { RAM(DMAList), RAM(Satt), 1 };
     rp a3 = RAM(pads);
-    for (int i = 0; i < 6; i++, a3 = rp_add(a3, 0x1C)) addframe2(0, 0, (struct SortObj *)ptr_of(a3), &v);
+    for (int i = 0; i < 6; i++, a3 = rp_add(a3, 0x1C)) addframe2(0, 0, obj_at(a3), &v);
     g.DMAlistend = rp_addr(v.dma);
     DoDMAList();
     g.palcount = 0x1C;

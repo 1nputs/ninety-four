@@ -60,7 +60,7 @@ static inline uint8_t m8(uint32_t a) { return is_ram(a) ? r8(ram_at(a), 0) : rom
 static inline uint16_t m16(uint32_t a) { return (uint16_t)(m8(a) << 8 | m8(a + 1)); }
 static inline uint32_t m32(uint32_t a) { return (uint32_t)m16(a) << 16 | m16(a + 2); }
 
-/* (step 1's bridges, while files move to places one by one: a host pointer into g as a place, and
- * back. They go when the last file has moved, which the compiler then proves.) */
-static inline rp rp_of(const void *p) { return (rp){ (uint16_t)((const uint8_t *)p - (const uint8_t *)&g) }; }
-static inline uint8_t *ptr_of(rp p) { return ram_byte_(p, 0); }
+/* a sort object (struct SortObj, read by its named fields) at a place: the sorted objects, and the
+ * regions the original reads as one (the pads, sso's arrows, the camera); and an object's place */
+static inline struct SortObj *obj_at(rp p) { return (struct SortObj *)ram_byte_(p, 0); }
+static inline rp obj_place(const struct SortObj *o) { return (rp){ (uint16_t)((const uint8_t *)o - (const uint8_t *)&g) }; }

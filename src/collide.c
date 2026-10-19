@@ -378,10 +378,10 @@ void FallDown(struct SortObj *a2, struct SortObj *a3)
     uint16_t s = a2->SPA;
     if (s == SPAinjuryfall || s == SPAinjury1 || s == SPAstumble || s == SPAfallfwd || s == SPAfallback || s == SPAflip)
         return;
-    if (g.PlayerChked == ram_addr(a2) && g.PlayerChking == ram_addr(a3))
+    if (g.PlayerChked == rp_addr(obj_place(a2)) && g.PlayerChking == rp_addr(obj_place(a3)))
         return;
-    g.PlayerChked = ram_addr(a2);
-    g.PlayerChking = ram_addr(a3);
+    g.PlayerChked = rp_addr(obj_place(a2));
+    g.PlayerChking = rp_addr(obj_place(a3));
     if (a2->pflags3 & (1 << pf3onetimer))
         return;
     if (a3->pflags3 & (1 << pf3onetimer))

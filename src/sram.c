@@ -28,11 +28,11 @@ void WriteSRAM(uint32_t at, uint32_t count, uint32_t src)
 void MakeSRAMChecksum(void)
 {
     ReadSRAM(0, 0x2000, RAM_BASE);
-    uint8_t *ram = (uint8_t *)&g;
+    rp ram = ram_at(RAM_BASE);
     uint8_t sum = 0;
-    for (int i = 0; i < 0x1FFE; i++) sum = (uint8_t)(sum + ram[i]);
-    ram[0x1FFF] = sum;
-    ram[0x1FFE] = (uint8_t)~sum;
+    for (int i = 0; i < 0x1FFE; i++) sum = (uint8_t)(sum + r8(ram, i));
+    w8(ram, 0x1FFF, sum);
+    w8(ram, 0x1FFE, (uint8_t)~sum);
     WriteSRAM(0x1FFE, 2, RAM_BASE + 0x1FFE);
 }
 
@@ -98,10 +98,10 @@ void VBcount(void)
  * byte. */
 void ValidateSRAM(void)
 {
-    const uint8_t *ram = (const uint8_t *)&g;
+    rp ram = ram_at(RAM_BASE);
     uint8_t sum = 0;
-    for (int i = 0; i < 0x1FFE; i++) sum = (uint8_t)(sum + ram[i]);
-    int bad = (ram[0x1FFF] != sum) + (ram[0x1FFE] != (uint8_t)~sum) + ((uint8_t)~ram[0x1FFE] != ram[0x1FFF]);
+    for (int i = 0; i < 0x1FFE; i++) sum = (uint8_t)(sum + r8(ram, i));
+    int bad = (r8(ram, 0x1FFF) != sum) + (r8(ram, 0x1FFE) != (uint8_t)~sum) + ((uint8_t)~r8(ram, 0x1FFE) != r8(ram, 0x1FFF));
     if (!bad) g.ValidSRAM = 0;
     else ST_W(g.ValidSRAM);
 }
@@ -110,11 +110,11 @@ void ValidateSRAM(void)
  * zeros), write it to save RAM, then byte 0 = 1 to save RAM byte 1, then MakeSRAMChecksum. */
 void ClearSRAM(void)
 {
-    uint8_t *ram = (uint8_t *)&g;
-    memset(ram, 0, 0x2000);
-    ram[RAM_OFF_sramcleared] = 0xFF;
+    rp ram = ram_at(RAM_BASE);
+    ram_fill(ram, 0, 0x2000);
+    w8(ram, RAM_OFF_sramcleared, 0xFF);
     WriteSRAM(0, 0x2000, RAM_BASE);
-    ram[0] = 1;
+    w8(ram, 0, 1);
     WriteSRAM(1, 1, RAM_BASE);
     MakeSRAMChecksum();
 }

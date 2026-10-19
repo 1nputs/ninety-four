@@ -25,7 +25,7 @@ void SegaInit(void)
         z80_reset(0);
         z80_busreq(0);
         z80_reset(0x100);
-        memset(&g, 0, RAM_SIZE);
+        ram_fill(ram_at(RAM_BASE), 0, RAM_SIZE);
         vdp_ctrl(rd32(t)); t += 4;                        /* reg 1 = 4 (display off), reg 15 = 2 */
         vdp_ctrl(rd32(t)); t += 4;                        /* CRAM */
         for (int i = 0; i < 32; i++) vdp_data32(0);

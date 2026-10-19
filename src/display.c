@@ -423,8 +423,9 @@ void showclock(struct Vid *v)
 
 /* the off-screen arrow of one controlled player: a0 = the object, a3 = the sso entry, d3 = its
  * first arrow frame */
-static void sso_arrow(rp a0, struct SortObj *a3, uint16_t d3, struct Vid *v)
+static void sso_arrow(rp a0, rp e, uint16_t d3, struct Vid *v)
 {
+    struct SortObj *a3 = obj_at(e);
     if ((int16_t)r16(a0, 0x18) < 0) return;               /* not on the ice */
     ST_W(a3->frame);                                      /* a3 is an sso entry: x 0, y 2, attribute 4, frame 6, oldframe 8, VRoffs $A, VRchar $12 */
     int16_t d0 = (int16_t)r16(a0, 0);
@@ -452,7 +453,7 @@ static void sso_arrow(rp a0, struct SortObj *a3, uint16_t d3, struct Vid *v)
     a3->Xpos = d0;
     if (t[1] != 0) d1 = (int16_t)t[1];
     d1 = (int16_t)(-d1 + 0xF0);
-    wr16((uint8_t *)a3 + 2, (uint16_t)d1);                /* sso y, offset 2 */
+    w16(e, 2, (uint16_t)d1);                              /* sso y, offset 2 */
     a3->frame = (uint16_t)(d3 + t[2]);
     a3->attribute = t[3];
     addframe2(d0, d1, a3, v);
@@ -464,18 +465,18 @@ void checksso(struct Vid *v)
 {
     if (g.sflags & HI(sfhor)) return;
     rp a0 = RAM(Joy1Struct);
-    struct SortObj *a3 = (struct SortObj *)ptr_of(RAM(sso));
+    rp a3 = RAM(sso);
     sso_arrow(a0, a3, SYM_SPFarrow, v);
     a0 = rp_add(a0, 0x1C);
-    a3 = (struct SortObj *)((uint8_t *)a3 + 0x14);
+    a3 = rp_add(a3, 0x14);
     sso_arrow(a0, a3, SYM_SPFarrow + 3, v);
     if (g.cont3team == 0) return;
     a0 = RAM(Joy3Struct);                                 /* (not after Joy1Struct's two: ReplayStarStruct is between) */
-    a3 = (struct SortObj *)((uint8_t *)a3 + 0x14);
+    a3 = rp_add(a3, 0x14);
     sso_arrow(a0, a3, 0x346, v);
     if (g.cont4team == 0) return;
     a0 = RAM(Joy4Struct);
-    a3 = (struct SortObj *)((uint8_t *)a3 + 0x14);
+    a3 = rp_add(a3, 0x14);
     sso_arrow(a0, a3, 0x349, v);
 }
 
@@ -494,7 +495,7 @@ void setffo(struct Vid *v)
     rp a3 = RAM(pads);
     for (int i = 0; i < 7; i++, a3 = rp_add(a3, 0x1C)) {
         rp before = v->sat;
-        addframe((struct SortObj *)ptr_of(a3), v);
+        addframe(obj_at(a3), v);
         if (rp_same(before, v->sat)) continue;
         int16_t d1 = (int16_t)r16(a3, 2);
         w16(before, 6, (uint16_t)(r16(before, 6) + d1));

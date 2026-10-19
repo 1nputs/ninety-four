@@ -69,13 +69,11 @@ static inline uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[
 static inline void wr16(uint8_t *p, uint16_t v) { p[0] = (uint8_t)(v >> 8); p[1] = (uint8_t)v; }
 static inline uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]; }
 static inline void wr32(uint8_t *p, uint32_t v) { p[0] = (uint8_t)(v >> 24); p[1] = (uint8_t)(v >> 16); p[2] = (uint8_t)(v >> 8); p[3] = (uint8_t)v; }
-/* the 68k address of something in work RAM, for pointers the game stores (move.l a2,(x)) */
-#define ram_addr(p) (RAM_BASE + (uint32_t)((const uint8_t *)(p) - (const uint8_t *)&g))
 
 /* a 16.16 position as the 68k reads it with move.l */
 #define POS32(o, f) (((int32_t)(o) << 16) | f)
 /* a sort object from a stored tmsort word (the low word of its RAM address) */
-static inline struct SortObj *sortobj_at(uint16_t lo) { return (struct SortObj *)ram_ptr(RAM_BASE + lo); }
+static inline struct SortObj *sortobj_at(uint16_t lo) { return obj_at(ram_at(RAM_BASE + lo)); }
 
 /* divu.w: 32/16 unsigned divide, remainder high / quotient low; unchanged on overflow */
 static inline uint32_t m68k_divu(uint32_t dividend, uint16_t divisor)

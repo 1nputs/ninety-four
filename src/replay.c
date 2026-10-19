@@ -217,7 +217,7 @@ uint16_t RestoreReplayFrame(uint32_t frame, rp cam)
     g.PBnum = (uint16_t)((r8_next(&a0) << 8) | (g.PBnum & 0xFF));
     g.PadControlBits34 = (uint16_t)((r8_next(&a0) << 4) | 0xF00F);
     if (g.sflags & HI(sfscrl)) {
-        const struct SortObj *o = (const struct SortObj *)ptr_of(cam);
+        const struct SortObj *o = obj_at(cam);
         if (g.sflags3 & 0x20) {
             w16(cam, 0x18, 0);
             o = sortobj((int16_t)r16(cam, 0x16));
@@ -711,7 +711,7 @@ void ReplayMode(void)
             if (ny <= 0x126 && ny >= -0x126) w16(cam, 0x14, (uint16_t)ny);
             w16(cam, 0x18, 0);
             g.PadControlBits = (uint16_t)((g.PadControlBits & 0xFFF) | 0xE000);
-            UpdateCameraPos((const struct SortObj *)ptr_of(cam), cam);
+            UpdateCameraPos(obj_at(cam), cam);
             setvideo();
             continue;
         }

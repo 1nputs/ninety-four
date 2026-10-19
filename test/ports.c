@@ -20,7 +20,7 @@ static void run_vtoa(const Record *r)
 
 static void run_SetSPA(const Record *r)
 {
-    SetSPA((struct SortObj *)ram_ptr(r->regs_in[R_A3]), (uint16_t)r->regs_in[R_D1]);
+    SetSPA(obj_at(ram_at(r->regs_in[R_A3])), (uint16_t)r->regs_in[R_D1]);
 }
 
 static uint32_t be32(const uint8_t *p) { return (uint32_t)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]; }
@@ -29,12 +29,12 @@ static void run_GetHot(const Record *r)
 {
     const uint8_t *sp = r->ram_in + (r->regs_in[R_A7] & 0xFFFF);
     int16_t hx, hy;
-    GetHot((const struct SortObj *)ram_ptr(be32(sp + 4)), &hx, &hy);
+    GetHot(obj_at(ram_at(be32(sp + 4))), &hx, &hy);
     expect_reg16(r, R_D0, (uint16_t)hx, "d0 (hot x)");
     expect_reg16(r, R_D1, (uint16_t)hy, "d1 (hot y)");
 }
 
-#define OBJ(reg) ((struct SortObj *)ram_ptr(r->regs_in[reg]))
+#define OBJ(reg) obj_at(ram_at(r->regs_in[reg]))
 static void run_checkcoll(const Record *r) { checkcoll((int16_t)r->regs_in[R_D2], (int16_t)r->regs_in[R_D3], OBJ(R_A3)); }
 static void run_checkplcoll(const Record *r) { checkplcoll((int16_t)r->regs_in[R_D2], (int16_t)r->regs_in[R_D3], OBJ(R_A3)); }
 static void run_checkcx(const Record *r) { checkcx((uint16_t)r->regs_in[R_D4], (int16_t)r->regs_in[R_D2], (int16_t)r->regs_in[R_D5], OBJ(R_A3)); }
