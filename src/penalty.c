@@ -725,13 +725,13 @@ void SetHor(void)
     g.Hscroll = (uint16_t)view_shift();                   /* (the wide view: the 256-wide rink in the middle) */
     g.Vscroll = 0;
     SprSort();
-    if (view_shift()) DoFill(0x800, g.VmMap2, 0x7FF);     /* (and nothing beside it) */
+    if (view_shift()) DoFill(0x800, g.maps[1].vram, 0x7FF);     /* (and nothing beside it) */
     printz(str_SetHor_1, sizeof str_SetHor_1);
     uint32_t a1 = ART(HorRinkMap) + rd32(rom_ptr(ART(HorRinkMap)) + 4);
     dobitmap(0, a1, ART(HorRinkTiles), 0, 0, 0x20, 0x1C, g.rinkvrcset, 0);   /* a0 (the palette) is not set */
     USBoard();
     if (g.sflags & HI(sfpz)) return;
-    DoFill(0x800, g.VmMap1, 0x7FF);
+    DoFill(0x800, g.maps[0].vram, 0x7FF);
 }
 
 /* penalty94.asm:printscores1. Draw the scoreboard. Vertical rink: the period box and the

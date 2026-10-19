@@ -506,10 +506,10 @@ void setVram_0(void)
     vdp_ctrl16(mode4);                                 /* 40 column mode, no interlace */
     vdp_ctrl16(SYM_VDPR_MODE1 + 0x04);
     vdp_ctrl16(SYM_VDPR_MODE2 + 0x64);
-    vdp_ctrl16(g.Map1col1 == 6 ? 0x9001 : 0x9003);     /* playfield 64x32 or 128x32 */
-    vdp_ctrl16((uint16_t)(0x8200 | ((g.VmMap1 >> 8 >> 2) & 0x38)));
-    vdp_ctrl16((uint16_t)(0x8400 | (g.VmMap2 >> 8 >> 5)));
-    vdp_ctrl16((uint16_t)(0x8300 | ((g.VmMap3 >> 8 >> 2) & 0x3E)));
+    vdp_ctrl16(g.maps[0].colshift == 6 ? 0x9001 : 0x9003);     /* playfield 64x32 or 128x32 */
+    vdp_ctrl16((uint16_t)(0x8200 | ((g.maps[0].vram >> 8 >> 2) & 0x38)));
+    vdp_ctrl16((uint16_t)(0x8400 | (g.maps[1].vram >> 8 >> 5)));
+    vdp_ctrl16((uint16_t)(0x8300 | ((g.maps[2].vram >> 8 >> 2) & 0x3E)));
     vdp_ctrl16((uint16_t)(0x8500 | (g.VSPRITES >> 8 >> 1)));
     vdp_ctrl16((uint16_t)(0x8D00 | (g.VSCRLPM >> 8 >> 2)));
     vdp_ctrl16(SYM_VDPR_WINX);                         /* no window plane */
@@ -750,17 +750,24 @@ void FlushOutputBuffer(struct Unpack *u)
 
 /* ---- printing --------------------------------------------------------------------------- */
 
-/* the map selected by printm: VmMap1/2/3 (VRAM base) and the shift for a row */
-static rp print_map(void) { return rp_add(RAM(VmMap1), (int16_t)g.printm); }
+/* the map selected by printm (a byte offset from VmMap1: 0, 4 or 8, though the 68000 takes any):
+ * its VRAM address and row shift */
+static struct Plane print_map(void)
+{
+    int16_t k = (int16_t)g.printm;
+    if (k == 0 || k == 4 || k == 8) return g.maps[k / 4];
+    rp m = rp_add(RAM(VmMap1), k);                        /* (another offset: the words there) */
+    return (struct Plane){ r16(m, 0), r16(m, 2) };
+}
 /* asl.w Dn: the count is taken mod 64 and 16 or more clears the word */
 static uint16_t asl_w(uint16_t v, uint16_t n) { n &= 63; return n >= 16 ? 0 : (uint16_t)(v << n); }
 
 /* video94.asm:xyVmMap. Set the VDP to write at printx/printy on the map printm. */
 void xyVmMap(void)
 {
-    rp m = print_map();
-    uint16_t row = asl_w(g.printy, r16(m, 2));
-    Vmaddr((uint16_t)(((uint16_t)(g.printx + row) << 1) + r16(m, 0)));
+    struct Plane m = print_map();
+    uint16_t row = asl_w(g.printy, m.colshift);
+    Vmaddr((uint16_t)(((uint16_t)(g.printx + row) << 1) + m.vram));
 }
 
 /* video94.asm:eraser. d0/d1 = width/height, d2 = map word: fill the rectangle at
@@ -1096,9 +1103,9 @@ void PrintBigChar(uint8_t c, struct BigPen *pen)
 /* video94.asm:PutBigTile. d3 = tile: write it plus the pen attribute at d4/d5 on printm. */
 void PutBigTile(uint16_t tile, const struct BigPen *pen)
 {
-    rp m = print_map();
-    uint16_t row = asl_w(pen->y, r16(m, 2));
-    Vmaddr((uint16_t)(((uint16_t)(row + pen->x) << 1) + r16(m, 0)));
+    struct Plane m = print_map();
+    uint16_t row = asl_w(pen->y, m.colshift);
+    Vmaddr((uint16_t)(((uint16_t)(row + pen->x) << 1) + m.vram));
     vdp_data((uint16_t)(tile + pen->attr));
 }
 

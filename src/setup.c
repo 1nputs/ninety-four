@@ -259,8 +259,8 @@ void view_rink_resume(void)
     view_rink_mode();
     if ((int16_t)g.Hpos > VIEW_HPOS) g.Hpos = VIEW_HPOS;  /* (and the camera within the wide rink) */
     if ((int16_t)g.Hpos < -VIEW_HPOS) g.Hpos = (uint16_t)-VIEW_HPOS;
-    DoFill(0x20, (uint16_t)(g.VmMap1 + 0x40), 0x7FF);
-    DoFill(0x20, (uint16_t)(g.VmMap1 + 0xC0), 0x7FF);
+    DoFill(0x20, (uint16_t)(g.maps[0].vram + 0x40), 0x7FF);
+    DoFill(0x20, (uint16_t)(g.maps[0].vram + 0xC0), 0x7FF);
 }
 
 /* setup94.asm:setupice. Set up the rink: the VDP layout (32 columns, maps at $C000 / $E000 /
@@ -272,10 +272,10 @@ void setupice(void)
     static const uint8_t small[8] = { 0x43, 0x43, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
     static const uint8_t big[8] = { 0x71, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
     g.disflags |= HI(df32c);
-    g.VmMap2 = 0xC000; g.Map2col1 = 6;
+    g.maps[1].vram = 0xC000; g.maps[1].colshift = 6;
     g.VSPRITES = 0xDC00;
-    g.VmMap1 = 0xE000; g.Map1col1 = 6;
-    g.VmMap3 = 0xF000; g.Map3col1 = 5;
+    g.maps[0].vram = 0xE000; g.maps[0].colshift = 6;
+    g.maps[2].vram = 0xF000; g.maps[2].colshift = 5;
     g.VSCRLPM = 0xFC00;
     setVram(0);
     view_rink_mode();                                     /* (the wide view's 40 columns) */
@@ -286,7 +286,7 @@ void setupice(void)
     g.Vpos = 0;
     g.Oldrow = 0x7D0;
     ST_W(g.zamx);
-    DoFill(0x800, g.VmMap1, 0x7FF);
+    DoFill(0x800, g.maps[0].vram, 0x7FF);
     g.rinkvrcset = 0;
     uint16_t c = DecompressGraphicsPlain(g.sflags4 & HI(4) ? ART(RevRinkTiles) : ART(Rinktiles), 0);
     c = LoadHomeTeamGfx(c);
@@ -307,7 +307,7 @@ void setupice(void)
     g.BigFontChars = c;
     c = DecompressGraphicsWithCallback(ART(BigFontMap) + 8, c, inline_table(SYM_setupice + 1, SYM_setupice + 0x200, big));
     c = setupTeamBlocksMap(c);
-    if (view_wide()) DoFill(0x80, g.VmMap1, 0x7FF);       /* (its unpacking ran over plane A's first two rows: the wide view shows their other half) */
+    if (view_wide()) DoFill(0x80, g.maps[0].vram, 0x7FF);       /* (its unpacking ran over plane A's first two rows: the wide view shows their other half) */
     g.ExtraChars = c;
     if (g.gmode & (1 << gmdir))
         for (int i = 0; i < 12; i++) sortobj(i)->pflags ^= 1 << pfgoal;
@@ -317,9 +317,9 @@ void setupice(void)
     ram_fill(RAM(padcont), 0, 12);
     ST_W(g.c1playernum);
     ST_W(g.c2playernum);
-    struct Vid v = { RAM(DMAList), RAM(Satt), 1 };
+    struct Vid v = { g.DMAList, g.Satt, 1 };
     for (int i = 0; i < 6; i++) addframe2(0, 0, &g.pads[i].head, &v);                     /* pads, logo, gloves */
-    g.DMAlistend = rp_addr(v.dma);
+    g.DMAlistend = ram_addr(v.dma);
     DoDMAList();
     g.disflags = saved;
     g.vbint = SYM_VBlank;
@@ -412,9 +412,9 @@ void setupice_highlight(void)
     ST_W(g.c1playernum);
     ST_W(g.c2playernum);
     setupEASNmap();
-    struct Vid v = { RAM(DMAList), RAM(Satt), 1 };
+    struct Vid v = { g.DMAList, g.Satt, 1 };
     for (int i = 0; i < 6; i++) addframe2(0, 0, &g.pads[i].head, &v);
-    g.DMAlistend = rp_addr(v.dma);
+    g.DMAlistend = ram_addr(v.dma);
     DoDMAList();
     g.palcount = 0x1C;
     g.disflags = saved;
@@ -485,12 +485,12 @@ void PlayoffScreen(void)
     g.disflags &= (uint16_t)~HI(df32c);
     g.VSCRLPM = 0;
     g.VSPRITES = 0xBC00;
-    g.VmMap3 = 0xB000;
-    g.Map3col1 = 6;
-    g.VmMap2 = 0xC000;
-    g.Map2col1 = 7;
-    g.VmMap1 = 0xE000;
-    g.Map1col1 = 7;
+    g.maps[2].vram = 0xB000;
+    g.maps[2].colshift = 6;
+    g.maps[1].vram = 0xC000;
+    g.maps[1].colshift = 7;
+    g.maps[0].vram = 0xE000;
+    g.maps[0].colshift = 7;
     setVram(0);
     printz(str_PlayoffScreen_1, sizeof str_PlayoffScreen_1);
     eraser(0x80, 0x1C, 0x7FF);
@@ -770,7 +770,7 @@ void ScrollDisplayUp(void)
     g.VertLineScrolling++;
     if ((int16_t)g.VertLineScrolling < 7) return;
     g.VertLineScrolling--;
-    uint16_t d1 = (uint16_t)(g.VmMap1 + 0x212);
+    uint16_t d1 = (uint16_t)(g.maps[0].vram + 0x212);
     for (int i = 0; i < 8; i++) {
         uint16_t d2 = (uint16_t)(d1 + 0x80);
         DoDMA_nd2(0x3A, d1, d2);

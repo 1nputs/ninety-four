@@ -13,12 +13,12 @@ void EASportsScreen(void)
 {
     g.vbint = SYM_vb2;
     g.disflags &= (uint16_t)~HI(df32c);
-    g.Map3col1 = 5;
-    g.VmMap2 = 0xA000;
-    g.Map2col1 = 7;
-    g.VmMap1 = 0xC000;
-    g.Map1col1 = 7;
-    g.VmMap3 = 0xF000;
+    g.maps[2].colshift = 5;
+    g.maps[1].vram = 0xA000;
+    g.maps[1].colshift = 7;
+    g.maps[0].vram = 0xC000;
+    g.maps[0].colshift = 7;
+    g.maps[2].vram = 0xF000;
     g.VSPRITES = 0xF800;
     g.VSCRLPM = 0xFC00;
     memset(g.palfadenew, 0, sizeof g.palfadenew);        /* all 64 colours black */

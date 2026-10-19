@@ -631,7 +631,7 @@ void ReplayMode(void)
     g.sflags2 |= HI(sf2replay);
     g.sflags4 &= (uint16_t)~HI(4);
     ClrHor();
-    DoFill(0x400, g.VmMap3, 0x7FF);
+    DoFill(0x400, g.maps[2].vram, 0x7FF);
     DecompressGraphicsPlain(ART(ReplayMap) + 8, g.ExtraChars);
     ShowReplayIcon();
     g.sflags &= (uint16_t)~HI(sfscrl);

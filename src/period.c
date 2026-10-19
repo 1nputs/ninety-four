@@ -66,7 +66,7 @@ void ClearGameStats(void)
 /* period94.asm:AddArenaAnimSprite. Add the frame arenaframe of the arena animation to the
  * sprite table (64 sprites at most) for the pieces inside the view. Not in a reverse angle
  * replay, nor on the horizontal rink. */
-void AddArenaAnimSprite(rp *sat, uint16_t *link)
+void AddArenaAnimSprite(uint8_t **sat, uint16_t *link)
 {
     if ((int16_t)g.arenaanim < 0) return;
     if (g.arenaspritelist == 0) return;
@@ -83,17 +83,17 @@ void AddArenaAnimSprite(rp *sat, uint16_t *link)
     a0 += rd16(a0 + d0 * 2);
     int16_t x0 = (int16_t)((int16_t)g.Hpos + 0xC0 - 0x90), x1 = (int16_t)((int16_t)g.Hpos + 0xC0 + 0x80);
     int16_t y0 = (int16_t)(0x170 - (int16_t)g.Vpos - 0x80), y1 = (int16_t)(0x170 - (int16_t)g.Vpos + 0x70);
-    rp a6 = *sat;
+    uint8_t *a6 = *sat;
     uint16_t d6 = *link;
     for (; n >= 0; n--, a0 += 8) {
         int16_t sx = (int16_t)rd16(a0), sy = (int16_t)rd16(a0 + 2);
         if (y0 > sy || y1 < sy || x0 - view_more() > sx || x1 + view_more() < sx) continue;
-        w16(a6, 0, (uint16_t)(sy + 0x70 - y0));
-        w8(a6, 2, a0[7]);
-        w8(a6, 3, (uint8_t)d6);
-        w16(a6, 4, (uint16_t)((rd16(a0 + 6) & 0xF800) + rd16(a0 + 4) + g.arenaanimchars));
-        w16(a6, 6, (uint16_t)(sx + 0x70 - x0 + view_shift()));     /* (the wide view: to the middle) */
-        a6 = rp_add(a6, 8);
+        wr16(a6, (uint16_t)(sy + 0x70 - y0));
+        a6[2] = a0[7];
+        a6[3] = (uint8_t)d6;
+        wr16(a6 + 4, (uint16_t)((rd16(a0 + 6) & 0xF800) + rd16(a0 + 4) + g.arenaanimchars));
+        wr16(a6 + 6, (uint16_t)(sx + 0x70 - x0 + view_shift()));   /* (the wide view: to the middle) */
+        a6 += 8;
         d6++;
         if (d6 == 0x40) break;
     }

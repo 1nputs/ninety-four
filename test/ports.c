@@ -257,7 +257,7 @@ V(ClearShotData) V(restoreteams) V(ResetClock) V(periodicevents) V(CheckInjury) 
 V(UpdateCwdExcite) V(updatecrowdf) V(clockcont) V(clockcont_0) V(demoread) V(startpause) V(startpause1) V(startpause2) V(startpause3)
 V(startpause4) V(SetupPauseScreen) V(updatesound) V(KillCrowd)
 O(ClampPositionBox) O(ShortenMsgTimer)
-static void run_AddArenaAnimSprite(const Record *r) { rp sat = ram_at(r->regs_in[R_A6]); uint16_t link = (uint16_t)r->regs_in[R_D6]; AddArenaAnimSprite(&sat, &link); expect_reg16(r, R_A6, (uint16_t)rp_addr(sat), "a6"); expect_reg16(r, R_D6, link, "d6"); }
+static void run_AddArenaAnimSprite(const Record *r) { uint8_t *sat = ram_bytes(ram_at(r->regs_in[R_A6]), 0); uint16_t link = (uint16_t)r->regs_in[R_D6]; AddArenaAnimSprite(&sat, &link); expect_reg16(r, R_A6, (uint16_t)ram_addr(sat), "a6"); expect_reg16(r, R_D6, link, "d6"); }
 static void run_PrintPlayerNameRight(const Record *r) { PrintPlayerNameRight((uint16_t)r->regs_in[R_D0], TEAM(R_A2)); }
 static void run_SkipNameNumber(const Record *r) { uint32_t a1 = SkipNameNumber((uint16_t)r->regs_in[R_D0], TEAM(R_A2)); expect_reg16(r, R_A1, (uint16_t)a1, "a1"); }
 static void run_StatScrollRow(const Record *r) { expect_reg16(r, R_D3, StatScrollRow(), "d3"); }
@@ -269,8 +269,8 @@ static void run_EndDemoOnPress(const Record *r) { EndDemoOnPress((uint16_t)r->re
 static void run_seta2(const Record *r) { expect_reg16(r, R_A2, (uint16_t)rp_addr(team_place(seta2())), "a2"); }
 
 /* display94: the sprite builders take a5 / a6 / d6 in a struct Vid and leave them advanced */
-#define VID_IN(v) struct Vid v = { ram_at(r->regs_in[R_A5]), ram_at(r->regs_in[R_A6]), (uint16_t)r->regs_in[R_D6] }
-#define VID_OUT(v) expect_reg16(r, R_A5, (uint16_t)rp_addr(v.dma), "a5"); expect_reg16(r, R_A6, (uint16_t)rp_addr(v.sat), "a6"); expect_reg16(r, R_D6, v.link, "d6")
+#define VID_IN(v) struct Vid v = { ram_bytes(ram_at(r->regs_in[R_A5]), 0), ram_bytes(ram_at(r->regs_in[R_A6]), 0), (uint16_t)r->regs_in[R_D6] }
+#define VID_OUT(v) expect_reg16(r, R_A5, (uint16_t)ram_addr(v.dma), "a5"); expect_reg16(r, R_A6, (uint16_t)ram_addr(v.sat), "a6"); expect_reg16(r, R_D6, v.link, "d6")
 #define VID_RUN(name) static void run_##name(const Record *r) { VID_IN(v); name(&v); VID_OUT(v); }
 static void run_VBlank(const Record *r) { VBlank(); }
 static void run_vb2(const Record *r) { vb2(); }
@@ -547,8 +547,8 @@ static void run_CreditsScrollStep(const Record *r) { CreditsScrollStep(); }
 
 /* ---- the game setup screen (optsetup94 and its helpers in data94 / cards94 / attract94 ...) ---- */
 #define A(reg) (r->regs_in[reg])
-static void run_SuperDiv(const Record *r) { expect_reg16(r, R_D0, SuperDiv(ram_at(A(R_A3)), R16(R_D0)), "d0"); }
-static void run_ReadPassBits(const Record *r) { ReadPassBits(ram_at(A(R_A3))); }
+static void run_SuperDiv(const Record *r) { expect_reg16(r, R_D0, SuperDiv(pass_bits(ram_at(A(R_A3))), R16(R_D0)), "d0"); }
+static void run_ReadPassBits(const Record *r) { ReadPassBits(pass_bits(ram_at(A(R_A3)))); }
 static void run_GetRandomUnusedTeam(const Record *r)
 {
     uint32_t used = A(R_D3);
@@ -696,11 +696,11 @@ static void run_CalcAttrib(const Record *r)
 
 /* ---- the game over: the playoff password, the player stats lists ---- */
 static void run_GameOver(const Record *r) { GameOver(); }
-static void run_ClrPassBits(const Record *r) { ClrPassBits(ram_at(A(R_A3))); }
-static void run_SuperAdd(const Record *r) { SuperAdd(ram_at(A(R_A3)), A(R_D0)); }
-static void run_SuperMult(const Record *r) { SuperMult(ram_at(A(R_A3)), R16(R_D0)); }
-static void run_PushBits(const Record *r) { PushBits(ram_at(A(R_A3)), R16(R_D0), R16(R_D1)); }
-static void run_WritePassBits(const Record *r) { WritePassBits(ram_at(A(R_A3))); }
+static void run_ClrPassBits(const Record *r) { ClrPassBits(pass_bits(ram_at(A(R_A3)))); }
+static void run_SuperAdd(const Record *r) { SuperAdd(pass_bits(ram_at(A(R_A3))), A(R_D0)); }
+static void run_SuperMult(const Record *r) { SuperMult(pass_bits(ram_at(A(R_A3))), R16(R_D0)); }
+static void run_PushBits(const Record *r) { PushBits(pass_bits(ram_at(A(R_A3))), R16(R_D0), R16(R_D1)); }
+static void run_WritePassBits(const Record *r) { WritePassBits(pass_bits(ram_at(A(R_A3)))); }
 static void run_ResolveGames(const Record *r) { ResolveGames(); }
 static void run_EncodePW(const Record *r) { EncodePW(); }
 static void run_WriteLineData(const Record *r) { WriteLineData(); }

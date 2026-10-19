@@ -379,7 +379,7 @@ void Pausemode(void)
         vcountwait();
         uint16_t d0, d1, d2, d3;
         getpzjoy(&d0, &d1, &d2, &d3);
-        struct Vid vid = { ram_at(g.DMAlistend), RAM(Satt), 1 };                           /* a5 as setvideo left it */
+        struct Vid vid = { g.DMAList + (g.DMAlistend - ram_addr(g.DMAList)), g.Satt, 1 };                           /* a5 as setvideo left it */
         showclock(&vid);
         ProcessInputWithRepeat(&d1, d2, d3);
         if (HandleMenuInput(&d1)) break;

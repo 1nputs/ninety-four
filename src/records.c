@@ -57,12 +57,12 @@ void NameEntryScreen(void)
     g.disflags &= (uint16_t)~HI(df32c);
     g.VSCRLPM = 0;
     g.VSPRITES = 0xB400;
-    g.VmMap3 = 0xB800;
-    g.Map3col1 = 5;
-    g.VmMap2 = 0xC000;
-    g.Map2col1 = 6;
-    g.VmMap1 = 0xE000;
-    g.Map1col1 = 6;
+    g.maps[2].vram = 0xB800;
+    g.maps[2].colshift = 5;
+    g.maps[1].vram = 0xC000;
+    g.maps[1].colshift = 6;
+    g.maps[0].vram = 0xE000;
+    g.maps[0].colshift = 6;
     setVram(0);
     cpu_set_sr(0x2500);
     orjoy();

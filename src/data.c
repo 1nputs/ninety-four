@@ -12,7 +12,7 @@
 
 /* the goal entry of the last goal: ChkCnt + ScoreSumbytes (byte 2 bit 7 away, 3 scorer, 4 / 5
  * assists, negative when none) */
-static rp last_goal(void) { return rp_add(RAM(ChkCnt), g.ScoreSumbytes); }
+static const uint8_t *last_goal(void) { return ram_bytes(rp_add(RAM(ScoreSum), (int16_t)(g.ScoreSumbytes - 6)), 6); }
 
 /* data94.asm:box. Clear a $13 x 8 rectangle at x $B, y 2 of map 1. */
 void box(void)
@@ -30,40 +30,40 @@ void ShowGoalBox(void)
     if (g.BA_PS_flags & HI(2)) g.sflags2 |= HI(sf2drec);
     lcfound2(team_struct(0));
     lcfound2(team_struct(1));
-    rp e = last_goal();
+    const uint8_t *e = last_goal();
     PRINTZ(str_ShowGoalBox_1);
     uint16_t rows = 5;
-    if (!(r8(e, 4) & 0x80)) {
+    if (!(e[4] & 0x80)) {
         rows += 2;
-        if (!(r8(e, 5) & 0x80)) rows++;
+        if (!(e[5] & 0x80)) rows++;
     }
     Framer(0x13, rows);
     CountGoalies();
     struct Team *tm = team_struct(0);
     g.scorergoalies = g.homegoalies;
-    if (r8(e, 2) & 0x80) { tm = team_struct(1); g.scorergoalies = g.awaygoalies; }
+    if (e[2] & 0x80) { tm = team_struct(1); g.scorergoalies = g.awaygoalies; }
     uint32_t text = SYM_GoalBigTxt;
     if (g.DelayedPen & 1) { g.DelayedPen &= (uint8_t)~1; text = SYM_PPGoalBigTxt; }
-    if (tm->pgoals[r8(e, 3)] == 3 && r8(e, 3) >= g.scorergoalies) {          /* third goal of a skater */
+    if (tm->pgoals[e[3]] == 3 && e[3] >= g.scorergoalies) {          /* third goal of a skater */
         text += rd16(rom_ptr(text));                               /* HAT TRICK! */
         if (tm->team == g.HomeTeam) StartArenaAnim(0);
     }
     printbig(text);
-    uint16_t scorer = r8(e, 3);
+    uint16_t scorer = e[3];
     g.printx = 0xC;
     print(FormatPlayerName(scorer, tm));
     if (scorer >= g.scorergoalies) PrintPlayerGoals(scorer, tm);
-    if (!(r8(e, 4) & 0x80)) {
+    if (!(e[4] & 0x80)) {
         int none = (g.sflags4 & HI(5)) != 0;
         g.sflags4 &= (uint16_t)~HI(5);
         if (!none) {
             PRINTZ(str_ShowGoalBox_2);
-            print(FormatPlayerName(r8(e, 4), tm));
-            PrintPlayerAssists(r8(e, 4), tm);
-            if (!(r8(e, 5) & 0x80)) {
+            print(FormatPlayerName(e[4], tm));
+            PrintPlayerAssists(e[4], tm);
+            if (!(e[5] & 0x80)) {
                 PRINTZ(str_ShowGoalBox_3);
-                print(FormatPlayerName(r8(e, 5), tm));
-                PrintPlayerAssists(r8(e, 5), tm);
+                print(FormatPlayerName(e[5], tm));
+                PrintPlayerAssists(e[5], tm);
             }
         }
     }
@@ -137,8 +137,8 @@ void CalcStarScores(uint16_t d2)
     CalcTeamStarScores(team_struct(0), team_struct(1), &out, mintime);
     int16_t diff = CalcTeamStarScores(team_struct(1), team_struct(0), &out, mintime);
     if (g.gsp != 3 || diff == 0) return;
-    rp e = last_goal();
-    uint8_t slot = (uint8_t)((r8(e, 2) & 0x80 ? SYM_RosterSlots : 0) + r8(e, 3));
+    const uint8_t *e = last_goal();
+    uint8_t slot = (uint8_t)((e[2] & 0x80 ? SYM_RosterSlots : 0) + e[3]);
     wr32(star_scores() + (uint16_t)(slot << 2), 0x7FFFFFFF);
 }
 
@@ -337,7 +337,7 @@ uint16_t GetShifter(uint16_t *first_bit)
 
 /* the playoff stat bit stream runs down in words from outputbuffer + $DE: the long holding bit
  * pos of it */
-static rp stat_long(uint16_t pos) { return rp_add(RAM(outputbuffer), 0x100 - 0x22 - (uint16_t)((pos >> 4) << 1)); }
+static uint8_t *stat_long(uint16_t pos) { return g.outputbuffer + 0xDE - (uint16_t)((pos >> 4) << 1); }
 
 /* data94.asm:ReadTeamStats. Unpack the $68 playoff stat totals of the bit stream (widths from
  * BitWidthTable by stat & 3) into statsbuffer words. */
@@ -347,7 +347,7 @@ void ReadTeamStats(void)
     const uint8_t *widths = rom_ptr(SYM_BitWidthTable);
     uint16_t pos = 0;
     for (int16_t n = 0x67; n >= 0; n--, out += 2) {
-        uint32_t v = r32(stat_long(pos), 0) >> (pos & 0xF);
+        uint32_t v = rd32(stat_long(pos)) >> (pos & 0xF);
         uint8_t w = widths[n & 3];
         pos += w;
         wr16(out, (uint16_t)(v & (uint16_t)((1u << (w & 31)) - 1)));
@@ -361,12 +361,12 @@ void AddPlayoffTeamStats(void)
 {
     if ((int16_t)g.OptPlayMode < 1) return;
     ReadTeamStats();
-    uint16_t team = r8(RAM(potree), (int16_t)g.potreeteam);
+    uint16_t team = g.potree[g.potreeteam];
     struct Team *tm = team_struct(0);
     if (tm->team != team) tm = team_struct(1);
-    rp st = rp_add(team_place(tm), offsetof(struct Team, pgoals));   /* (goals, assists, shots, penalty minutes: four tables of 26) */
+    const uint8_t *st = (const uint8_t *)tm + offsetof(struct Team, pgoals);   /* (goals, assists, shots, penalty minutes: four tables of 26) */
     uint8_t *tot = g.statsbuffer;
-    for (int i = 0; i < 0x68; i++) wr16(tot + 2 * i, (uint16_t)(rd16(tot + 2 * i) + r8(st, i)));
+    for (int i = 0; i < 0x68; i++) wr16(tot + 2 * i, (uint16_t)(rd16(tot + 2 * i) + st[i]));
     const uint8_t *widths = rom_ptr(SYM_BitWidthTable);
     uint16_t pos = 0;
     for (int16_t n = 0x67; n >= 0; n--, tot += 2) {
@@ -378,8 +378,8 @@ void AddPlayoffTeamStats(void)
         unsigned r = pos & 0xF;
         keep = r ? (keep << r | keep >> (32 - r)) : keep;   /* rol.l */
         v = r ? (v << r | v >> (32 - r)) : v;
-        rp p = stat_long(pos);
-        w32(p, 0, (r32(p, 0) & keep) | v);
+        uint8_t *p = stat_long(pos);
+        wr32(p, (rd32(p) & keep) | v);
         pos += w;
     }
 }
@@ -389,20 +389,28 @@ void AddPlayoffTeamStats(void)
 void DefaultMenus(void)
 {
     ST_W(g.demoflag);
-    for (int i = 0; i < 9; i++)
-        w16(RAM(OptPlayMode), 2 * i, rd16(rom_ptr(SYM_defmenuoptions) + 2 * i));
+    const uint8_t *t = rom_ptr(SYM_defmenuoptions);
+    g.OptPlayMode = rd16(t);
+    g.OptNOP = rd16(t + 2);
+    g.Opt1Team = rd16(t + 4);
+    g.Opt2Team = rd16(t + 6);
+    g.OptPerlen = rd16(t + 8);
+    g.OptGoalie = rd16(t + 0xA);
+    g.OptUserRec = rd16(t + 0xC);
+    g.OptPen = rd16(t + 0xE);
+    g.OptLine = rd16(t + 0x10);
 }
 
 /* ---- the playoff tree (game setup) ---------------------------------------------------------- */
 
 
 /* data94.asm:SuperDiv. Divide the 5-word number at a3 by d0 in place -> the remainder. */
-uint16_t SuperDiv(rp bits, uint16_t div)
+uint16_t SuperDiv(uint8_t *bits, uint16_t div)
 {
     uint32_t d2 = 0;
     for (int i = 0; i < 5; i++) {
-        d2 = m68k_divu((d2 & 0xFFFF0000) | r16(bits, 2 * i), div);     /* the remainder rides in the high word */
-        w16(bits, 2 * i, (uint16_t)d2);
+        d2 = m68k_divu((d2 & 0xFFFF0000) | rd16(bits + 2 * i), div);     /* the remainder rides in the high word */
+        wr16(bits + 2 * i, (uint16_t)d2);
     }
     return (uint16_t)(d2 >> 16);
 }
@@ -410,10 +418,10 @@ uint16_t SuperDiv(rp bits, uint16_t div)
 /* data94.asm:ReadPassBits. The playoff state from the 5 saved words at a3 (kept): each game's
  * series wins (bit 2 of its flags: a series won), WinBits, pojoy (1 / 2 become 4 without
  * FourWayPlay), potreeteam, gamelevel, bosgames, postarts. */
-void ReadPassBits(rp bits)
+void ReadPassBits(uint8_t *bits)
 {
     uint16_t saved[5];
-    for (int i = 0; i < 5; i++) saved[i] = r16(bits, 2 * i);
+    for (int i = 0; i < 5; i++) saved[i] = rd16(bits + 2 * i);
     for (int n = 7; n >= 0; n--) {
         struct Matchup *gs = &g.matchups[n];
         gs->flags &= (uint8_t)~MU_SERIES_OVER;
@@ -431,7 +439,7 @@ void ReadPassBits(rp bits)
     g.gamelevel = SuperDiv(bits, 4);
     g.bosgames = SuperDiv(bits, 8);
     g.postarts = SuperDiv(bits, 0x20);
-    for (int i = 0; i < 5; i++) w16(bits, 2 * i, saved[i]);
+    for (int i = 0; i < 5; i++) wr16(bits + 2 * i, saved[i]);
 }
 
 /* data94.asm:GetRandomUnusedTeam. -> d0 = a random playoff team whose bit in d3 is clear; set it. */
@@ -590,7 +598,7 @@ void NewPO(void)
  * moved to the pad set-ups). */
 void ContinuePlayoffs(void)
 {
-    ReadPassBits(RAM(pwddatabuffer));
+    ReadPassBits(pass_bits(RAM(pwddatabuffer)));
     if ((g.gamelevel | g.bosgames) == 0) return;          /* nothing played yet */
     maketree();
     uint16_t d0 = g.FourWayPlay ? 0xB : 7;
@@ -608,43 +616,43 @@ void ContinuePlayoffs(void)
 
 /* the long at p (two words of a 5-word number) plus v, the carry run up through at most n words
  * above it (dbcc: n counts down to -1) */
-static void add_long_carry(rp p, uint32_t v, int16_t n)
+static void add_long_carry(uint8_t *p, uint32_t v, int16_t n)
 {
-    uint32_t old = r32(p, 0), sum = old + v;
-    w32(p, 0, sum);
+    uint32_t old = rd32(p), sum = old + v;
+    wr32(p, sum);
     int carry = sum < old;
     while (carry && --n != -1) {
-        p = rp_add(p, -2);
-        uint16_t w = (uint16_t)(r16(p, 0) + 1);
-        w16(p, 0, w);
+        p -= 2;
+        uint16_t w = (uint16_t)(rd16(p) + 1);
+        wr16(p, w);
         carry = w == 0;
     }
 }
 
 /* data94.asm:ClrPassBits. Clear the 5 words at a3. */
-void ClrPassBits(rp bits)
+void ClrPassBits(uint8_t *bits)
 {
-    for (int i = 0; i < 10; i++) w8(bits, i, 0);
+    for (int i = 0; i < 10; i++) bits[i] = 0;
 }
 
 /* data94.asm:SuperAdd. The 5-word number at a3 plus d0 (a long). */
-void SuperAdd(rp bits, uint32_t v)
+void SuperAdd(uint8_t *bits, uint32_t v)
 {
-    add_long_carry(rp_add(bits, 6), v, 3);
+    add_long_carry(bits + 6, v, 3);
 }
 
 /* data94.asm:SuperMult. The 5-word number at a3 times d0 (a word): each word's product added in
  * from the lowest (the highest's spills into the word below a3, which the game's numbers never
  * reach). */
-void SuperMult(rp bits, uint16_t m)
+void SuperMult(uint8_t *bits, uint16_t m)
 {
     uint16_t w[5];
-    for (int i = 0; i < 5; i++) { w[i] = r16(bits, 2 * i); w16(bits, 2 * i, 0); }
-    for (int16_t i = 4; i >= 0; i--) add_long_carry(rp_add(bits, 2 * i - 2), (uint32_t)m * w[i], i);
+    for (int i = 0; i < 5; i++) { w[i] = rd16(bits + 2 * i); wr16(bits + 2 * i, 0); }
+    for (int16_t i = 4; i >= 0; i--) add_long_carry(bits + 2 * i - 2, (uint32_t)m * w[i], i);
 }
 
 /* data94.asm:PushBits. bits = bits x d1 + d0 (d1 the value's range, 2-$4000). */
-void PushBits(rp bits, uint16_t v, uint16_t range)
+void PushBits(uint8_t *bits, uint16_t v, uint16_t range)
 {
     SuperMult(bits, range);
     SuperAdd(bits, v);
@@ -652,7 +660,7 @@ void PushBits(rp bits, uint16_t v, uint16_t range)
 
 /* data94.asm:WritePassBits. The playoff state into the 5 words at a3 (as ReadPassBits reads it):
  * postarts, bosgames, gamelevel, potreeteam, pojoy, WinBits, then each game's series wins. */
-void WritePassBits(rp bits)
+void WritePassBits(uint8_t *bits)
 {
     ClrPassBits(bits);
     PushBits(bits, g.postarts, 0x20);
@@ -711,7 +719,7 @@ void ResolveGames(void)
                     }
                 }
             }
-            WritePassBits(RAM(tpassbits));
+            WritePassBits(pass_bits(RAM(tpassbits)));
             g.sflags3 |= 1 << sf3alttree;
         }
     }
@@ -740,14 +748,14 @@ void EncodePW(void)
     ResolveGames();
     maketree();
     if (g.gamelevel != 4 && (int16_t)g.gamenum >= 0) {
-        WritePassBits(RAM(pwddatabuffer));
+        WritePassBits(pass_bits(RAM(pwddatabuffer)));
         WriteLineData();
         if (!(g.sflags3 & (1 << sf3alttree))) return;
-        ReadPassBits(RAM(tpassbits));                          /* the bits before the round was settled */
+        ReadPassBits(pass_bits(RAM(tpassbits)));                          /* the bits before the round was settled */
         maketree();
         return;
     }
-    ClrPassBits(RAM(pwddatabuffer));
+    ClrPassBits(pass_bits(RAM(pwddatabuffer)));
     WriteLineData();
     g.OptPlayMode = 2;                                    /* new playoffs */
     g.TempOptPlayMode = 2;

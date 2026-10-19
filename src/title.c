@@ -372,12 +372,12 @@ static struct Picture picture(uint32_t img)
 /* the screens' VRAM layout: planes at $C000 / $A000, window $F000, sprites $F800, hscroll $FC00 */
 static void screen_layout(void)
 {
-    g.Map3col1 = 5;
-    g.VmMap2 = 0xA000;
-    g.Map2col1 = 7;
-    g.VmMap1 = 0xC000;
-    g.Map1col1 = 7;
-    g.VmMap3 = 0xF000;
+    g.maps[2].colshift = 5;
+    g.maps[1].vram = 0xA000;
+    g.maps[1].colshift = 7;
+    g.maps[0].vram = 0xC000;
+    g.maps[0].colshift = 7;
+    g.maps[2].vram = 0xF000;
     g.VSPRITES = 0xF800;
     g.VSCRLPM = 0xFC00;
 }
@@ -604,11 +604,11 @@ void UnpackPicture(uint32_t pic)
  * Satt (an empty entry when it is off screen), the list ended there (Sattsize). */
 void DrawPlayoffSprite(void)
 {
-    struct Vid v = { { 0 }, RAM(Satt), 1 };
+    struct Vid v = { NULL, g.Satt, 1 };
     SetSframe(ART(PlayoffSprite), (int16_t)g.playoffspritex, (int16_t)g.playoffspritey, 1, (uint16_t)(g.energybarchars | 0x8000), &v);
-    if (rp_same(v.sat, RAM(Satt))) { ram_fill(v.sat, 0, 8); v.sat = rp_add(v.sat, 8); }
-    w8(v.sat, -5, 0);                                     /* the last sprite's link */
-    g.Sattsize = (uint16_t)((uint16_t)(rp_diff(v.sat, RAM(Satt))) >> 1);
+    if (v.sat == g.Satt) { memset(v.sat, 0, 8); v.sat += 8; }
+    v.sat[-5] = 0;                                        /* the last sprite's link */
+    g.Sattsize = (uint16_t)((uint16_t)(v.sat - g.Satt) >> 1);
 }
 
 /* title94.asm:PlayedByHome. The text player's '#' -> a1 = "(played by NAME)" for homeuser

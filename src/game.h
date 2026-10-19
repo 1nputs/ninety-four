@@ -37,6 +37,10 @@ static inline struct Team *team_struct(int away) { return &g.teams[away ? 1 : 0]
  * (its newpos and newpnum bytes), so read and written by address (RAM(puckc)) */
 static inline uint16_t puck_carrier(void) { return r16(RAM(puckc), 0); }
 
+/* a 5-word number of the playoff password at a place (pwddatabuffer, tpassbits): its bytes, with
+ * the word below it SuperMult spills into */
+static inline uint8_t *pass_bits(rp p) { return ram_bytes(rp_add(p, -2), 12) + 2; }
+
 /* the message area's text (TextBuffer), after its String's length word */
 static inline uint8_t *text_buffer(void) { return g.mesarea + 2; }
 
@@ -248,7 +252,7 @@ void StartGame(void);                                   /* does not return */
 /* The sprite builders share three registers: a5 = the DMA list being filled (long
  * source, word length in words, word VRAM address per entry), a6 = the sprite attribute table
  * being filled, d6 = the sprite link counter. */
-struct Vid { rp dma; rp sat; uint16_t link; };
+struct Vid { uint8_t *dma; uint8_t *sat; uint16_t link; };   /* (host bytes: DMAList and Satt hold the chip's formats) */
 void VBlank(void);                                       /* the game play vblank handler */
 void vb2(void);                                          /* the fades-only vblank handler */
 void DumpSprites(void);
@@ -579,7 +583,7 @@ uint16_t GetHotColdTotal(struct Team *tm);              /* a0 -> d1 */
 void EndShootout(void);
 void ClampPositionBox(struct SortObj *o);
 void ClearGameStats(void);
-void AddArenaAnimSprite(rp *sat, uint16_t *link);         /* a6, d6 */
+void AddArenaAnimSprite(uint8_t **sat, uint16_t *link);         /* a6, d6 */
 void PrintPlayerNameRight(uint16_t player, struct Team *tm);   /* d0, a2 */
 uint32_t SkipNameNumber(uint16_t player, struct Team *tm);   /* d0, a2 -> a1 */
 void SetStatScroll(void);
@@ -668,19 +672,19 @@ uint16_t GetShifter(uint16_t *first_bit);               /* -> d1, d2 */
 void AddPlayoffTeamStats(void);
 void ReadTeamStats(void);
 void DefaultMenus(void);
-uint16_t SuperDiv(rp bits, uint16_t div);               /* a3, d0 -> d0 */
-void ReadPassBits(rp bits);                             /* a3 */
+uint16_t SuperDiv(uint8_t *bits, uint16_t div);               /* a3, d0 -> d0 */
+void ReadPassBits(uint8_t *bits);                             /* a3 */
 uint16_t GetRandomUnusedTeam(uint32_t *used);           /* d3 -> d0 */
 void InitializeGameStructures(void);
 void FigureJoy(void);
 void maketree(void);
 void NewPO(void);
 void ContinuePlayoffs(void);
-void ClrPassBits(rp bits);                              /* a3 */
-void SuperAdd(rp bits, uint32_t v);                     /* a3, d0 */
-void SuperMult(rp bits, uint16_t m);                    /* a3, d0 */
-void PushBits(rp bits, uint16_t v, uint16_t range);         /* a3, d0, d1 */
-void WritePassBits(rp bits);                            /* a3 */
+void ClrPassBits(uint8_t *bits);                              /* a3 */
+void SuperAdd(uint8_t *bits, uint32_t v);                     /* a3, d0 */
+void SuperMult(uint8_t *bits, uint16_t m);                    /* a3, d0 */
+void PushBits(uint8_t *bits, uint16_t v, uint16_t range);         /* a3, d0, d1 */
+void WritePassBits(uint8_t *bits);                            /* a3 */
 void ResolveGames(void);
 void EncodePW(void);
 uint32_t FormatLastName(uint32_t name, uint8_t *out);   /* a0, a1 -> a1 = mesarea */

@@ -43,25 +43,25 @@ void KillCrowd(void)
  * length in words, word VRAM address per entry), a6 = the sprite attribute table being filled,
  * d6 = the sprite link counter. */
 #define SAT_MAX 0x40
-static inline rp dmalist(void) { return RAM(DMAList); }
-static inline rp satbase(void) { return RAM(Satt); }
+static inline uint8_t *dmalist(void) { return g.DMAList; }
+static inline uint8_t *satbase(void) { return g.Satt; }
 /* one DMA list entry */
 static inline void dma_entry(struct Vid *v, uint32_t src, uint16_t words, uint16_t vram)
 {
-    w32(v->dma, 0, src);
-    w16(v->dma, 4, words);
-    w16(v->dma, 6, vram);
-    v->dma = rp_add(v->dma, 8);
+    wr32(v->dma, src);
+    wr16(v->dma + 4, words);
+    wr16(v->dma + 6, vram);
+    v->dma += 8;
 }
 /* one hardware sprite: y, size / link, tile word, x */
 static inline void sat_entry(struct Vid *v, uint16_t y, uint8_t size, uint16_t tile, uint16_t x)
 {
-    w16(v->sat, 0, y);
-    w8(v->sat, 2, size);
-    w8(v->sat, 3, (uint8_t)v->link);
-    w16(v->sat, 4, tile);
-    w16(v->sat, 6, (uint16_t)(x + view_shift()));        /* (the wide view: to the middle) */
-    v->sat = rp_add(v->sat, 8);
+    wr16(v->sat, y);
+    v->sat[2] = size;
+    v->sat[3] = (uint8_t)v->link;
+    wr16(v->sat + 4, tile);
+    wr16(v->sat + 6, (uint16_t)(x + view_shift()));      /* (the wide view: to the middle) */
+    v->sat += 8;
     v->link++;
 }
 
@@ -91,9 +91,8 @@ void VBlank(void)
                     }
                 }
             } else if (g.gameclock != 0) {
-                rp jiffy = rp_add(RAM(gameclock), 2);
-                uint16_t j = r16(jiffy, 0);
-                w16(jiffy, 0, (uint16_t)(j - 0xAAA));
+                uint16_t j = g.gamejiffy;
+                g.gamejiffy = (uint16_t)(j - 0xAAA);
                 if (j < 0xAAA) {
                     g.disflags |= HI(dfclock);
                     g.gameclock--;
@@ -132,11 +131,10 @@ void DumpSprites2(void)
 /* display94.asm:DoDMAList. Transfer every entry of the DMA list, last first. */
 void DoDMAList(void)
 {
-    rp a6 = ram_at(g.DMAlistend);
-    rp base = dmalist();
-    while (!rp_same(a6, base)) {
-        a6 = rp_add(a6, -8);
-        DoDMA(r32(a6, 0), r16(a6, 4), r16(a6, 6));
+    const uint8_t *base = dmalist(), *a6 = base + (g.DMAlistend - ram_addr(base));   /* (DMAlistend: the 68000 address of its end) */
+    while (a6 != base) {
+        a6 -= 8;
+        DoDMA(rd32(a6), rd16(a6 + 4), rd16(a6 + 6));
     }
 }
 
@@ -167,13 +165,13 @@ void setvideo(void)
     showcrowd(&v);
     showref(&v);
     Crowd_Noise();
-    if (rp_same(v.sat, satbase())) {                      /* no sprites: one blank sprite */
-        ram_fill(v.sat, 0, 8);
-        v.sat = rp_add(v.sat, 8);
+    if (v.sat == satbase()) {                             /* no sprites: one blank sprite */
+        memset(v.sat, 0, 8);
+        v.sat += 8;
     }
-    w8(v.sat, -5, 0);                                     /* end the sprite list */
-    g.Sattsize = (uint16_t)(rp_diff(v.sat, satbase()) >> 1);
-    g.DMAlistend = rp_addr(v.dma);
+    v.sat[-5] = 0;                                        /* end the sprite list */
+    g.Sattsize = (uint16_t)((v.sat - satbase()) >> 1);
+    g.DMAlistend = ram_addr(v.dma);
     g.disflags |= HI(dfok);
 }
 
@@ -196,7 +194,7 @@ void updatescroll(struct Vid *v)
     int up = d1 < d4;
     for (int d3 = 0x1F; d3 >= 0; d3--) {                  /* dbeq: stop at the old row */
         int16_t d0 = (int16_t)(((-d1 + (up ? 0x1D : 0x1E)) & 0x1F) << 7);
-        d0 = (int16_t)(d0 + g.VmMap2);
+        d0 = (int16_t)(d0 + g.maps[1].vram);
         int16_t row = (int16_t)((up ? 0x3D : 0x1E) - d1);
         uint16_t off = (uint16_t)((uint16_t)row * perrow * 2);
         dma_entry(v, map + 4 + (int16_t)off, perrow, (uint16_t)d0);
@@ -211,13 +209,13 @@ void showref(struct Vid *v)
     if (!(g.sflags2 & HI(sf2refref))) return;
     g.sflags2 &= (uint16_t)~HI(sf2refref);
     uint32_t a0 = ram_addr(g.RefRamMap);
-    uint16_t d2 = r16(rp_add(RAM(VmMap1), 2), 0);
+    uint16_t d2 = g.maps[0].colshift;
     uint16_t d0 = (g.sflags & HI(sfhor)) ? 0xF : 2;
     d0 = (uint16_t)(d0 << d2);
     uint16_t d1 = (uint16_t)(2 << d2);
     d0 += 2;
     if (g.sflags & HI(sfhor)) d0 += 0xB;
-    d0 = (uint16_t)((d0 << 1) + g.VmMap1);
+    d0 = (uint16_t)((d0 << 1) + g.maps[0].vram);
     for (int i = 0; i < 8; i++) {
         dma_entry(v, a0, 7, d0);
         a0 += 0xE;
@@ -355,15 +353,13 @@ static void clock_digit(uint16_t d)
     print(clock_digits() + d * 4);
 }
 /* one tile of the vertical clock, written backward from a0: the high word of the divu result */
-static rp clock_char(uint32_t *d0, const uint8_t *font, rp a0)
+static void clock_char(uint32_t *d0, const uint8_t *font, int k)
 {
     uint16_t digit = (uint16_t)(*d0 >> 16);
     uint16_t tile = (uint16_t)(rd16(font + 0x64 + (int16_t)(digit << 1)) + g.smallfontchars);
     tile |= 0x8000;
-    a0 = rp_add(a0, -2);
-    w16(a0, 0, tile);
+    g.clocktiles[k] = tile;
     *d0 = (uint32_t)(int32_t)(int16_t)*d0;
-    return a0;
 }
 
 /* display94.asm:showclock. The game clock on screen. Horizontal rink: printed with the big
@@ -394,30 +390,26 @@ void showclock(struct Vid *v)
     g.disflags &= (uint16_t)~HI(dfclock);
     if (g.sflags2 & HI(sf2replay)) return;
     if (g.gsp == 4) return;
-    rp a0 = rp_add(RAM(clockram), 6);                         /* 5 words, written backward */
-    const uint8_t *font = rom_ptr(ART(SmallFontMap) + rd32(rom_ptr(ART(SmallFontMap)) + 4));
+    const uint8_t *font = rom_ptr(ART(SmallFontMap) + rd32(rom_ptr(ART(SmallFontMap)) + 4));   /* the 5 tiles, written backward */
     uint16_t colon = (uint16_t)((rd16(font + 0x78) + g.smallfontchars) | 0x8000);
-    g.clockram[0] = colon;
+    g.clocktiles[2] = colon;
     uint32_t d0 = (g.gmode2 & HI(1)) ? g.shootoutclock : g.gameclock;
     d0 = (uint32_t)(int32_t)(int16_t)d0;
     d0 = m68k_divu(d0, 0xA);
-    a0 = clock_char(&d0, font, a0);                       /* seconds ones */
+    clock_char(&d0, font, 4);                             /* seconds ones */
     d0 = m68k_divu(d0, 6);
-    a0 = clock_char(&d0, font, a0);                       /* seconds tens */
-    a0 = rp_add(a0, -2);                                  /* the colon */
-    d0 = m68k_divu(d0, 0xA);
-    a0 = clock_char(&d0, font, a0);                       /* minutes ones */
+    clock_char(&d0, font, 3);                             /* seconds tens */
+    d0 = m68k_divu(d0, 0xA);                              /* (2: the colon) */
+    clock_char(&d0, font, 1);                             /* minutes ones */
     d0 = (d0 << 16) | (d0 >> 16);
     if (d0 == 0) d0 = 0xFFF00000u;                        /* a blank leading zero */
-    a0 = clock_char(&d0, font, a0);                       /* minutes tens */
-    uint32_t src = rp_addr(a0);
+    clock_char(&d0, font, 0);                             /* minutes tens */
+    uint32_t src = ram_addr(g.clocktiles);
     uint16_t words = 5;
-    uint16_t mapoff = RAM_OFF_VmMap1;
+    const struct Plane *m = &g.maps[0];
     uint16_t y = 0x18, x = 3;
-    if (g.sflags & HI(sfhor)) { mapoff = RAM_OFF_VmMap2; y = 5; x = 0xD; }
-    rp a1 = ram_at(RAM_BASE + mapoff);
-    uint16_t d1 = r16(a1, 2);
-    uint16_t dest = (uint16_t)((((y << d1) + x) << 1) + r16(a1, 0));
+    if (g.sflags & HI(sfhor)) { m = &g.maps[1]; y = 5; x = 0xD; }
+    uint16_t dest = (uint16_t)((((y << m->colshift) + x) << 1) + m->vram);
     dma_entry(v, src, words, dest);
 }
 
@@ -485,12 +477,12 @@ void setffo(struct Vid *v)
     uppads(v);
     for (int i = 0; i < 7; i++) {
         struct RinkObj *a3 = &g.pads[i];
-        rp before = v->sat;
+        uint8_t *before = v->sat;
         addframe(a3, v);
-        if (rp_same(before, v->sat)) continue;
+        if (before == v->sat) continue;
         int16_t d1 = (int16_t)a3->Xfrac;                  /* (the label's x offset) */
-        w16(before, 6, (uint16_t)(r16(before, 6) + d1));
-        w16(before, 0xE, (uint16_t)(r16(before, 0xE) + d1));
+        wr16(before + 6, (uint16_t)(rd16(before + 6) + d1));
+        wr16(before + 0xE, (uint16_t)(rd16(before + 0xE) + d1));
     }
 }
 

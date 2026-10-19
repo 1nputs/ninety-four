@@ -43,8 +43,8 @@ void ScoutingReport(void)
     Create_HotCold_Table(team_struct(1));
     BuildHotColdLists();
     g.disflags &= (uint16_t)~HI(df32c);
-    g.Map1col1 = 6;
-    g.Map2col1 = 6;
+    g.maps[0].colshift = 6;
+    g.maps[1].colshift = 6;
     setVram(0);
     uint16_t c = 2;
     g.homepicchars = c;

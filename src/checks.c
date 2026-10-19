@@ -2041,12 +2041,12 @@ void a2touchpuck(struct SortObj *pl, struct SortObj *puck)
     if ((g.iflags & 4) && (g.iflags & 1) && pl->position != 0) {
         int icing = (g.iflags & 2) ? !PFLAG(pl, pfgoal) : PFLAG(pl, pfgoal) != 0;
         if (icing) {
-            AddPenalty(0xC, sortobj(g.icingPlayer[0]));   /* PenIcing on the player who shot it */
+            AddPenalty(0xC, sortobj(g.icingPlayer));   /* PenIcing on the player who shot it */
             return;
         }
     }
     g.iflags = 0;
-    g.icingPlayer[0] = (uint8_t)pl->SCnum;
+    g.icingPlayer = (uint8_t)pl->SCnum;
     int16_t y = pucky();
     if (PFLAG(pl, pfgoal)) {
         g.iflags |= 2;

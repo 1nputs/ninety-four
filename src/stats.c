@@ -60,7 +60,7 @@ void ReloadRinkGraphics(void)
     vdp_data32(0);
     vdp_ctrl16((uint16_t)(0x8D00 | (g.VSCRLPM >> 8 >> 2)));
     vdp_ctrl16(SYM_VDPR_MODE4);
-    g.Map3col1 = 5;
+    g.maps[2].colshift = 5;
     g.disflags = saved;
     g.disflags |= HI(df32c);
     view_rink_mode();                                     /* (the wide view's 40 columns) */
@@ -90,7 +90,7 @@ uint16_t SetupScreen(uint16_t row, uint16_t rows)
     Vmaddr(g.VSPRITES);
     vdp_data32(0);
     vdp_ctrl16(SYM_VDPR_MODE4 + 0x81);
-    g.Map3col1 = 6;
+    g.maps[2].colshift = 6;
     vdp_ctrl16(SYM_VDPR_HSCROLL);
     Vmaddr(0);
     vdp_data32(0);

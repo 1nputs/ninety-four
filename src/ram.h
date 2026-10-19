@@ -419,17 +419,21 @@ _Static_assert(sizeof(struct PuckCross) == 0x4, "PuckCross size");
 _Static_assert(offsetof(struct PuckCross, x) == 0x000, "PuckCross x");
 _Static_assert(offsetof(struct PuckCross, frames) == 0x002, "PuckCross frames");
 
+/* a plane map's place in VRAM and its width */
+struct RAM_PACKED Plane {
+    uint16_t vram;  /* the map's VRAM address (VmMap1) */
+    uint16_t colshift;  /* a row is 1 << colshift tiles (Map1col1) */
+};
+_Static_assert(sizeof(struct Plane) == 0x4, "Plane size");
+_Static_assert(offsetof(struct Plane, vram) == 0x000, "Plane vram");
+_Static_assert(offsetof(struct Plane, colshift) == 0x002, "Plane colshift");
+
 struct RAM_PACKED Ram {
     struct ReplayFrame replay[458];  /* $FFFF0000: the instant replay's frames, a ring to replayend; between games the save RAM's copy, and the game's RAM kept during a highlight: those by address (M68K_RAM) */
     uint8_t replayend[0xAC];  /* $FFFFAF54: end of the replay frames ($62 bytes each from M68K_RAM); suba4, adda43 and the record step wrap here */
     uint16_t VSCRLPM;  /* $FFFFB000 */
     uint16_t VSPRITES;  /* $FFFFB002 */
-    uint16_t VmMap1;  /* $FFFFB004 */
-    uint16_t Map1col1;  /* $FFFFB006 */
-    uint16_t VmMap2;  /* $FFFFB008 */
-    uint16_t Map2col1;  /* $FFFFB00A */
-    uint16_t VmMap3;  /* $FFFFB00C */
-    uint16_t Map3col1;  /* $FFFFB00E */
+    struct Plane maps[3];  /* $FFFFB004: the plane maps: 1 and 2 the planes, 3 the window (VmMap1) */
     uint16_t BigFontChars;  /* $FFFFB010 */
     uint16_t smallfontchars;  /* $FFFFB012 */
     uint16_t smallfont2chars;  /* $FFFFB014 */
@@ -562,8 +566,9 @@ struct RAM_PACKED Ram {
     uint16_t ltx;  /* $FFFFBF7C */
     uint16_t lty;  /* $FFFFBF7E */
     uint8_t iflags;  /* $FFFFBF80 */
-    uint8_t icingPlayer[0x5];  /* $FFFFBF81 */
-    uint16_t clockram[0x4];  /* $FFFFBF86 */
+    uint8_t icingPlayer;  /* $FFFFBF81 */
+    uint16_t clocktiles[5];  /* $FFFFBF82: the vertical clock's tiles, the colon the third (clockram) (clocktiles) */
+    uint8_t _padBF8C[0x2];
     uint16_t xc1;  /* $FFFFBF8E */
     uint16_t yc1;  /* $FFFFBF90 */
     uint16_t yleader;  /* $FFFFBF92 */
@@ -639,7 +644,7 @@ struct RAM_PACKED Ram {
     uint8_t RefRamMap[0x70];  /* $FFFFC3F6 */
     uint16_t gsp;  /* $FFFFC466 */
     uint16_t gameclock;  /* $FFFFC468 */
-    uint8_t _padC46A[0x2];
+    uint16_t gamejiffy;  /* $FFFFC46A: the clock's jiffies to its next second (gameclock+2) */
     uint16_t PerTimeTotal;  /* $FFFFC46C */
     uint16_t ChkCnt;  /* $FFFFC46E */
     uint16_t TempPlOffset;  /* $FFFFC470 */
@@ -856,12 +861,12 @@ _Static_assert(offsetof(struct Ram, replay) == 0x0000, "replay");
 _Static_assert(offsetof(struct Ram, replayend) == 0xAF54, "replayend");
 _Static_assert(offsetof(struct Ram, VSCRLPM) == 0xB000, "VSCRLPM");
 _Static_assert(offsetof(struct Ram, VSPRITES) == 0xB002, "VSPRITES");
-_Static_assert(offsetof(struct Ram, VmMap1) == 0xB004, "VmMap1");
-_Static_assert(offsetof(struct Ram, Map1col1) == 0xB006, "Map1col1");
-_Static_assert(offsetof(struct Ram, VmMap2) == 0xB008, "VmMap2");
-_Static_assert(offsetof(struct Ram, Map2col1) == 0xB00A, "Map2col1");
-_Static_assert(offsetof(struct Ram, VmMap3) == 0xB00C, "VmMap3");
-_Static_assert(offsetof(struct Ram, Map3col1) == 0xB00E, "Map3col1");
+_Static_assert(offsetof(struct Ram, maps) == 0xB004, "maps");
+/* Map1col1 at 0xB006 overlaps the previous field; use RAM_OFF_Map1col1 */
+/* VmMap2 at 0xB008 overlaps the previous field; use RAM_OFF_VmMap2 */
+/* Map2col1 at 0xB00A overlaps the previous field; use RAM_OFF_Map2col1 */
+/* VmMap3 at 0xB00C overlaps the previous field; use RAM_OFF_VmMap3 */
+/* Map3col1 at 0xB00E overlaps the previous field; use RAM_OFF_Map3col1 */
 _Static_assert(offsetof(struct Ram, BigFontChars) == 0xB010, "BigFontChars");
 _Static_assert(offsetof(struct Ram, smallfontchars) == 0xB012, "smallfontchars");
 _Static_assert(offsetof(struct Ram, smallfont2chars) == 0xB014, "smallfont2chars");
@@ -1001,7 +1006,8 @@ _Static_assert(offsetof(struct Ram, ltx) == 0xBF7C, "ltx");
 _Static_assert(offsetof(struct Ram, lty) == 0xBF7E, "lty");
 _Static_assert(offsetof(struct Ram, iflags) == 0xBF80, "iflags");
 _Static_assert(offsetof(struct Ram, icingPlayer) == 0xBF81, "icingPlayer");
-_Static_assert(offsetof(struct Ram, clockram) == 0xBF86, "clockram");
+_Static_assert(offsetof(struct Ram, clocktiles) == 0xBF82, "clocktiles");
+/* clockram at 0xBF86 overlaps the previous field; use RAM_OFF_clockram */
 _Static_assert(offsetof(struct Ram, xc1) == 0xBF8E, "xc1");
 _Static_assert(offsetof(struct Ram, yc1) == 0xBF90, "yc1");
 _Static_assert(offsetof(struct Ram, yleader) == 0xBF92, "yleader");
@@ -1069,6 +1075,7 @@ _Static_assert(offsetof(struct Ram, RefPen) == 0xC3F4, "RefPen");
 _Static_assert(offsetof(struct Ram, RefRamMap) == 0xC3F6, "RefRamMap");
 _Static_assert(offsetof(struct Ram, gsp) == 0xC466, "gsp");
 _Static_assert(offsetof(struct Ram, gameclock) == 0xC468, "gameclock");
+_Static_assert(offsetof(struct Ram, gamejiffy) == 0xC46A, "gamejiffy");
 _Static_assert(offsetof(struct Ram, PerTimeTotal) == 0xC46C, "PerTimeTotal");
 _Static_assert(offsetof(struct Ram, ChkCnt) == 0xC46E, "ChkCnt");
 _Static_assert(offsetof(struct Ram, TempPlOffset) == 0xC470, "TempPlOffset");
@@ -1443,6 +1450,7 @@ static inline struct SortObj *sortobj(int n) { return (struct SortObj *)((uint8_
 #define RAM_OFF_lty 0xBF7E
 #define RAM_OFF_iflags 0xBF80
 #define RAM_OFF_icingPlayer 0xBF81
+#define RAM_OFF_clocktiles 0xBF82
 #define RAM_OFF_clockram 0xBF86
 #define RAM_OFF_xc1 0xBF8E
 #define RAM_OFF_yc1 0xBF90
@@ -1511,6 +1519,7 @@ static inline struct SortObj *sortobj(int n) { return (struct SortObj *)((uint8_
 #define RAM_OFF_RefRamMap 0xC3F6
 #define RAM_OFF_gsp 0xC466
 #define RAM_OFF_gameclock 0xC468
+#define RAM_OFF_gamejiffy 0xC46A
 #define RAM_OFF_PerTimeTotal 0xC46C
 #define RAM_OFF_ChkCnt 0xC46E
 #define RAM_OFF_TempPlOffset 0xC470

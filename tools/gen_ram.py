@@ -242,6 +242,12 @@ CROSS_DECL = [
     (0x2, 'uint16_t frames;', 'frames until it does ($FFFF: never; st puckcross2 sets the high byte)'),
 ]
 
+# ---- the plane maps (VmMap1-3 and their row shifts) -------------------------------------------
+PLANE_DECL = [
+    (0x0, 'uint16_t vram;', "the map's VRAM address (VmMap1)"),
+    (0x2, 'uint16_t colshift;', 'a row is 1 << colshift tiles (Map1col1)'),
+]
+
 # ---- the game's structures (NATIVE-STATE.md, step 3) -------------------------------------
 # Each: its size, what it is, and its fields (offset, declaration, comment) at the 68000's offsets,
 # which the generator checks follow one another and the C asserts. TYPED gives a RAM region one.
@@ -255,6 +261,7 @@ STRUCTS = {
     'MenuPos': (4, "a menu's state", None, MENU_DECL),
     'FoMan': (4, "a faceoff man's frame and attribute (fofdata2)", None, FOMAN_DECL),
     'PuckCross': (4, "where and when the puck crosses a goal line (findpc)", None, CROSS_DECL),
+    'Plane': (4, "a plane map's place in VRAM and its width", None, PLANE_DECL),
 }
 # RAM regions of the game's structures: the symbol, the field's declaration, and its comment
 TYPED = {
@@ -266,6 +273,8 @@ TYPED = {
     'fm_track_slots': ('struct TrackSlot fm_slots[8]', "the track slots (track 7 the first)"),
     'fofdata2': ('struct FoMan fomen[3]', "the faceoff men: the two players, then the ref (fofdata)"),
     'puckcross': ('struct PuckCross puckcross[2]', "the puck's crossings of the top goal line, then the bottom's"),
+    'VmMap1': ('struct Plane maps[3]', "the plane maps: 1 and 2 the planes, 3 the window"),
+    'clocktiles': ('uint16_t clocktiles[5]', "the vertical clock's tiles, the colon the third (clockram)"),
     'menuitem': ('struct MenuPos menu', "the menu's state"),
     'mesarea': ('uint8_t mesarea[0x64]', "the message area, a String as the cartridge's (a big-endian length word counting itself, the text: TextBuffer)"),
     'pads': ('struct RinkObj pads[7]', "the pads' markers (Joy1Struct the second; the fourth the replay camera, ReplayStarStruct), then the gloves (glovestruct)"),
@@ -349,6 +358,13 @@ for sname, (ssize, sdoc, size_name, sdecl) in STRUCTS.items():
 # ---- RAM struct ---------------------------------------------------------------------------
 fields, asserts = [], []
 pos = 0
+# places the game uses that ram_addrs.inc leaves unnamed (the 68000 reaches them as a neighbour's
+# address plus an offset)
+EXTRA = [
+    (0xFFFFC46A, 'gamejiffy', "the clock's jiffies to its next second (gameclock+2)"),
+    (0xFFFFBF82, 'clocktiles', "the vertical clock's five tiles, m:ss, for the DMA list (clockram-4)"),
+]
+rows = rows + [{'name': n, 'addr': a, 'widths': {'w': 1}, 'comment': c} for a, n, c in EXTRA]
 inram = [r for r in rows if RAM_BASE <= r['addr'] < RAM_BASE + RAM_SIZE]
 inram.sort(key=lambda r: r['addr'])
 for i, r in enumerate(inram):
