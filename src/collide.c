@@ -467,7 +467,7 @@ hitter:
         newcheck();
         return;
     }
-    w8(RAM(puckc), 0, 0xFF);                                         /* the puck carrier lost it */
+    puck_loose();                                                    /* the puck carrier lost it */
     if (!(g.gmode & (1 << gmhl)) && a2->SPA == SPAfallback && (a2->facedir & 3) == 0 && !(a2->pflags2 & (1 << 4))) {
         uint16_t r = randomd0(0xA0);
         if ((int16_t)r <= a2->impact && !(g.gmode & (1 << gmclock))) {
@@ -619,7 +619,7 @@ void checkgoal(struct SortObj *goal, struct SortObj *o, int16_t x, int16_t y)
     o->pflags &= (uint8_t)~(1 << pfgoal);
     if ((int16_t)puck_carrier() >= 0) {                         /* the carrier loses it */
         struct SortObj *car = sortobj((int16_t)puck_carrier());
-        w8(RAM(puckc), 0, 0xFF);
+        puck_loose();
         car->nopuck[0] = 8;
         int16_t py = sortobj(puckscnum)->Ypos;
         if (!(car->pflags & (1 << pfgoal)))
@@ -1127,7 +1127,7 @@ void puckglue(struct SortObj *p, struct SortObj *puck)
     (void)puck;
     int16_t snd = 7;                                       /* SFXpuckget */
     uint16_t d0 = (uint16_t)p->SCnum;
-    w16(RAM(puckc), 0, d0);
+    set_puck_carrier(d0);
     struct Team *other = team_struct(0), *own = team_struct(1);
     if (!(p->pflags & (1 << pfteam))) { struct Team *t = other; other = own; own = t; }
     ST_W(other->assist1);
@@ -1224,7 +1224,7 @@ void puckgoalie(struct SortObj *gk, struct SortObj *puck, int16_t dx, int16_t dy
     sfx(0x24);                                             /* SFXpuckbody */
     if ((int16_t)puck_carrier() >= 0) {
         struct SortObj *car = sortobj((int16_t)puck_carrier());
-        w8(RAM(puckc), 0, 0xFF);
+        puck_loose();
         car->nopuck[0] = 0x14;
         g.lastplayer = (uint16_t)car->SCnum;
         g.sflags &= (uint16_t)~(HI(sfspdir) | HI(sfssdir));
@@ -1269,7 +1269,7 @@ bounceoff:
 /* collide94.asm:deflect. Random puck direction on a deflection. */
 void deflect(struct SortObj *puck)
 {
-    w8(RAM(puckc), 0, 0xFF);
+    puck_loose();
     puck->Yvel = (int16_t)randomd0s(0x1000);
     puck->Xvel = (int16_t)randomd0s(0x1000);
     puck->Zvel = (int16_t)randomd0(0x1000);
@@ -1371,7 +1371,7 @@ int TryAddPlayerToList(struct Team *team, uint16_t player, int slot)
  * his position, or from the whole roster. */
 void SetPlList(struct Team *team)
 {
-    ram_fill(RAM(PlList), 0, 6);
+    memset(g.PlList, 0, 6);
     const uint8_t *prio = rom_ptr(SYM_priolist);
     if ((int16_t)team->goalie < 0)
         prio++;                                            /* no goalie: an extra attacker */
@@ -1473,21 +1473,21 @@ void forcepldata(struct Team *team)
 
 /* collide94.asm:ResetBench .rb. One team: count the players left in the box into PBnum (byte
  * at PBnum, home in the high nibble) and put everyone else on the bench. */
+static void pb_add(int d) { g.PBnum = (uint16_t)((g.PBnum & 0xFF) | (uint16_t)(uint8_t)((g.PBnum >> 8) + d) << 8); }   /* (PBnum's high byte) */
 static void rb(uint8_t d1, struct Team *tm)
 {
-    rp pb = RAM(PBnum);
     for (int d0 = 0x32; d0 >= 0; d0 -= 2) {
-        w8(pb, 0, (uint8_t)(r8(pb, 0) + d1));
+        pb_add(d1);
         uint16_t st = tm->pdst[d0 / 2];
         if ((int16_t)st > 0) {
             if (!(st & (1u << 12)))
                 continue;
             if (st & 0x7FF)
                 continue;
-            w8(pb, 0, (uint8_t)(r8(pb, 0) - d1));
+            pb_add(-d1);
             continue;
         }
-        w8(pb, 0, (uint8_t)(r8(pb, 0) - d1));
+        pb_add(-d1);
         if (st == 0xFFFD || st == 0xFFFC)
             continue;                                      /* injured */
         tm->pdst[d0 / 2] = 0xFFFE;
@@ -1497,7 +1497,7 @@ static void rb(uint8_t d1, struct Team *tm)
 /* collide94.asm:ResetBench. Everyone out of the penalty box and onto his bench. */
 void ResetBench(void)
 {
-    w8(RAM(PBnum), 0, 0);
+    g.PBnum &= 0xFF;                                      /* (clr.b: the high byte) */
     rb(0x10, team_struct(0));
     rb(1, team_struct(1));
 }
@@ -1545,8 +1545,7 @@ void setplayer(uint16_t roster, struct SortObj *o)
     tm->pdst[idx / 2] = 0xFFFF;
     const uint8_t *td = rom_ptr(tm->data);
     const uint8_t *odds = td + (int16_t)rd16(td + 8);     /* the team's ScoreOdds bytes */
-    rp bonus = RAM(PPBonus);
-    ram_fill(bonus, 0, 4);                                /* PPBonus, PKBonus, ThirdPBonus, HmAwBonus */
+    g.PPBonus = g.PKBonus = g.ThirdPBonus = g.HmAwBonus = 0;
     if (o->position != 0) {
         if (g.sflags2 & HI(sf2pwrplay)) {
             if (!chkpk2(o))

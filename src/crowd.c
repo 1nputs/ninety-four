@@ -189,11 +189,11 @@ void BuildHotColdLists(void)
     g.awayhotidx = 0;
     g.homehotidx = 0;
     SortHotColdStarters(team_struct(0));
-    CopyHottestPlayer(RAM(homehotplayer));
-    CopyColdestPlayer(RAM(homecoldplayer));
+    g.homehotplayer = CopyHottestPlayer();
+    g.homecoldplayer = CopyColdestPlayer();
     SortHotColdStarters(team_struct(1));
-    CopyHottestPlayer(RAM(awayhotplayer));
-    CopyColdestPlayer(RAM(awaycoldplayer));
+    g.awayhotplayer = CopyHottestPlayer();
+    g.awaycoldplayer = CopyColdestPlayer();
 }
 
 /* crowd94.asm:SortHotColdStarters. Sum the hot / cold values of the 6 starters of team a0 into
@@ -231,17 +231,9 @@ void SortHotColdStarters(struct Team *tm)
 }
 
 /* crowd94.asm:CopyHottestPlayer / CopyColdestPlayer. The hottest (first) or coldest (sixth)
- * player of TempBuffer to the one entry list at a0. */
-void CopyHottestPlayer(rp a0)
-{
-    w8(a0, 0, 0);
-    w8(a0, 1, g.TempBuffer[0]);
-}
-void CopyColdestPlayer(rp a0)
-{
-    w8(a0, 0, 0);
-    w8(a0, 1, g.TempBuffer[10]);
-}
+ * player of TempBuffer, for the one word list at a0. */
+uint16_t CopyHottestPlayer(void) { return g.TempBuffer[0]; }
+uint16_t CopyColdestPlayer(void) { return g.TempBuffer[10]; }
 
 /* crowd94.asm:CompareHotColdTotals. awayhotter = 1 when the away total is higher; d0 = -1, $22
  * or $23 by the difference. */

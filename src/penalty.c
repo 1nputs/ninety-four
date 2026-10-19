@@ -122,7 +122,7 @@ cont:
     struct Matchup *gs = NULL;
     int16_t d3 = NewTicker(&gs);
     NewTicker3(d3, gs);
-    w8(RAM(puckc), 0, 0xFF);
+    puck_loose();
     struct SortObj *puck = sortobj(puckscnum);
     assinsert(0x1A, puck);                                /* puckunflip */
     puck->temp1 = 0x1C20;
@@ -996,6 +996,10 @@ void reenergizeteam(struct Team *tm)
     }
 }
 
+/* the weights at nibblebuffer two to a long, as getscore adds them (add.l) */
+static uint32_t nib_long(int k) { return (uint32_t)g.nibblebuffer[2 * k] << 16 | g.nibblebuffer[2 * k + 1]; }
+static void set_nib_long(int k, uint32_t v) { g.nibblebuffer[2 * k] = (uint16_t)(v >> 16); g.nibblebuffer[2 * k + 1] = (uint16_t)v; }
+
 /* the weighted goals of one team's period: d0 = scoring team, d1 = the other team. Adds the
  * scoring team's (bits 4-6) and the other team's (bits 0-2) sctab rows as weights */
 static uint16_t getscore(uint16_t d0, uint16_t d1)
@@ -1004,13 +1008,13 @@ static uint16_t getscore(uint16_t d0, uint16_t d1)
     const uint8_t *a1 = rom_ptr(rd32(tl + d0 * 4));
     a1 += rd16(a1 + 8);
     unsigned row = (a1[0] & 0x70) >> 1;                   /* row * 8 */
-    g.nibblebuffer[0] = ((uint32_t)sctab[row / 2] << 16) | sctab[row / 2 + 1];
-    g.nibblebuffer[1] = ((uint32_t)sctab[row / 2 + 2] << 16) | sctab[row / 2 + 3];
+    set_nib_long(0, ((uint32_t)sctab[row / 2] << 16) | sctab[row / 2 + 1]);
+    set_nib_long(1, ((uint32_t)sctab[row / 2 + 2] << 16) | sctab[row / 2 + 3]);
     a1 = rom_ptr(rd32(tl + d1 * 4));
     a1 += rd16(a1 + 8);
     row = (a1[0] & 7) << 3;
-    g.nibblebuffer[0] += ((uint32_t)sctab[row / 2] << 16) | sctab[row / 2 + 1];
-    g.nibblebuffer[1] += ((uint32_t)sctab[row / 2 + 2] << 16) | sctab[row / 2 + 3];
+    set_nib_long(0, nib_long(0) + (((uint32_t)sctab[row / 2] << 16) | sctab[row / 2 + 1]));
+    set_nib_long(1, nib_long(1) + (((uint32_t)sctab[row / 2 + 2] << 16) | sctab[row / 2 + 3]));
     return WeightedRandomSelect(4);
 }
 

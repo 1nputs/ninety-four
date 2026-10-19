@@ -246,8 +246,8 @@ static void run_AttributeCalc(const Record *r) { expect_reg16(r, R_D3, (uint16_t
 #define HOTCOLD(name) static void run_##name(const Record *r) { struct Team *tm; expect_reg16(r, R_D1, name(&tm), "d1"); expect_reg16(r, R_A1, (uint16_t)rp_addr(team_place(tm)), "a1"); }
 HOTCOLD(NextHomeHotPlayer) HOTCOLD(NextAwayHotPlayer) HOTCOLD(NextHomeColdPlayer) HOTCOLD(NextAwayColdPlayer)
 static void run_SortHotColdStarters(const Record *r) { SortHotColdStarters(TEAM(R_A0)); }
-static void run_CopyHottestPlayer(const Record *r) { CopyHottestPlayer(ram_at(r->regs_in[R_A0])); }
-static void run_CopyColdestPlayer(const Record *r) { CopyColdestPlayer(ram_at(r->regs_in[R_A0])); }
+static void run_CopyHottestPlayer(const Record *r) { w16(PLACE(R_A0), 0, CopyHottestPlayer()); }
+static void run_CopyColdestPlayer(const Record *r) { w16(PLACE(R_A0), 0, CopyColdestPlayer()); }
 static void run_CompareHotColdTotals(const Record *r) { expect_reg16(r, R_D0, CompareHotColdTotals(), "d0"); }
 static void run_GetHotColdTotal(const Record *r) { expect_reg16(r, R_D1, GetHotColdTotal(TEAM(R_A0)), "d1"); }
 
@@ -343,7 +343,7 @@ static void run_DecompressGraphicsWithCallback(const Record *r) { expect_reg16(r
 static void run_DecompressGraphicsPlain(const Record *r) { expect_reg16(r, R_D4, DecompressGraphicsPlain(r->regs_in[R_A2], R16(R_D4)), "d4"); }
 static void run_DecompressGraphics(const Record *r) { expect_reg16(r, R_D4, DecompressGraphics(r->regs_in[R_A2], R16(R_D4)), "d4"); }
 static void run_DecompressBytecode(const Record *r) { DecompressBytecode(r->regs_in[R_A0], R16(R_D1)); }
-static struct Unpack unpack_in(const Record *r) { struct Unpack u = { r->regs_in[R_A0], (uint8_t)r->regs_in[R_D1], R16(R_D3) }; return u; }
+static struct Unpack unpack_in(const Record *r) { struct Unpack u = { r->regs_in[R_A0], (uint8_t)r->regs_in[R_D1], R16(R_D3), unpack_ring() }; return u; }
 static void unpack_out(const Record *r, const struct Unpack *u, int done)
 {
     if (done) return;                              /* the end code returns from DecompressBytecode */
@@ -676,7 +676,7 @@ static void run_RestartAdvantageMarks(const Record *r) { RestartAdvantageMarks()
 static void run_PrintAdvantageMarks(const Record *r) { PrintAdvantageMarks(); }
 static void run_GetTeamNickname(const Record *r) { expect_reg32(r, R_A1, GetTeamNickname(TEAM(R_A2)), "a1"); }
 static void run_GetTeamArena(const Record *r) { expect_reg32(r, R_A1, GetTeamArena(TEAM(R_A2)), "a1"); }
-static void run_InitScoutingDisplay(const Record *r) { expect_reg16(r, R_A0, (uint16_t)rp_addr(InitScoutingDisplay()), "a0"); }
+static void run_InitScoutingDisplay(const Record *r) { expect_reg16(r, R_A0, (uint16_t)InitScoutingDisplay(), "a0"); }
 static void run_UpdateScoutingDisplay(const Record *r) { UpdateScoutingDisplay(); }
 static void run_ScrollDisplayUp(const Record *r) { ScrollDisplayUp(); }
 static void run_PlayedByHome(const Record *r) { expect_reg32(r, R_A1, PlayedByHome(), "a1"); }

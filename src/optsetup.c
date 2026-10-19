@@ -16,7 +16,7 @@
 #include "optsetup_strings_gen.h"
 
 #define CARD(n) HI(n)                                    /* setupcardflags bits (btst on the word's high byte) */
-static uint16_t option(uint16_t line) { return r16(RAM(OptPlayMode), line); }
+static uint16_t option(uint16_t line) { return g.options[line / 2]; }   /* (line: the option's byte offset) */
 
 /* (rules: more period lengths) their names as the setup prints them, padded like PerLengthValues */
 #define LENGTH_TEXT(s) "\x00\x16" s                    /* (a String: its length, 22, then the text) */
@@ -242,9 +242,9 @@ void ChangeOption(uint16_t line, int16_t d2)
             g.OptLine = g.TmpOptLine;
         }
     }
-    rp opt = rp_add(RAM(OptPlayMode), line);
+    unsigned opt = line / 2;                              /* (line: the option's byte offset) */
     uint32_t limits = g.FourWayPlay ? SYM_OptionLimits4Way : SYM_OptionLimits;
-    uint16_t lo = 0, hi = rd16(rom_ptr(limits + line)), v = r16(opt, 0);
+    uint16_t lo = 0, hi = rd16(rom_ptr(limits + line)), v = g.options[opt];
     if (line == 4 || line == 6) hi = league.teams;        /* (the league's; the cartridge's table says 28) */
     if ((int16_t)g.OptPlayMode >= 2 && g.OptPlayMode != 4 && line == 4) hi = league.playoff_teams;
     if (line == 8 && rules[RULE_PERIOD_LENGTHS]) hi = 7;  /* (rules: more period lengths) */
@@ -266,7 +266,7 @@ void ChangeOption(uint16_t line, int16_t d2)
             if (d2 >= 0) { if (v == 9 || v == 0xA) v = 0xB; }
             else if (v == 0xA) v = 8;
         }
-        w16(opt, 0, v);
+        g.options[opt] = v;
         if (d2 == 0) return;
         if (g.OptPlayMode == 1 && line == 0) {
             ContinuePlayoffs();
@@ -498,8 +498,8 @@ uint16_t ReadSetupPads(void)
 void SetupDemo(void)
 {
     g.demoflag = 0;
-    w16(RAM(seed), 0, vdp_hv16());
-    w16(RAM(seed), 2, vdp_hv16());
+    uint16_t hi = vdp_hv16();                             /* a new seed from the HV counter: its high word first */
+    g.seed = (uint32_t)hi << 16 | vdp_hv16();
     g.OptPlayMode = 0;
     g.OptNOP = 0;
     g.OptLine = 0;
@@ -516,8 +516,8 @@ void SetupStart(void)
     g.goaliemode1 = g.OptGoalie;
     g.goaliemode2 = g.OptGoalie;
     UpdatePlayoffLevel();
-    w16(RAM(seed), 0, vdp_hv16());
-    w16(RAM(seed), 2, vdp_hv16());
+    uint16_t hi = vdp_hv16();                             /* a new seed from the HV counter: its high word first */
+    g.seed = (uint32_t)hi << 16 | vdp_hv16();
     g.TmpOptLine2 = g.OptLine;
     if (g.OptLine == 2) {
         g.OptLine = 0;

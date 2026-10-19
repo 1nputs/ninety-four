@@ -125,8 +125,8 @@ void PrintPlayerNameRight(uint16_t player, struct Team *tm)
 uint32_t SkipNameNumber(uint16_t player, struct Team *tm)
 {
     uint32_t a1 = FormatPlayerNumInitial(player, tm);
-    rp p = ram_at(a1);
-    w16(p, 2, (uint16_t)(r16(p, 0) - 2));
+    uint8_t *p = ram_bytes(ram_at(a1), 4);                /* (the message area) */
+    wr16(p + 2, (uint16_t)(rd16(p) - 2));
     return a1 + 2;
 }
 

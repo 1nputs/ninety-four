@@ -61,21 +61,20 @@ void resetplstuff(void)
  * A bubble sort over the 16 entries until nothing moves. */
 void SprSort(void)
 {
-    rp ylist = RAM(Ylist), oo = RAM(OOlist), pos = RAM(OOlistpos);
     for (int i = 0; i < 0x10; i++) {
         struct SortObj *o = sortobj(i);
-        w16(ylist, 2 * i, (uint16_t)(g.sflags & HI(sfhor) ? o->Xpos : o->Ypos));
+        g.Ylist[i] = (uint16_t)(g.sflags & HI(sfhor) ? o->Xpos : o->Ypos);
     }
     int moved;
     do {
         moved = 0;
         for (int i = 0; i < 0xF; i++) {
-            uint8_t a = r8(oo, i), b = r8(oo, i + 1);
-            if ((int16_t)r16(ylist, a) <= (int16_t)r16(ylist, b)) continue;
-            w8(oo, i + 1, a);
-            w8(oo, i, b);
-            w16(pos, a, (uint16_t)(i + 1));
-            w16(pos, b, (uint16_t)i);
+            uint8_t a = g.OOlist[i], b = g.OOlist[i + 1];    /* (byte offsets: the object * 2) */
+            if ((int16_t)g.Ylist[a / 2] <= (int16_t)g.Ylist[b / 2]) continue;
+            g.OOlist[i + 1] = a;
+            g.OOlist[i] = b;
+            g.OOlistpos[a / 2] = (uint16_t)(i + 1);
+            g.OOlistpos[b / 2] = (uint16_t)i;
             moved = 1;
         }
     } while (moved);
@@ -170,7 +169,6 @@ uint16_t defaultsprites(uint16_t chars)
  * the sort order lists, then SprSort -> d4. */
 uint16_t defaultsprites2(uint16_t chars)
 {
-    rp oo = RAM(OOlist), pos = RAM(OOlistpos);
     const uint16_t *t = dslist;
     for (uint16_t n = 0; n < 0x10; n++) {
         struct SortObj *o = sortobj(n);
@@ -189,8 +187,8 @@ uint16_t defaultsprites2(uint16_t chars)
         o->radiusy = (int16_t)*t++;
         o->asslist[0] = (uint8_t)*t++;
         o->pflags = (uint8_t)*t++;
-        w8_next(&oo, (uint8_t)(n << 1));
-        w16(pos, 0, n); pos = rp_add(pos, 2);
+        g.OOlist[n] = (uint8_t)(n << 1);
+        g.OOlistpos[n] = n;
     }
     SprSort();
     return chars;
@@ -314,7 +312,7 @@ void setupice(void)
     setplayercolors();
     g.PadControlBits = 0xFFFF;
     g.PadControlBits34 = 0xFFFF;
-    ram_fill(RAM(padcont), 0, 12);
+    memset(g.padcont, 0, sizeof g.padcont);
     ST_W(g.c1playernum);
     ST_W(g.c2playernum);
     struct Vid v = { g.DMAList, g.Satt, 1 };
@@ -367,13 +365,13 @@ void clearTeamStats(void)
 {
     struct Team *home = team_struct(0), *away = team_struct(1);
     uint16_t hg = home->goalie, ag = away->goalie;
-    ram_write(RAM(homehotcoldsave), home->hotcold, 0x1A0);
-    ram_write(RAM(awayhotcoldsave), away->hotcold, 0x1A0);
+    memcpy(g.homehotcoldsave, home->hotcold, 0x1A0);
+    memcpy(g.awayhotcoldsave, away->hotcold, 0x1A0);
     memset(home, 0, sizeof *home);
     memset(away, 0, sizeof *away);
     rules_clear_stats();                                  /* (the rules' own, beside the RAM) */
-    ram_read(home->hotcold, RAM(homehotcoldsave), 0x1A0);
-    ram_read(away->hotcold, RAM(awayhotcoldsave), 0x1A0);
+    memcpy(home->hotcold, g.homehotcoldsave, 0x1A0);
+    memcpy(away->hotcold, g.awayhotcoldsave, 0x1A0);
     away->goalie = ag;
     home->goalie = hg;
     home->penbox[0] = 0xFF;                               /* (st tmpdst+$34: the penalty box empty) */
@@ -408,7 +406,7 @@ void setupice_highlight(void)
     setplayercolors();
     g.PadControlBits = 0xFFFF;
     g.PadControlBits34 = 0xFFFF;
-    ram_fill(RAM(padcont), 0, 12);
+    memset(g.padcont, 0, sizeof g.padcont);
     ST_W(g.c1playernum);
     ST_W(g.c2playernum);
     setupEASNmap();
@@ -652,13 +650,13 @@ void VBlank_Playoff(void)
 
 /* setup94.asm:InitScoutingDisplay. Start the text player: no line yet, a new paragraph next ->
  * a0 = the paragraph list (TestList). */
-rp InitScoutingDisplay(void)
+uint32_t InitScoutingDisplay(void)
 {
     g.VertLineScrolling = 0xFFFF;
     ST_W(g.PlayerScrollCtr);
     g.SelectedPlayerIdx = 0;
     g.typedelay = 0;
-    return RAM(TestList);
+    return ram_addr(g.TestList);
 }
 
 /* setup94.asm:UpdateScoutingDisplay. The text player: each time its delay (typedelay; longer
@@ -678,7 +676,7 @@ void UpdateScoutingDisplay(void)
         g.DispAttribCtr = 0;
         uint16_t i = g.SelectedPlayerIdx;
         g.SelectedPlayerIdx += 2;
-        d0 = (int16_t)r16(RAM(TestList), (int16_t)i);
+        d0 = (int16_t)g.TestList[i / 2];                  /* (SelectedPlayerIdx: its byte offset) */
         if (d0 < 0) {                                     /* the list's end */
             g.typedelay = 0x7FFF;
             g.screentimer = 0x1E0;

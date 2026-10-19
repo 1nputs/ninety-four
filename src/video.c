@@ -14,18 +14,25 @@
  * aaaa aaaa, low word 0000 0000 0000 00aa (asl.l #2 / lsr.w #2 / ori.w #$4000 / swap) */
 static uint32_t vram_write_cmd(uint16_t a) { return (uint32_t)(0x4000 | (a & 0x3FFF)) << 16 | (a >> 14); }
 
+/* nibblebuffer's word k (past its six as the 68000 goes on) */
+static uint16_t nib(unsigned k) { return k < 6 ? g.nibblebuffer[k] : r16(rp_add(RAM(nibblebuffer), (int32_t)(2 * k)), 0); }
+static void set_nib(unsigned k, uint16_t v)
+{
+    if (k < 6) g.nibblebuffer[k] = v;
+    else w16(rp_add(RAM(nibblebuffer), (int32_t)(2 * k)), 0, v);
+}
+
 /* video94.asm:UnpackNibbles. a0 = packed data, d0 = count: unpack count 4-bit values (high
  * nibble first) into words at nibblebuffer. */
 void UnpackNibbles(uint32_t src, uint16_t count)
 {
     uint32_t p = src;
-    rp out = RAM(nibblebuffer);
     int lo = 0;
-    while (count--) {
+    for (unsigned k = 0; count--; k++) {
         uint8_t b = m8(p);
         if (lo) p++; else b >>= 4;
         lo ^= 1;
-        w16(out, 0, b & 0xF); out = rp_add(out, 2);
+        set_nib(k, b & 0xF);
     }
 }
 
@@ -33,14 +40,11 @@ void UnpackNibbles(uint32_t src, uint16_t count)
  * index picked with probability weight / total. The pick walks back from the last weight. */
 uint16_t WeightedRandomSelect(uint16_t n)
 {
-    uint16_t off = RAM_OFF_nibblebuffer, sum = 0;
-    while (n--) { sum += m16(RAM_BASE + off); off += 2; }
+    uint16_t k = 0, sum = 0;
+    while (n--) sum += nib(k++);
     int16_t r = (int16_t)randomd0(sum);
-    do {
-        off -= 2;
-        r = (int16_t)(r - m16(RAM_BASE + off));
-    } while (r >= 0);
-    return (uint16_t)((uint16_t)(off - RAM_OFF_nibblebuffer) >> 1);
+    do r = (int16_t)(r - nib(--k)); while (r >= 0);
+    return k;
 }
 
 /* video94.asm:remap. a0 = tile words, a1 = 8-byte colour table, d0 = words, d1 = VRAM address:
@@ -537,9 +541,11 @@ uint16_t dobitmap(uint32_t pal, uint32_t map, uint32_t tiles, uint16_t x, uint16
 {
     uint16_t keep_y = g.printy, saved = g.disflags;
     g.disflags |= HI(dfng);
-    rp dst = RAM(palfadenew);
-    for (; palbits; palbits >>= 1, pal += 0x20, dst = rp_add(dst, 0x20))
-        if (palbits & 1) for (int i = 0x1F; i >= 0; i--) w8(dst, i, m8(pal + i));
+    for (unsigned c = 0; palbits; palbits >>= 1, pal += 0x20, c += 0x10) {   /* the palettes of palbits */
+        if (!(palbits & 1)) continue;
+        if (c < 0x40) for (int i = 0xF; i >= 0; i--) g.palfadenew[c + i] = m16(pal + 2 * i);
+        else for (int i = 0x1F; i >= 0; i--) w8(rp_add(RAM(palfadenew), (int32_t)(2 * c + i)), 0, m8(pal + i));   /* (past the four: on, as the 68000) */
+    }
     uint16_t attr = g.printa & 0xF800;
     uint32_t m = map;
     uint16_t row = y, rows = h;
@@ -597,9 +603,6 @@ uint16_t DecompressGraphics(uint32_t tiles, uint16_t start)
     return start;
 }
 
-/* the 256-byte ring buffer at ThreeStars that DecompressBytecode unpacks into */
-#define RING (RAM_OFF_ThreeStars)
-static rp ring(uint8_t i) { return ram_at(RAM_BASE + (RING + i)); }
 
 /* video94.asm:DecompressBytecode. a0 = packed tiles, d1 = VRAM address: run the byte code
  * (one handler per high nibble, jump_table) into the ring buffer, which goes to VRAM each time
@@ -612,7 +615,7 @@ void DecompressBytecode(uint32_t src, uint16_t vram)
         Opcode_CopyBackwardMedium, Opcode_CopyBackwardLong, Opcode_CopyBackwardExtended1, Opcode_CopyBackwardExtended2,
         Opcode_CopyBackwardReverseShort, Opcode_CopyBackwardReverseShort, Opcode_CopyBackwardReverseMedium, Opcode_CopyBackwardReverseLong,
     };
-    struct Unpack u = { src, 0, vram };
+    struct Unpack u = { src, 0, vram, unpack_ring() };
     for (;;) {
         uint8_t op = m8(u.src++);
         if (jump_table[op >> 4](&u)) return;
@@ -622,7 +625,7 @@ void DecompressBytecode(uint32_t src, uint16_t vram)
 /* put one byte in the ring buffer; a full buffer goes to VRAM */
 static void ring_put(struct Unpack *u, uint8_t b)
 {
-    w8(ring(u->idx), 0, b);
+    u->ring[u->idx] = b;
     if (++u->idx == 0) FlushOutputBuffer(u);
 }
 static uint8_t op_byte(const struct Unpack *u) { return m8(u->src - 1); }        /* -1(a0) */
@@ -655,7 +658,7 @@ int Opcode_Fillbytes(struct Unpack *u)
 int CopyBackwardRun(struct Unpack *u, uint16_t count, uint8_t dist)
 {
     uint8_t from = (uint8_t)(u->idx - dist);
-    do ring_put(u, r8(ring(from++), 0)); while (count-- != 0);
+    do ring_put(u, u->ring[from++]); while (count-- != 0);
     return 0;
 }
 
@@ -663,7 +666,7 @@ int CopyBackwardRun(struct Unpack *u, uint16_t count, uint8_t dist)
 int CopyBackwardReverseRun(struct Unpack *u, uint16_t count, uint8_t dist)
 {
     uint8_t from = (uint8_t)(u->idx - dist);
-    do ring_put(u, r8(ring(from--), 0)); while (count-- != 0);
+    do ring_put(u, u->ring[from--]); while (count-- != 0);
     return 0;
 }
 
@@ -744,8 +747,8 @@ void FlushOutputBuffer(struct Unpack *u)
     uint16_t words = (uint16_t)((u->idx ? u->idx : 0x100) >> 1);
     uint16_t vram = u->vram;
     u->vram = (uint16_t)(u->vram + 2 * words);
-    if (g.callbackPtr) remap(RAM_BASE + RING, g.callbackPtr, words, vram);
-    else DoDMApro(RAM_BASE + RING, words, vram);
+    if (g.callbackPtr) remap(ram_addr(u->ring), g.callbackPtr, words, vram);
+    else DoDMApro(ram_addr(u->ring), words, vram);
 }
 
 /* ---- printing --------------------------------------------------------------------------- */

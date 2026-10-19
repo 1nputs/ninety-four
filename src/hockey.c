@@ -16,7 +16,7 @@
 /* hockey94.asm:ClearShotData. Clear $E4 words at outputbuffer. */
 void ClearShotData(void)
 {
-    for (int i = 0; i < 0xE4; i++) w16(RAM(outputbuffer), i * 2, 0);
+    ram_fill(RAM(outputbuffer), 0, 0xE4 * 2);             /* (0xE4 words: outputbuffer and what follows) */
 }
 
 /* hockey94.asm:restoreteams. Put both teams' rosters on the bench. */

@@ -408,13 +408,13 @@ void NameEntryFramer(uint16_t w, uint16_t h)
  * letters. */
 void GetLogName(uint32_t dst)
 {
-    rp d = ram_at(dst);
+    uint8_t *d = ram_bytes(ram_at(dst), 12);
     uint16_t at = (uint16_t)(g.namelogsel * 0xC);
     g.namelength = 0;
     for (int i = 0; i < 12; i++, at++) {
         uint8_t c = g.namelog[(int16_t)at];
         if (c == 0) { c = '-'; g.namelength--; }
-        w8_next(&d, c);
+        *d++ = c;
         g.namelength++;
     }
 }
@@ -609,13 +609,13 @@ void PrintPlayerRecords(void)
 {
     printsmallz(str_PrintPlayerRecords_1, sizeof str_PrintPlayerRecords_1);
     int goals = g.TempWord1 == 1;
-    rp sort = goals ? RAM(recsort1) : RAM(recsort2);
+    const uint8_t *sort = goals ? g.recsort1 : g.recsort2;
     for (int16_t row = 6; row >= 0; row--) {
         g.printx = 2;
-        uint8_t *r = g.ThreeStars + ((int16_t)(uint16_t)((int16_t)(int8_t)r8_next(&sort) << 4) + (goals ? 0 : 4));
+        uint8_t *r = g.ThreeStars + ((int16_t)(uint16_t)((int16_t)(int8_t)*sort++ << 4) + (goals ? 0 : 4));
         uint32_t a1 = SYM_RecParenTxt;
         if (r[0] != 0) {
-            PrintRecordName((uint16_t)row, r8(sort, -1));
+            PrintRecordName((uint16_t)row, sort[-1]);
             g.printx = 0x12;
             printsmall(PushNumberWidth(r[0], 3));
             g.printx = 0x19;
@@ -655,11 +655,10 @@ void CalcWinPercents(void)
     for (int i = 0; i < 8; i++) {
         uint8_t *r = g.ThreeStars + (i * 0x10);
         uint16_t wins = rd16(r + 8), games = rd16(r + 0xA);
-        w16(RAM(wingames), i * 2, games);
+        g.wingames[i] = games;
         uint32_t pct = games == 0 ? 0 : m68k_divu((uint32_t)wins * 100u, games);
         g.winpcts[i] = (uint8_t)pct;
-        g.winties[i * 2] = r[0xC];
-        g.winties[i * 2 + 1] = r[0xD];
+        g.winties[i] = rd16(r + 0xC);
     }
     for (int i = 0; i < 7; i++) g.winsort[i] = (uint8_t)(i + 1);
     int swapped;
@@ -670,10 +669,10 @@ void CalcWinPercents(void)
             int8_t pa = (int8_t)g.winpcts[a], pb = (int8_t)g.winpcts[b];
             if (pa > pb) continue;
             if (pa == pb) {
-                int16_t ta = (int16_t)r16(RAM(winties), (int16_t)(a * 2)), tb = (int16_t)r16(RAM(winties), (int16_t)(b * 2));
+                int16_t ta = (int16_t)g.winties[a], tb = (int16_t)g.winties[b];
                 if (ta > tb) continue;
                 if (ta == tb) {
-                    int16_t ga = (int16_t)r16(RAM(wingames), (int16_t)(a * 2)), gb = (int16_t)r16(RAM(wingames), (int16_t)(b * 2));
+                    int16_t ga = (int16_t)g.wingames[a], gb = (int16_t)g.wingames[b];
                     if (ga >= gb) continue;
                 }
             }
@@ -691,18 +690,18 @@ void ReadTeamRecords(void)
 {
     ReadSRAM(SYM_TeamRecBase, 0x80, ram_addr(g.ThreeStars));
     int saves = (g.sflags6 & HI(6)) != 0;
-    rp sort = saves ? RAM(recsort2) : RAM(recsort1);
-    for (int i = 0; i < 7; i++) w8(sort, i, (uint8_t)(i + 1));
+    uint8_t *sort = saves ? g.recsort2 : g.recsort1;
+    for (int i = 0; i < 7; i++) sort[i] = (uint8_t)(i + 1);
     int swapped;
     do {
         swapped = 0;
         for (int i = 0; i < 6; i++) {
-            int16_t a = (int16_t)(uint16_t)((int16_t)(int8_t)r8(sort, i) << 4), b = (int16_t)(uint16_t)((int16_t)(int8_t)r8(sort, i + 1) << 4);
+            int16_t a = (int16_t)(uint16_t)((int16_t)(int8_t)sort[i] << 4), b = (int16_t)(uint16_t)((int16_t)(int8_t)sort[i + 1] << 4);
             int8_t va = (int8_t)g.ThreeStars[a + (saves ? 4 : 0)], vb = (int8_t)g.ThreeStars[b + (saves ? 4 : 0)];
             if (va >= vb) continue;
-            uint8_t t = r8(sort, i);
-            w8(sort, i, r8(sort, i + 1));
-            w8(sort, i + 1, t);
+            uint8_t t = sort[i];
+            sort[i] = sort[i + 1];
+            sort[i + 1] = t;
             swapped = 1;
         }
     } while (swapped);

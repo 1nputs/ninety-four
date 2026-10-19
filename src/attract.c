@@ -31,14 +31,13 @@ void EASportsScreen(void)
     g.palfadenew[7] = 0;
     g.palcount = 0x18;                                    /* fade in */
     cpu_set_sr(0x2500);
-    rp count = RAM(seed);                                 /* (the seed's high word counts down) */
-    w16(count, 0, 0x50);
+    set_seed_hi(0x50);                                    /* (the seed's high word counts down) */
     do {
         uint16_t d0, d1, d2, d3;
         waitx(4, &d0, &d1, &d2, &d3);
         if (d1) break;
-        w16(count, 0, (uint16_t)(r16(count, 0) - 1));
-    } while ((int16_t)r16(count, 0) >= 0);
+        set_seed_hi((uint16_t)(seed_hi() - 1));
+    } while ((int16_t)seed_hi() >= 0);
     cpu_set_sr(0x2700);
 }
 

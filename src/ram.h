@@ -675,19 +675,14 @@ struct RAM_PACKED Ram {
     uint32_t callbackPtr;  /* $FFFFCF32 */
     uint8_t ThreeStars[0xC8];  /* $FFFFCF36 */
     uint8_t teamrecbuf[0x38];  /* $FFFFCFFE: SRAM team record buffer: the 16 byte record of a team (ReadCrowdRecord), byte 8 crowd record, byte 9 its name number */
-    uint32_t nibblebuffer[0x3];  /* $FFFFD036 */
+    uint16_t nibblebuffer[0x6];  /* $FFFFD036 */
     uint16_t homeuser;  /* $FFFFD042 */
     uint16_t awayuser;  /* $FFFFD044 */
     uint16_t FourWayPlay;  /* $FFFFD046 */
-    uint16_t OptPlayMode;  /* $FFFFD048 */
-    uint16_t OptNOP;  /* $FFFFD04A */
-    uint16_t Opt1Team;  /* $FFFFD04C */
-    uint16_t Opt2Team;  /* $FFFFD04E */
-    uint16_t OptPerlen;  /* $FFFFD050 */
-    uint16_t OptGoalie;  /* $FFFFD052 */
-    uint16_t OptUserRec;  /* $FFFFD054 */
-    uint16_t OptPen;  /* $FFFFD056 */
-    uint16_t OptLine;  /* $FFFFD058 */
+    union {
+        uint16_t options[9];  /* $FFFFD048: the setup menu's options by number (OptPlayMode ... OptLine) */
+        struct RAM_PACKED { uint16_t OptPlayMode, OptNOP, Opt1Team, Opt2Team, OptPerlen, OptGoalie, OptUserRec, OptPen, OptLine; };
+    };
     uint16_t goaliemode1;  /* $FFFFD05A */
     uint16_t goaliemode2;  /* $FFFFD05C */
     uint16_t TmpOptUserRec;  /* $FFFFD05E */
@@ -775,8 +770,8 @@ struct RAM_PACKED Ram {
     uint8_t recsort2[0x8];  /* $FFFFD53A: Record Holders row order sorted on record byte 4 (ReadTeamRecords, sflags6 bit 6) */
     uint8_t winsort[0x8];  /* $FFFFD542: Record Holders win row order (CalcWinPercents), read by PrintWinRecords */
     uint8_t winpcts[0x8];  /* $FFFFD54A: the win % byte of each of the 8 records (CalcWinPercents) */
-    uint8_t winties[0x10];  /* $FFFFD552: the ties word of each record (record bytes $C-$D) */
-    uint8_t wingames[0x10];  /* $FFFFD562: the games word of each record (record bytes $A-$B) */
+    uint16_t winties[0x8];  /* $FFFFD552: the ties word of each record (record bytes $C-$D) */
+    uint16_t wingames[0x8];  /* $FFFFD562: the games word of each record (record bytes $A-$B) */
     uint16_t shootoutstate;  /* $FFFFD572: first of the 19 words ClearGameStats clears ($FFD572-$FFD597: shootout goals, shootoutround, shooter lists ...) */
     uint16_t homeshootgoals;  /* $FFFFD574 */
     uint16_t awayshootgoals;  /* $FFFFD576 */
@@ -1115,7 +1110,6 @@ _Static_assert(offsetof(struct Ram, nibblebuffer) == 0xD036, "nibblebuffer");
 _Static_assert(offsetof(struct Ram, homeuser) == 0xD042, "homeuser");
 _Static_assert(offsetof(struct Ram, awayuser) == 0xD044, "awayuser");
 _Static_assert(offsetof(struct Ram, FourWayPlay) == 0xD046, "FourWayPlay");
-_Static_assert(offsetof(struct Ram, OptPlayMode) == 0xD048, "OptPlayMode");
 _Static_assert(offsetof(struct Ram, OptNOP) == 0xD04A, "OptNOP");
 _Static_assert(offsetof(struct Ram, Opt1Team) == 0xD04C, "Opt1Team");
 _Static_assert(offsetof(struct Ram, Opt2Team) == 0xD04E, "Opt2Team");
@@ -1124,6 +1118,7 @@ _Static_assert(offsetof(struct Ram, OptGoalie) == 0xD052, "OptGoalie");
 _Static_assert(offsetof(struct Ram, OptUserRec) == 0xD054, "OptUserRec");
 _Static_assert(offsetof(struct Ram, OptPen) == 0xD056, "OptPen");
 _Static_assert(offsetof(struct Ram, OptLine) == 0xD058, "OptLine");
+_Static_assert(offsetof(struct Ram, OptPlayMode) == 0xD048, "OptPlayMode");
 _Static_assert(offsetof(struct Ram, goaliemode1) == 0xD05A, "goaliemode1");
 _Static_assert(offsetof(struct Ram, goaliemode2) == 0xD05C, "goaliemode2");
 _Static_assert(offsetof(struct Ram, TmpOptUserRec) == 0xD05E, "TmpOptUserRec");

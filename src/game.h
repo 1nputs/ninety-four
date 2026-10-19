@@ -33,13 +33,19 @@ enum { MU_FLIPPED = 1, MU_HIGHLIGHT = 2, MU_SERIES_OVER = 4 };                  
 
 /* the home (0) or away team's struct (src/ram.h: struct Team, tmstruct and AwShots) */
 static inline struct Team *team_struct(int away) { return &g.teams[away ? 1 : 0]; }
-/* puckc, who has the puck ($FFxx: nobody): the word the 68000 keeps in the puck's own sort object
- * (its newpos and newpnum bytes), so read and written by address (RAM(puckc)) */
-static inline uint16_t puck_carrier(void) { return r16(RAM(puckc), 0); }
+/* puckc, who has the puck ($FFxx: nobody): the 68000 keeps it as a word in the puck's own sort
+ * object, its newpos and newpnum bytes; st puckc (its high byte $FF): nobody */
+static inline uint16_t puck_carrier(void) { const struct SortObj *p = sortobj(puckscnum); return (uint16_t)(p->newpos << 8 | p->newpnum); }
+static inline void set_puck_carrier(uint16_t v) { struct SortObj *p = sortobj(puckscnum); p->newpos = (uint8_t)(v >> 8); p->newpnum = (uint8_t)v; }
+static inline void puck_loose(void) { sortobj(puckscnum)->newpos = 0xFF; }
 
 /* a 5-word number of the playoff password at a place (pwddatabuffer, tpassbits): its bytes, with
  * the word below it SuperMult spills into */
 static inline uint8_t *pass_bits(rp p) { return ram_bytes(rp_add(p, -2), 12) + 2; }
+
+/* the seed's high word, which the title screens count down with (move.w #$50,seed) */
+static inline uint16_t seed_hi(void) { return (uint16_t)(g.seed >> 16); }
+static inline void set_seed_hi(uint16_t v) { g.seed = (g.seed & 0xFFFF) | (uint32_t)v << 16; }
 
 /* the message area's text (TextBuffer), after its String's length word */
 static inline uint8_t *text_buffer(void) { return g.mesarea + 2; }
@@ -118,7 +124,9 @@ void setVram_0(void);
 uint16_t DecompressGraphicsWithCallback(uint32_t tiles, uint16_t start, uint32_t cb);  /* a2, d4, table after the call -> d4 */
 uint16_t DecompressGraphics(uint32_t tiles, uint16_t start);     /* a2, d4 -> d4 */
 /* DecompressBytecode's registers: a0 = data, d1 = ring buffer index, d3 = VRAM address */
-struct Unpack { uint32_t src; uint8_t idx; uint16_t vram; };
+struct Unpack { uint32_t src; uint8_t idx; uint16_t vram; uint8_t *ring; };   /* ring: the 256 bytes it unpacks into (unpack_ring) */
+/* the ring buffer DecompressBytecode unpacks into: ThreeStars and teamrecbuf after it, 256 bytes */
+static inline uint8_t *unpack_ring(void) { return ram_bytes(RAM(ThreeStars), 0x100); }
 void DecompressBytecode(uint32_t src, uint16_t vram);            /* a0, d1 */
 int Opcode_CopyLiteral(struct Unpack *u);                        /* the handlers return 1 at the end code */
 int Opcode_ClearBytes(struct Unpack *u);
@@ -574,8 +582,8 @@ uint16_t NextHomeColdPlayer(struct Team **team);
 uint16_t NextAwayColdPlayer(struct Team **team);
 void BuildHotColdLists(void);
 void SortHotColdStarters(struct Team *tm);              /* a0 */
-void CopyHottestPlayer(rp a0);
-void CopyColdestPlayer(rp a0);
+uint16_t CopyHottestPlayer(void);
+uint16_t CopyColdestPlayer(void);
 uint16_t CompareHotColdTotals(void);                    /* -> d0 */
 uint16_t GetHotColdTotal(struct Team *tm);              /* a0 -> d1 */
 
@@ -726,7 +734,7 @@ void PrintSeriesScore(const struct Matchup *gs);        /* a2 */
 void DrawTreeArrow(uint16_t col);                       /* d0 */
 void DrawTeamBlocks(uint16_t row);                      /* d1 */
 void VBlank_Playoff(void);
-rp InitScoutingDisplay(void);                           /* -> a0 */
+uint32_t InitScoutingDisplay(void);                     /* -> a0 */
 void UpdateScoutingDisplay(void);
 void ScrollDisplayUp(void);
 void GameOver(void);                                    /* the password, the playoff screens, back to the title */

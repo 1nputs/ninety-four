@@ -190,9 +190,8 @@ void chgplayer(uint16_t pad, struct SortObj *o)
     if (g.sflags5 & 0x40) { rtsChgplayer(); return; }    /* never set */
     int16_t tx = (int16_t)(((int16_t)g.puckvx >> 8) + puckx());
     int16_t ty = (int16_t)(((int16_t)g.puckvy >> 8) + (int16_t)g.pucky);
-    rp cont = RAM(cont1team), cur = RAM(c1playernum);
-    struct SortObj *pl = sortobj(r16(cont, pad) == 1 ? 0 : 6);
-    uint16_t mine = r16(cur, pad), other = r16(cur, (pad ^ 2));
+    struct SortObj *pl = sortobj((pad ? g.cont2team : g.cont1team) == 1 ? 0 : 6);   /* (pad: 0 or 2, the word of pad 1 or 2) */
+    uint16_t mine = pad ? g.c2playernum : g.c1playernum, other = pad ? g.c1playernum : g.c2playernum;
     uint32_t best = 0xFFFFFFFF;
     int found = 0;
     uint16_t pick = 0;
@@ -222,11 +221,10 @@ void chgplayer(uint16_t pad, struct SortObj *o)
 void CountButtonPress(int16_t pad, struct SortObj *o)
 {
     if (g.gmode & 1) return;
-    rp cnt = ram_at(RAM_BASE + (pad ? RAM_OFF_awaypresses : RAM_OFF_homepresses));
     uint16_t dir = g.TempWord1;
-    w32(cnt, 0, r32(cnt, 0) + 1);
+    if (pad) g.awaypresses++; else g.homepresses++;
     if (dir == 8 || dir == (uint16_t)o->facedir) return;
-    w32(cnt, 4, r32(cnt, 4) + 1);
+    if (pad) g.awaydirpresses++; else g.homedirpresses++;
 }
 
 /* title94.asm:PSandSOpassdir. Penalty shot / shootout: passdir = the direction at the end of
@@ -286,7 +284,7 @@ void ClearPenalties(void)
     g.PBnum = 0;
     g.Penaltytimer = 0;
     g.Pencntdwn = 0;
-    for (int i = 0; i < 0x44; i++) w8(RAM(PenBuf), i, 0);           /* 17 longs */
+    ram_fill(RAM(PenBuf), 0, 0x44);                       /* 17 longs: PenBuf and the word after */
     clrTmPdst(team_struct(0));
     clrTmPdst(team_struct(1));
 }
@@ -406,14 +404,13 @@ void HiScoreScreen(void)
     dobitmap(p.pal, p.map, p.tiles, 0, 0, p.w, p.h, c, 0);
     g.palcount = 0x18;
     cpu_set_sr(0x2500);
-    rp count = RAM(seed);                                 /* (the seed's high word counts down) */
-    w16(count, 0, 0x50);
+    set_seed_hi(0x50);                                    /* (the seed's high word counts down) */
     do {
         uint16_t d0, d1, d2, d3;
         waitx(4, &d0, &d1, &d2, &d3);
         if (d1) break;
-        w16(count, 0, (uint16_t)(r16(count, 0) - 1));
-    } while ((int16_t)r16(count, 0) >= 0);
+        set_seed_hi((uint16_t)(seed_hi() - 1));
+    } while ((int16_t)seed_hi() >= 0);
     cpu_set_sr(0x2700);
 }
 
@@ -424,8 +421,8 @@ void newTitleScreen(void)
 {
     static const uint8_t font[8] = { 0x0D, 0x10, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
     cpu_set_sr(0x2700);
-    w16(RAM(seed), 0, vdp_hv16());
-    w16(RAM(seed), 2, vdp_hv16());
+    uint16_t hi = vdp_hv16();                             /* the seed from the HV counter: its high word first */
+    g.seed = (uint32_t)hi << 16 | vdp_hv16();
     g.vbint = SYM_VBlank_TitleScreen;
     g.disflags |= HI(df32c);
     screen_layout();
@@ -627,7 +624,7 @@ uint32_t PlayedByText(uint16_t user)
     GetLogName(RAM_BASE + RAM_OFF_nameentrybuf + 2);
     g.nameentrybuf[2 + (int16_t)g.namelength] = 0;
     g.namelength = (uint16_t)(((g.namelength + 1) & 0xFFFE) + 2);
-    w16(RAM(nameentrybuf), 0, g.namelength);
+    wr16(g.nameentrybuf, g.namelength);
     CopyString(SYM_PlayedByTxt, ram_addr(g.TempBuffer));
     appstring(ram_addr(g.nameentrybuf), ram_addr(g.TempBuffer));
     appendz(str_PlayedByText_1, sizeof str_PlayedByText_1, ram_addr(g.TempBuffer));
@@ -679,7 +676,7 @@ uint16_t GetLeagueCrowdRecord(void)
  * cleared, the $80 bytes written back at TeamRecBase (WriteSRAM, MakeSRAMChecksum). */
 void ClearWinRecords(void)
 {
-    for (int i = 0; i < 8; i++) ram_fill(rp_add(RAM(ThreeStars), i * 0x10 + 8), 0, 4);
+    for (int i = 0; i < 8; i++) memset(g.ThreeStars + i * 0x10 + 8, 0, 4);
     WriteSRAM(SYM_TeamRecBase, 0x80, ram_addr(g.ThreeStars));
     MakeSRAMChecksum();
 }

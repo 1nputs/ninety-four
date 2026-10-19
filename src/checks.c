@@ -1291,7 +1291,7 @@ void puckpenshot(struct Team *tm, struct SortObj *o)
     g.puckvx = 0;
     g.puckvy = 0;
     g.puckvz[0] = 0;
-    w8(RAM(puckc), 0, 0xFF);
+    puck_loose();
     reset_ice_objects();
     setpersonel(team_struct(0));
     SetupPenaltyShot(team_struct(0));
@@ -1314,8 +1314,8 @@ void puckpenshot(struct Team *tm, struct SortObj *o)
             assinsert(0x11, pl);                          /* assnearest */
         } else if (d2 == (int16_t)g.BA_Goalie_SCnum) {
             if (g.gmode2 & HI(0)) {                       /* shootout: the goalie of the shooting order */
-                pl->pnum = r8(RAM(shootoutteam), -1);
-                if (g.shootoutteam != 0) pl->pnum = r8(RAM(homeshootnum), -1);
+                pl->pnum = g.awayshooters[0xB];           /* (shootoutteam-1: the away list's last word, low byte) */
+                if (g.shootoutteam != 0) pl->pnum = g.homeshooters[0xB];   /* (homeshootnum-1) */
                 setplayer(pl->pnum, pl);
             } else if (pl->position < 0 && (pl->pflags2 & 4)) {
                 pl->pflags2 &= (uint8_t)~4;
@@ -1687,7 +1687,7 @@ void puckfaceoff2(struct Team *tm, struct SortObj *o)
     g.puckvx = 0;
     g.puckvy = 0;
     g.puckvz[0] = 0;
-    w8(RAM(puckc), 0, 0xFF);
+    puck_loose();
     reset_ice_objects();
     setpersonel(team_struct(0));
     forcepldata(team_struct(0));

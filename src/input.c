@@ -490,7 +490,7 @@ void passmode(uint16_t d0, uint16_t d2, struct SortObj *o)
 void dopass(struct SortObj *o)
 {
     g.sflags &= (uint16_t)~HI(sfspdir);
-    w8(RAM(puckc), 0, 0xFF);
+    puck_loose();
     o->nopuck[0] = 0x10;
     g.lastplayer = (uint16_t)o->SCnum;
     if (g.sflags5 & 8) {
@@ -784,7 +784,7 @@ void doshot(struct SortObj *o)
     int16_t sadd = (int16_t)(3 - (int16_t)d0);
     if (sadd < 0) sadd = 0;
     snd = (int16_t)(snd + sadd);
-    w8(RAM(puckc), 0, 0xFF);
+    puck_loose();
     o->nopuck[0] = 0x10;
     g.lastplayer = (uint16_t)o->SCnum;
     int16_t dy = PFLAG(o, pfgoal) ? 0x108 : -0x108;

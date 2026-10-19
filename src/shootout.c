@@ -80,14 +80,12 @@ void ShootoutWonBy(void)
  * below homeshootnum) or the away team (below shootoutteam), roster index - 1 each. */
 void InitShooters(void)
 {
-    uint16_t team = g.HomeTeam, at = RAM_OFF_homeshootnum;
-    if (g.shootoutteam) { team = g.VisTeam; at = RAM_OFF_shootoutteam; }
+    uint16_t team = g.HomeTeam;
+    uint8_t *list = g.homeshooters;                       /* (below homeshootnum or shootoutteam) */
+    if (g.shootoutteam) { team = g.VisTeam; list = g.awayshooters; }
     uint32_t data = rd32(rom_ptr(LG(TeamList) + (uint16_t)(team << 2)));
     const uint8_t *a1 = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 6)));
-    for (int i = 0; i < 6; i++) {
-        at -= 2;
-        w16(ram_at(RAM_BASE + at), 0, (uint16_t)(*a1++ - 1));
-    }
+    for (int i = 5; i >= 0; i--) wr16(list + 2 * i, (uint16_t)(*a1++ - 1));   /* (written from the end) */
 }
 
 /* shootout94.asm:ClearShootout. Clear the player structs ($800 bytes from SortCords) and the
@@ -111,7 +109,7 @@ void ClearShootout(void)
 /* ---- the Shootout Shooters menu item ------------------------------------------------------------- */
 
 /* the shooter list of team a2 (6 words: 5 shooters, then the goalie) */
-static rp shooters(struct Team *tm) { return tm == team_struct(0) ? RAM(homeshooters) : RAM(awayshooters); }
+static uint8_t *shooters(struct Team *tm) { return tm == team_struct(0) ? g.homeshooters : g.awayshooters; }
 
 /* shootout94.asm:ShootoutShooters. Shootout Shooters for team a2 (a menu item, in a shootout
  * only): the 5 shooter slots and the goalie's; up / down a shooter slot, left / right the first
@@ -164,8 +162,8 @@ void ShootoutShooters(struct Team *tm)
  * the player, left / right the attribute column, C takes him, Start goes back. */
 void ShooterSelectList(struct Team *tm)
 {
-    rp list = shooters(tm);
-    uint16_t cur = r16(list, (int16_t)(uint16_t)(g.TestList[0] << 1));
+    uint8_t *list = shooters(tm);
+    uint16_t cur = rd16(list + (uint16_t)(g.TestList[0] << 1));
     uint16_t first = GetGoalieCount(tm);
     uint16_t n = (uint16_t)(GetPlayerCount(tm) - first - 1);
     if (g.TestList[0] == 5) {
@@ -215,7 +213,7 @@ void ShooterSelectList(struct Team *tm)
             ProcessInputWithRepeat(&d1, d2, d3);
             if (d1 & 0x80) return;
             if (d1 & 0x20) {                              /* .pick */
-                w16(list, (int16_t)(uint16_t)(g.TestList[0] << 1), satt[(int16_t)g.VertLineScrolling]);
+                wr16(list + (uint16_t)(g.TestList[0] << 1), satt[(int16_t)g.VertLineScrolling]);
                 return;
             }
             if (d1 & 2) { by = 1; scroll = 1; break; }
@@ -313,7 +311,7 @@ void PrintShooterBox(struct Team *tm)
     printsmallz(str_PrintShooterBox_1, sizeof str_PrintShooterBox_1);
     Framer(0x18, 3);
     printsmallz(str_PrintShooterBox_2, sizeof str_PrintShooterBox_2);
-    uint16_t p = r16(shooters(tm), (int16_t)(uint16_t)(g.TestList[0] << 1));
+    uint16_t p = rd16(shooters(tm) + (uint16_t)(g.TestList[0] << 1));
     uint32_t a1 = getname(p, tm);
     g.printx -= (uint16_t)(m16(a1) >> 1);
     printsmall(a1);
@@ -325,9 +323,9 @@ void PrintShooterBox(struct Team *tm)
 void PrintShooterNames(struct Team *tm)
 {
     printsmallz(str_PrintShooterNames_1, sizeof str_PrintShooterNames_1);
-    rp list = shooters(tm);
+    const uint8_t *list = shooters(tm);
     for (uint16_t n = 0; n < 6; n++) {
-        uint32_t a1 = FormatPlayerNameShort(r16(list, n * 2), tm);
+        uint32_t a1 = FormatPlayerNameShort(rd16(list + n * 2), tm);
         uint16_t x = g.printx;
         if (n == g.TestList[0]) g.printfontset = 2;
         if (n == 5) {

@@ -87,8 +87,9 @@ void ScoutingReport(void)
     g.palcount = 0x18;
     g.vbint = SYM_vb2;
     cpu_set_sr(0x2500);
-    rp list = InitScoutingDisplay();                      /* the paragraphs of ScoutTextScript */
-    #define PARA(n) (w16(list, 0, n), list = rp_add(list, 2))
+    InitScoutingDisplay();                                /* the paragraphs of ScoutTextScript, to TestList */
+    int k = 0;
+    #define PARA(n) (g.TestList[k++] = (n))
     PARA(0x1B);                                           /* "Hi, I'm Ron Barr ..." */
     PARA(0x1D);                                           /* (a blank line) */
     PARA(0x1A);                                           /* "Welcome to a sold out ^ ..." */
@@ -102,7 +103,7 @@ void ScoutingReport(void)
     PARA(0x20);                                           /* "The ^ crowd record is @ dB." */
     PARA(0x1D);
     PARA(0x21);                                           /* "Hit the start button ..." */
-    w16(list, 0, 0xFFFF);
+    g.TestList[k] = 0xFFFF;
     g.asv = 0;
     g.screentimer = 0x7FFF;
     g.scoutwait = 0x8CA0;

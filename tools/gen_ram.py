@@ -18,7 +18,7 @@ RAM_BASE, RAM_SIZE = 0xFFFF0000, 0x10000
 
 CTYPE = {'b': 'uint8_t', 'w': 'uint16_t', 'l': 'uint32_t'}
 # symbols whose width the access scan cannot see (indexed through an address register)
-OVERRIDE = {'OOlistpos': 'w', 'Ylist': 'w', 'OOlist': 'b', 'padcont': 'w', 'per_channel_frequency_table': 'w', 'PushNumberBuf': 'b'}
+OVERRIDE = {'OOlistpos': 'w', 'Ylist': 'w', 'OOlist': 'b', 'padcont': 'w', 'per_channel_frequency_table': 'w', 'PushNumberBuf': 'b', 'winties': 'w', 'wingames': 'w', 'nibblebuffer': 'w'}
 # symbols kept inside another structure, so no field of their own (a byte area named name_): the
 # game reads and writes them by address, RAM(name), and their bytes follow that structure
 BY_ADDRESS = {'puckc': "the puck's sort object's newpos and newpnum, read by the 68000 as one word"}
@@ -263,6 +263,11 @@ STRUCTS = {
     'PuckCross': (4, "where and when the puck crosses a goal line (findpc)", None, CROSS_DECL),
     'Plane': (4, "a plane map's place in VRAM and its width", None, PLANE_DECL),
 }
+# runs of words the game reads both by name and by number: an anonymous union of the array and the
+# names (the first symbol, the array's name, its length, a comment)
+UNIONS = {
+    'OptPlayMode': ('options', 9, "the setup menu's options by number (OptPlayMode ... OptLine)"),
+}
 # RAM regions of the game's structures: the symbol, the field's declaration, and its comment
 TYPED = {
     'tmstruct': ('struct Team teams[2]', 'the home and away team structs, AwShots the second'),
@@ -357,6 +362,7 @@ for sname, (ssize, sdoc, size_name, sdecl) in STRUCTS.items():
 
 # ---- RAM struct ---------------------------------------------------------------------------
 fields, asserts = [], []
+in_union = set()
 pos = 0
 # places the game uses that ram_addrs.inc leaves unnamed (the 68000 reaches them as a neighbour's
 # address plus an offset)
@@ -371,6 +377,8 @@ for i, r in enumerate(inram):
     off = r['addr'] - RAM_BASE
     name = cident(r['name'])
     nxt = inram[i + 1]['addr'] - RAM_BASE if i + 1 < len(inram) else RAM_SIZE
+    if r['name'] in in_union:
+        continue
     if off < pos:
         asserts.append(f'/* {name} at 0x{off:04X} overlaps the previous field; use RAM_OFF_{name} */')
         continue
@@ -380,7 +388,20 @@ for i, r in enumerate(inram):
     gap = nxt - off
     com = r.get('comment', '').replace('*/', '* /')
     cm = f'  /* ${r["addr"]:08X}{": " + com if com else ""} */'
-    if r['name'] in TYPED:
+    if r['name'] in UNIONS:
+        aname, count, ucom = UNIONS[r['name']]
+        run = inram[i:i + count]
+        if [q['addr'] - r['addr'] for q in run] != list(range(0, 2 * count, 2)) or (i + count < len(inram) and inram[i + count]['addr'] < r['addr'] + 2 * count):
+            raise SystemExit(f'{r["name"]}: not {count} words one after another')
+        names = [cident(q['name']) for q in run]
+        fields.append('    union {')
+        fields.append(f'        uint16_t {aname}[{count}];  /* ${r["addr"]:08X}: {ucom} */')
+        fields.append('        struct RAM_PACKED { uint16_t ' + ', '.join(names) + '; };')
+        fields.append('    };')
+        asserts += [f'_Static_assert(offsetof(struct Ram, {n}) == 0x{q["addr"] - RAM_BASE:04X}, "{n}");' for n, q in zip(names[1:], run[1:])]
+        in_union.update(q['name'] for q in run[1:])
+        name, pos = names[0], off + 2 * count
+    elif r['name'] in TYPED:
         decl, tcom = TYPED[r['name']]
         _, name, esize, count = decl_size(decl)
         fields.append(f'    {decl};  /* ${r["addr"]:08X}: {tcom} ({r["name"]}) */')

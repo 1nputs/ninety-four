@@ -636,7 +636,7 @@ void ReplayMode(void)
     ShowReplayIcon();
     g.sflags &= (uint16_t)~HI(sfscrl);
     g.sflags3 &= (uint8_t)~0x20;
-    w8(RAM(replayactive), 0, 0xFF);
+    g.pads[3].Yfrac |= 0xFF00;                            /* st replayactive: the camera's Yfrac, its high byte */
     struct RinkObj *cam = &g.pads[3];                     /* a5, the camera (ReplayStarStruct): Xpos, Ypos its place, Yfrac the
                                                            * object it follows, Zpos < 0 none (not read while sfscrl is clear) */
     uint32_t a4 = g.recbpr;
@@ -644,7 +644,7 @@ void ReplayMode(void)
     SprSort();
     setvideo();
     g.sflags3 &= (uint8_t)~2;
-    ram_fill(RAM(padcont), 0, 12);
+    memset(g.padcont, 0, sizeof g.padcont);
     g.palcount = 0x18;
     elapsed = 1;
     for (;;) {                                            /* .top */
