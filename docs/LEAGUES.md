@@ -255,6 +255,22 @@ The 2025 hack also moves its in-game boxes (the goal, injury, three stars, penal
 shootout boxes, the scoreboard) about 7 columns right, as for a screen 320 wide. Those places are in
 its code too and are not taken; the game's own wide rink view is a game rule instead.
 
+### Known issue: NHL 94 2025's ratings play as the cartridge's 6 at most
+
+The cartridge rates a player's skills 0 to 6, and the game plays a rating as five times it, at most
+30, a hot or cold streak added (`AttributeCalc`): so a 7 or more plays as a 6, but for a streak,
+which it is further from. NHL 94 2025 (`[h] 2025 AC v3.9`) rates on a wider scale of its own, for
+its own code: all of its 704 skaters past 6 in agility, shot power and shot accuracy (speed up to
+10, shot power up to 14), most in their awareness, stick handling and endurance, and all of its 96
+goalies past 6 in every rating a goalie has. Its code is not taken, so here those ratings play as
+the cartridge reads them: every rating past 6 the same as a 6, and its players far more alike than
+its authors meant. Its cards' overall ratings come out 99 for many of them (the game's reckoning
+stops there), and the roster screen's numbers run over (8 to 14 show as 25). The League page orders
+such ratings by the league's own numbers and shows those (see below). Its teams, lines, colours and
+art are as the hack has them; only how far its ratings reach is lost. A game rule that reads a
+wider scale would be the way to play it as meant; there is none yet. The other hacks here rate on
+the cartridge's scale (the 30th Anniversary's has three aggressiveness ratings past 6).
+
 ## Packages
 
 ```

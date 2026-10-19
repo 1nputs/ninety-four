@@ -152,7 +152,9 @@ in. The cartridge's own league, exported and built again, plays the original fra
 Community hacks made on the 32-team template (NHL 94 2025, NHL 2026 94 Edition, the 30th
 Anniversary Championship Teams and the like) extract whole: teams, players, ratings, lines,
 playoff draws, colours and jerseys, and all their art. Their code is not taken, so what a hack
-changed there (its own gameplay, extra menu lines, its texts) is not either.
+changed there (its own gameplay, extra menu lines, its texts) is not either. A known issue: NHL 94
+2025 rates its players on a wider scale of its own, which plays here as the cartridge's best at most
+([docs/LEAGUES.md](docs/LEAGUES.md#known-issue-nhl-94-2025s-ratings-play-as-the-cartridges-6-at-most)).
 
 **Everything about leagues, file by file and column by column, is in
 [docs/LEAGUES.md](docs/LEAGUES.md):** the folder's layout, every CSV column and its range, the
