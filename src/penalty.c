@@ -13,8 +13,6 @@
 #include "penalty_tables_gen.h"
 #include "penalty_strings_gen.h"
 
-#define RAM_W(off) ram_ptr(RAM_BASE + (off))
-
 #define PFLAG(o, b) ((o)->pflags & (1 << (b)))
 static inline int16_t puckx(void) { return (int16_t)g.puckx[0]; }
 static inline int16_t pucky(void) { return (int16_t)g.pucky; }
@@ -22,7 +20,7 @@ static inline int16_t puckc(void) { return (int16_t)g.puckc; }
 /* the Penaltylist entry of penalty number d0 (a word offset into the table): byte 0 = delay before
  * the stop, byte 1 = minutes, +2 a String (the message), then the referee animation */
 static inline const uint8_t *penalty_entry(uint16_t pen) { const uint8_t *t = rom_ptr(SYM_Penaltylist); return t + rd16(t + pen); }
-static inline uint8_t *penbuf(void) { return ram_ptr(RAM_BASE + RAM_OFF_PenBuf); }
+static inline rp penbuf(void) { return RAM(PenBuf); }
 #define tmPenalties 6
 #define tmPenmin 8
 #define tmATOP 0xA
@@ -65,19 +63,19 @@ void AddPenalty2(uint16_t pen, struct SortObj *o)
         if (PFLAG(o, pfteam)) { g.CwdExciteLvl += 0x14; snd = 0xB; }
         song(snd);
     }
-    uint8_t *a1 = penbuf();
+    rp a1 = penbuf();
     int i;
-    for (i = 0; i < 32; i++, a1 += 2)                     /* a free slot */
-        if (rd16(a1) == 0) break;
+    for (i = 0; i < 32; i++, a1 = rp_add(a1, 2))          /* a free slot */
+        if (r16(a1, 0) == 0) break;
     if (i == 32) return;                                  /* buffer full */
-    a1[1] = (uint8_t)o->SCnum;
-    a1[0] = (uint8_t)pen;
+    w8(a1, 1, (uint8_t)o->SCnum);
+    w8(a1, 0, (uint8_t)pen);
     const uint8_t *e = penalty_entry(pen);
     if ((int8_t)e[1] <= 0) return;                        /* no minutes */
     g.DelayedPen |= PFLAG(o, pfteam) ? 4 : 2;
     int was = o->pflags2 & 0x10;
     o->pflags2 |= 0x10;
-    if (was) wr16(a1, 0);                                 /* he already has one pending: drop this */
+    if (was) w16(a1, 0, 0);                               /* he already has one pending: drop this */
 }
 
 /* penalty94.asm:PenaltyManager. Called every game loop pass (d7 = elapsed frames). */
@@ -116,10 +114,10 @@ cont:
     g.Pencntdwn = (uint16_t)(g.Pencntdwn - elapsed);
     if ((int16_t)g.Pencntdwn >= 0) return;
     g.gmode &= (uint8_t)~(1 << gmpendel);
-    const uint8_t *a0 = penbuf();
-    for (;; a0 += 2) {                                    /* any penalty with minutes? */
-        if (rd16(a0) == 0) return;
-        if ((int8_t)penalty_entry(a0[0])[1] > 0) break;
+    rp a0 = penbuf();
+    for (;; a0 = rp_add(a0, 2)) {                         /* any penalty with minutes? */
+        if (r16(a0, 0) == 0) return;
+        if ((int8_t)penalty_entry(r8(a0, 0))[1] > 0) break;
     }
     g.sflags2 |= HI(sf2drec);
     uint16_t vc = g.vcount;
@@ -127,7 +125,7 @@ cont:
     g.vcount = vc;
     SetHor();
     DecompressGraphicsPlain(ART(RefMap2) + 8, g.ExtraChars);   /* the horizontal ref tiles */
-    const uint8_t *gs = NULL;
+    rp gs = { 0 };
     int16_t d3 = NewTicker(&gs);
     NewTicker3(d3, gs);
     ST_W(g.puckc);
@@ -189,45 +187,45 @@ void InProgress(void)
     if ((int16_t)g.RefCnt >= 0) return;                   /* animation in progress */
     if ((int16_t)g.RefStep >= 0) return;
     for (;;) {
-        uint8_t *a0 = penbuf();
-        if (rd16(a0) == 0) break;
-        while (rd16(a0) != 0) a0 += 2;
-        a0 -= 2;                                          /* the last entry */
-        int called = a0[1] & 0x80;
-        a0[1] &= 0x7F;
+        rp a0 = penbuf();
+        if (r16(a0, 0) == 0) break;
+        while (r16(a0, 0) != 0) a0 = rp_add(a0, 2);
+        a0 = rp_add(a0, -2);                              /* the last entry */
+        int called = r8(a0, 1) & 0x80;
+        w8(a0, 1, (uint8_t)(r8(a0, 1) & 0x7F));
         if (!called) {
-            if (sortobj(a0[1])->position >= 0) return;    /* still on the ice */
-            wr16(a0, 0);
+            if (sortobj(r8(a0, 1))->position >= 0) return;   /* still on the ice */
+            w16(a0, 0, 0);
             return;
         }
-        uint16_t pen = a0[0];
+        uint16_t pen = r8(a0, 0);
         const uint8_t *e = penalty_entry(pen);
         g.sflags5 &= (uint8_t)~0x20;
         uint16_t d2 = e[1];
         if (d2 == 0 || (int8_t)d2 < 0) {                  /* no player involved */
-            wr16(a0, 0);
+            w16(a0, 0, 0);
             if (g.sflags & HI(sfhor)) continue;
             SetPA(pen);
             return;
         }
         if ((uint8_t)d2 == 5) g.sflags5 |= 0x20;          /* a major: matched as coincidental */
         uint16_t t = GetPeriodTimeRemaining();            /* log time, penalty and player */
-        uint8_t *a4 = ram_ptr(RAM_BASE + RAM_OFF_PenSum) + g.PenSumLength;
+        rp a4 = rp_add(RAM(PenSum), g.PenSumLength);
         if (g.PenSumLength != 0xEC) g.PenSumLength += 4;
-        wr16(a4, t);
-        a4[2] = (uint8_t)pen;
-        struct SortObj *pl = sortobj(a0[1]);
+        w16(a4, 0, t);
+        w8(a4, 2, (uint8_t)pen);
+        struct SortObj *pl = sortobj(r8(a0, 1));
         uint16_t d0 = 0;
         rp a2 = team_struct(0), a1 = team_struct(1);
         if (PFLAG(pl, pfteam)) {
-            a4[2] |= 0x80;
+            w8(a4, 2, (uint8_t)(r8(a4, 2) | 0x80));
             d0 = 0x8000;
             rp tt = a1; a1 = a2; a2 = tt;
         }
         w16(a2, tmPenalties, (uint16_t)(r16(a2, tmPenalties) + 1));
         w16(a2, tmPenmin, (uint16_t)(r16(a2, tmPenmin) + d2));
         d0 = (uint16_t)((d0 & 0xFF00) | pl->pnum);
-        a4[3] = pl->pnum;
+        w8(a4, 3, pl->pnum);
         g.TempPlOffset = d0;
         int16_t p = (int8_t)pl->pnum;
         w8(a2, tmppim + p, (uint8_t)(r8(a2, tmppim + p) + d2));   /* his penalty minutes */
@@ -286,19 +284,19 @@ void coinsearch(rp tm)
 void checkfornewpen(void)
 {
     if (g.sflags & HI(sfhor)) return;
-    uint8_t *a0 = penbuf();
+    rp a0 = penbuf();
     for (;;) {
-        if (rd16(a0) == 0) return;
-        a0 += 2;
+        if (r16(a0, 0) == 0) return;
+        a0 = rp_add(a0, 2);
         if (!(g.gmode & (1 << gmpen))) {
-            const uint8_t *e = penalty_entry(a0[-2]);
+            const uint8_t *e = penalty_entry(r8(a0, -2));
             int delayed = 0;
             if (e[1] != 0) {
                 int16_t d0 = puckc();
                 if (d0 < 0) delayed = 1;
                 else {
                     d0 = (int16_t)(d0 - 6);
-                    int16_t d1 = (int16_t)((int8_t)a0[-1] - 6);
+                    int16_t d1 = (int16_t)((int8_t)r8(a0, -1) - 6);
                     if ((int16_t)(d0 ^ d1) < 0) delayed = 1;   /* the other team has the puck */
                 }
             }
@@ -308,12 +306,12 @@ void checkfornewpen(void)
                 if (!was) SetPA(0x2C);                    /* delayed penalty */
                 continue;
             }
-            Stop4Pen(ram_addr(a0), NULL);
+            Stop4Pen(rp_addr(a0), NULL);
         }
-        int was = a0[-1] & 0x80;
-        a0[-1] |= 0x80;
+        int was = r8(a0, -1) & 0x80;
+        w8(a0, -1, (uint8_t)(r8(a0, -1) | 0x80));
         if (was) continue;
-        const uint8_t *e = penalty_entry(a0[-2]);         /* the longest stop delay wins */
+        const uint8_t *e = penalty_entry(r8(a0, -2));     /* the longest stop delay wins */
         uint16_t d1 = (uint16_t)(e[0] << 5);
         if ((int16_t)d1 <= (int16_t)g.Pencntdwn) continue;
         g.Pencntdwn = d1;
@@ -364,9 +362,9 @@ void Stop4Pen(uint32_t a0, struct SortObj *o)
  * PenBuf (the first entry is looked at even when empty). */
 void limitfo(void)
 {
-    const uint8_t *a0 = penbuf();
+    rp a0 = penbuf();
     do {
-        const struct SortObj *pl = sortobj(a0[1] & 0x7F);
+        const struct SortObj *pl = sortobj(r8(a0, 1) & 0x7F);
         int16_t d1 = 0x58;
         if (!PFLAG(pl, pfgoal)) {
             d1 = (int16_t)-d1;
@@ -378,8 +376,8 @@ void limitfo(void)
         }
         g.fox = (uint16_t)((int16_t)g.fox < 0 ? -0x46 : 0x46);
 next:
-        a0 += 2;
-    } while (rd16(a0) != 0);
+        a0 = rp_add(a0, 2);
+    } while (r16(a0, 0) != 0);
 }
 
 /* penalty94.asm:UpdatePA. Animate the ref in the ref window. Runs ShowThreeStars for game
@@ -396,7 +394,7 @@ void UpdatePA(void)
     ClearPenaltyMessage();
     printz(str_UpdatePA_1, sizeof str_UpdatePA_1);
     uint32_t a1 = GetPlayerName();
-    g.printx -= rd16(ram_ptr(a1)) >> 1;                   /* center it */
+    g.printx -= r16(ram_at(a1), 0) >> 1;                  /* center it */
     print(a1);
 }
 
@@ -442,10 +440,10 @@ void SetPA2(void)
  * clears the window. The horizontal ref uses RefMap2. */
 void PushRef(uint16_t frame)
 {
-    uint8_t *a1 = ram_ptr(RAM_BASE + RAM_OFF_RefRamMap);
+    rp a1 = RAM(RefRamMap);
     if (frame == 0x40) {
         if (!(g.sflags & HI(sfhor))) {                    /* horizontal mode only clears the line */
-            for (int i = 0; i < 0x38; i++) wr16(a1 + i * 2, 0x7FF);
+            for (int i = 0; i < 0x38; i++) w16(a1, i * 2, 0x7FF);
             g.sflags2 |= HI(sf2refref);
         }
         prefmes(-1);
@@ -457,7 +455,7 @@ void PushRef(uint16_t frame)
     a0 += (int16_t)(uint16_t)(frame * 0x70);
     uint16_t d2 = g.ExtraChars;
     if (!(g.sflags & HI(sfhor))) d2 |= 0x8000;            /* priority */
-    for (int i = 0; i < 0x38; i++) wr16(a1 + i * 2, (uint16_t)(rd16(a0 + i * 2) + d2));
+    for (int i = 0; i < 0x38; i++) w16(a1, i * 2, (uint16_t)(rd16(a0 + i * 2) + d2));
     g.sflags2 |= HI(sf2refref);
 }
 
@@ -525,8 +523,8 @@ void PenGoalStuff(rp a1, rp a2)
 /* penalty94.asm:ClearPenaltyBuffer. */
 void ClearPenaltyBuffer(void)
 {
-    uint8_t *a0 = penbuf();
-    for (int i = 0; i < 32; i++) wr16(a0 + i * 2, 0);
+    rp a0 = penbuf();
+    for (int i = 0; i < 32; i++) w16(a0, i * 2, 0);
 }
 
 /* penalty94.asm:updatepentime. Update the time remaining on all penalized players, once a
@@ -564,7 +562,7 @@ static void penbox_check(rp tm, uint16_t d0)
 void ProcessPenaltyList(rp tm)
 {
     rp a0 = rp_add(tm, tmpenbox);
-    uint8_t *a1 = ram_ptr(RAM_BASE + RAM_OFF_mesarea);    /* the serving players */
+    rp a1 = RAM(mesarea);                                 /* the serving players */
     int16_t d1 = 2;
     for (;;) {
         uint8_t d0 = r8_next(&a0);
@@ -579,8 +577,8 @@ void ProcessPenaltyList(rp tm)
             return;
         }
         if (--d1 < 0) continue;                           /* third or later player waits */
-        wr16(a1, d0);
-        a1 += 2;
+        w16(a1, 0, d0);
+        a1 = rp_add(a1, 2);
         st--;
         w16(tm, tmpdst + d0, st);
         if (st == 0) RemovePlayerFromList(a0);            /* time is up */
@@ -702,7 +700,7 @@ void updatepwrplay(void)
     print(PushTime(GetLowestPen(a2, a3)));
     uint32_t a0 = r32(a3, tmdata);
     uint32_t mes = RAM_BASE + RAM_OFF_mesarea;
-    wr16(ram_ptr(mes), 2);
+    w16(ram_at(mes), 0, 2);
     appendz(str_updatepwrplay_2, sizeof str_updatepwrplay_2, mes);
     a0 += rd16(rom_ptr(a0) + 4);                          /* the team name */
     a0 += rd16(rom_ptr(a0));
@@ -805,7 +803,7 @@ void PrintTeamLogoAndScore(rp tm, uint16_t logo)
     uint16_t d0 = r16(tm, tmscore);
     if ((int16_t)d0 >= 0xA) g.printx -= 1;
     uint32_t a1 = PushNumber(d0);
-    d0 = (uint16_t)((uint16_t)(rd16(ram_ptr(a1)) - 2) >> 1);
+    d0 = (uint16_t)((uint16_t)(r16(ram_at(a1), 0) - 2) >> 1);
     g.printx -= d0;
     g.printx += 1;
     printbig(a1);
@@ -864,8 +862,8 @@ void pplpen(rp tm, uint16_t d0)
     }
     uint16_t num = a1[-8];                                /* his number (BCD) */
     uint16_t saved = g.printx;
-    ConvertByteToDigits(num, ram_ptr(RAM_BASE + RAM_OFF_TextBuffer));
-    wr16(ram_ptr(RAM_BASE + RAM_OFF_mesarea), 4);         /* string length: 2 digits */
+    ConvertByteToDigits(num, RAM(TextBuffer));
+    g.mesarea = 4;                                        /* string length: 2 digits */
     print(RAM_BASE + RAM_OFF_mesarea);
     print(PushTime(d2));
     g.printx = saved;
@@ -935,9 +933,9 @@ void ChkShotStat(void)
         int was8 = g.sflags8 & 8;
         g.sflags8 &= (uint8_t)~8;
         if (!was8) { g.sflags8 |= 8; return; }            /* every second call */
-        const uint8_t *a4 = ram_ptr(RAM_BASE + RAM_OFF_ScoreSum) - 6 + g.ScoreSumbytes;   /* the last goal entry */
-        rp tm = team_struct((a4[2] & 0x80) != 0);
-        uint8_t pn = a4[3];
+        rp a4 = rp_add(RAM(ScoreSum), -6 + g.ScoreSumbytes);                              /* the last goal entry */
+        rp tm = team_struct((r8(a4, 2) & 0x80) != 0);
+        uint8_t pn = r8(a4, 3);
         const struct SortObj *p = sortobj_at(r16(tm, tmsort));
         int i;
         for (i = 0; i < 6; i++, p++)
@@ -1025,23 +1023,23 @@ static uint16_t getscore(uint16_t d0, uint16_t d1)
 
 /* penalty94.asm:SetScore. Add to the score of the ticker game a0. After period 3 a game
  * within one goal goes to overtime and asks for a highlight. */
-void SetScore(uint8_t *a0)
+void SetScore(rp a0)
 {
-    if ((int16_t)rd16(a0 + 8) >= 4) return;
-    if (rd16(a0 + 8) == 3) {
-        wr16(a0 + 8, 5);                                  /* final */
-        int16_t d0 = (int16_t)(rd16(a0 + 0xA) - rd16(a0 + 0xC));
+    if ((int16_t)r16(a0, 8) >= 4) return;
+    if (r16(a0, 8) == 3) {
+        w16(a0, 8, 5);                                    /* final */
+        int16_t d0 = (int16_t)(r16(a0, 0xA) - r16(a0, 0xC));
         if (d0 > 1) return;
         if (d0 < -1) return;
-        wr16(a0 + 8, 3);                                  /* close game: overtime */
-        a0[0xE] |= 2;                                     /* gsfhl */
+        w16(a0, 8, 3);                                    /* close game: overtime */
+        w8(a0, 0xE, (uint8_t)(r8(a0, 0xE) | 2));          /* gsfhl */
         return;
     }
-    wr16(a0 + 8, (uint16_t)(rd16(a0 + 8) + 1));
-    uint16_t s = getscore(rd16(a0), rd16(a0 + 2));
-    wr16(a0 + 0xA, (uint16_t)(rd16(a0 + 0xA) + s));
-    s = getscore(rd16(a0 + 2), rd16(a0));
-    wr16(a0 + 0xC, (uint16_t)(rd16(a0 + 0xC) + s));
+    w16(a0, 8, (uint16_t)(r16(a0, 8) + 1));
+    uint16_t s = getscore(r16(a0, 0), r16(a0, 2));
+    w16(a0, 0xA, (uint16_t)(r16(a0, 0xA) + s));
+    s = getscore(r16(a0, 2), r16(a0, 0));
+    w16(a0, 0xC, (uint16_t)(r16(a0, 0xC) + s));
 }
 
 /* penalty94.asm:InitScores. Initialize the other games' scores / period in the playoffs. */
@@ -1049,11 +1047,11 @@ void InitScores(void)
 {
     if ((int16_t)g.gamelevel > 1) return;
     int16_t d1 = (int16_t)GetShifter(NULL);
-    uint8_t *a0 = ram_ptr(RAM_BASE + RAM_OFF_gsstruct) + 0x10 * d1;
-    for (; d1 >= 0; d1--, a0 -= 0x10) {
+    rp a0 = rp_add(RAM(gsstruct), 0x10 * d1);
+    for (; d1 >= 0; d1--, a0 = rp_add(a0, -0x10)) {
         if ((uint16_t)d1 == g.gamenum) continue;
-        if (a0[0xE] & 4) continue;                        /* gsfso */
-        wr16(a0 + 8, 0);
+        if (r8(a0, 0xE) & 4) continue;                    /* gsfso */
+        w16(a0, 8, 0);
         for (int16_t d0 = (int16_t)randomd0(3); d0 > 0; d0--) SetScore(a0);
     }
 }
@@ -1063,25 +1061,25 @@ void UpdateScores(void)
 {
     int16_t d1 = (int16_t)GetShifter(NULL);
     g.TickerNum = (uint16_t)d1;
-    uint8_t *a0 = ram_ptr(RAM_BASE + RAM_OFF_gsstruct) + 0x10 * d1;
-    for (; d1 >= 0; d1--, a0 -= 0x10) {
+    rp a0 = rp_add(RAM(gsstruct), 0x10 * d1);
+    for (; d1 >= 0; d1--, a0 = rp_add(a0, -0x10)) {
         if ((uint16_t)d1 == g.gamenum) continue;
-        a0[0xE] &= (uint8_t)~2;
-        if (a0[0xE] & 4) continue;
+        w8(a0, 0xE, (uint8_t)(r8(a0, 0xE) & (uint8_t)~2));
+        if (r8(a0, 0xE) & 4) continue;
         SetScore(a0);
     }
 }
 
 /* penalty94.asm:NewTicker. Show the next ticker score once the clock is at 8:00 or less.
  * Returns d3 = the game, negative for none. */
-int16_t NewTicker(const uint8_t **gs)
+int16_t NewTicker(rp *gs)
 {
     if ((int16_t)g.gameclock > 0x1E0) return -1;
     return NewTicker2(gs);
 }
 
 /* penalty94.asm:NewTicker2. The next ticker game, skipping this game. */
-int16_t NewTicker2(const uint8_t **gs)
+int16_t NewTicker2(rp *gs)
 {
     int16_t d3 = (int16_t)g.TickerNum;
     if (d3 < 0) return d3;
@@ -1092,11 +1090,11 @@ int16_t NewTicker2(const uint8_t **gs)
 
 /* penalty94.asm:CheckGameTickerStatus. d3 = game. Returns a0 = its gstruct, skipping to the
  * next ticker game if a highlight is coming up or the series is over. */
-int16_t CheckGameTickerStatus(int16_t d3, const uint8_t **gs)
+int16_t CheckGameTickerStatus(int16_t d3, rp *gs)
 {
-    const uint8_t *a0 = ram_ptr(RAM_BASE + RAM_OFF_gsstruct) + 0x10 * d3;
-    if (a0[0xE] & 2) return NewTicker2(gs);               /* a highlight is coming */
-    if (a0[0xE] & 4) return NewTicker2(gs);               /* the series is over */
+    rp a0 = rp_add(RAM(gsstruct), 0x10 * d3);
+    if (r8(a0, 0xE) & 2) return NewTicker2(gs);           /* a highlight is coming */
+    if (r8(a0, 0xE) & 4) return NewTicker2(gs);           /* the series is over */
     *gs = a0;
     return d3;
 }
@@ -1115,7 +1113,7 @@ static void ticker_team(uint16_t team, uint16_t score, uint16_t x)
 
 /* penalty94.asm:NewTicker3. Display the ticker score for game d3 (a0 = its gstruct); nothing
  * for a negative d3. */
-void NewTicker3(int16_t d3, const uint8_t *gs)
+void NewTicker3(int16_t d3, rp gs)
 {
     if (d3 < 0) return;
     uint16_t d0, d1;
@@ -1131,13 +1129,13 @@ void NewTicker3(int16_t d3, const uint8_t *gs)
     d0 = (uint16_t)(1 + g.gamelevel);
     if (g.OptPlayMode == 0) d0 = 0;                       /* not the playoffs: 'EA Hockey Night' */
     PrintStringFromList(SYM_GameLabels, d0);
-    uint32_t a1 = AdvanceStringPtr(SYM_PerLabels, (uint16_t)(rd16(gs + 8) - 1));
+    uint32_t a1 = AdvanceStringPtr(SYM_PerLabels, (uint16_t)(r16(gs, 8) - 1));
     d0 = rd16(rom_ptr(a1)) >> 1;                          /* the period name centered on x + $17 */
     g.printx = (uint16_t)(x + 0x17 - d0);
     print(a1);
     g.printa = 0x8000;
-    ticker_team(rd16(gs + 2), rd16(gs + 0xC), x);
-    ticker_team(rd16(gs), rd16(gs + 0xA), x);
+    ticker_team(r16(gs, 2), r16(gs, 0xC), x);
+    ticker_team(r16(gs, 0), r16(gs, 0xA), x);
 }
 
 /* penalty94.asm:ClearTickerArea. Erase the ticker box. */
@@ -1191,14 +1189,14 @@ static void hl_restore(void)
 }
 
 /* StartHL2's .ranres: settle highlight game a0 at random when tied, and mark it final */
-static void hl_random_result(uint8_t *gs)
+static void hl_random_result(rp gs)
 {
-    if (rd16(gs + 0xA) == rd16(gs + 0xC)) {
+    if (r16(gs, 0xA) == r16(gs, 0xC)) {
         uint16_t d0 = vdp_hv16() & 1;
-        wr16(gs + 0xA, (uint16_t)(rd16(gs + 0xA) + d0));
-        wr16(gs + 0xC, (uint16_t)(rd16(gs + 0xC) + (d0 ^ 1)));
+        w16(gs, 0xA, (uint16_t)(r16(gs, 0xA) + d0));
+        w16(gs, 0xC, (uint16_t)(r16(gs, 0xC) + (d0 ^ 1)));
     }
-    wr16(gs + 8, 5);                                      /* gsper: final */
+    w16(gs, 8, 5);                                        /* gsper: final */
 }
 
 /* StartHL2's .setteam: refill the energy, personnel and player data of team a2 */
@@ -1218,15 +1216,15 @@ static void hl_set_team(rp tm)
  * computer playing until 180 frames after the clock stops or C / start (a tie is settled at
  * random); the game's RAM is kept aside meanwhile. Still tied: another highlight. Start skips
  * it with a random result (sf3sbut). */
-void StartHL2(uint8_t *gs, int16_t game)
+void StartHL2(rp gs, int16_t game)
 {
     for (;;) {
-        uint8_t *a0 = gs;
+        rp a0 = gs;
         if (g.sflags3 & (1 << sf3sbut)) { hl_random_result(a0); return; }
         hl_save();
-        const uint8_t *t = a0;
+        rp t = a0;
         int16_t d3 = CheckGameTickerStatus(game, &t);
-        a0 = (uint8_t *)t;
+        a0 = t;
         NewTicker3(d3, a0);
         if (g.sflags3 & (1 << sf3sbut)) { hl_restore(); hl_random_result(a0); g.sflags3 |= 1 << sf3sbut; return; }
         g.printx = 4;
@@ -1238,8 +1236,8 @@ void StartHL2(uint8_t *gs, int16_t game)
         if (waitxsr(0xB4) & 0x80) { hl_restore(); hl_random_result(a0); g.sflags3 |= 1 << sf3sbut; return; }
         ST_W(g.zamx);
         g.CwdExciteLvl = 0;
-        g.HomeTeam = rd16(a0);
-        g.VisTeam = rd16(a0 + 2);
+        g.HomeTeam = r16(a0, 0);
+        g.VisTeam = r16(a0, 2);
         rp home = team_struct(0), away = team_struct(1);
         w16(home, tmgoalie, 0);
         w16(away, tmgoalie, 0);
@@ -1250,9 +1248,9 @@ void StartHL2(uint8_t *gs, int16_t game)
         g.cont1team = 0;
         g.cont2team = 0;
         g.gameclock = (uint16_t)(randomd0(0x78) + 0x3C);
-        g.gsp = (uint16_t)(rd16(a0 + 8) - 1);
-        w16(home, tmscore, rd16(a0 + 0xA));
-        w16(away, tmscore, rd16(a0 + 0xC));
+        g.gsp = (uint16_t)(r16(a0, 8) - 1);
+        w16(home, tmscore, r16(a0, 0xA));
+        w16(away, tmscore, r16(a0, 0xC));
         g.gmode = 1 << gmhl;
         if (g.gsp & 1) g.gmode |= 1 << gmdir;
         g.sflags &= 0x00FF;                               /* clr.b: the high byte */
@@ -1305,8 +1303,8 @@ void StartHL2(uint8_t *gs, int16_t game)
         }
         KillCrowd();                                      /* the scores go to a0 as pushed: CheckGameTickerStatus's */
         p_turnoff();
-        wr16(a0 + 0xA, r16(home, tmscore));
-        wr16(a0 + 0xC, r16(away, tmscore));
+        w16(a0, 0xA, r16(home, tmscore));
+        w16(a0, 0xC, r16(away, tmscore));
         forceblack();
         for (int i = 0; i < 0x10; i++) sortobj(i)->Xpos = 0;
         hl_restore();
@@ -1317,9 +1315,9 @@ void StartHL2(uint8_t *gs, int16_t game)
         DrawMenuScreen();
         g.palcount = 0x18;
         song(SYM_SngEOG);
-        wr16(gs + 8, 4);                                  /* gsper: overtime */
-        if (rd16(gs + 0xA) == rd16(gs + 0xC)) continue;   /* still tied: another highlight */
-        wr16(gs + 8, 5);                                  /* final */
+        w16(gs, 8, 4);                                    /* gsper: overtime */
+        if (r16(gs, 0xA) == r16(gs, 0xC)) continue;       /* still tied: another highlight */
+        w16(gs, 8, 5);                                    /* final */
         t = gs;
         d3 = CheckGameTickerStatus(game, &t);
         NewTicker3(d3, t);
@@ -1331,21 +1329,21 @@ void StartHL2(uint8_t *gs, int16_t game)
 }
 
 /* penalty94.asm:StartHL. Play the highlight of game a0 (d1 = its number): StartHL2. */
-void StartHL(uint8_t *gs, int16_t game) { StartHL2(gs, game); }
+void StartHL(rp gs, int16_t game) { StartHL2(gs, game); }
 
 /* penalty94.asm:DoHiLights. The highlights: each game of the round (GetShifter, last first)
  * whose highlight flag is set (gsfhl, cleared here), unless the series is over (gsfso). */
 void DoHiLights(void)
 {
     int16_t n = (int16_t)GetShifter(NULL);
-    uint8_t *gs = RAM_W(RAM_OFF_gsstruct) + (uint16_t)(n * 0x10);
+    rp gs = rp_add(RAM(gsstruct), (uint16_t)(n * 0x10));
     do {
-        if (!(gs[0xE] & 4)) {
-            int hl = gs[0xE] & 2;
-            gs[0xE] &= (uint8_t)~2;
+        if (!(r8(gs, 0xE) & 4)) {
+            int hl = r8(gs, 0xE) & 2;
+            w8(gs, 0xE, (uint8_t)(r8(gs, 0xE) & (uint8_t)~2));
             if (hl) StartHL(gs, n);
         }
-        gs -= 0x10;
+        gs = rp_add(gs, -0x10);
     } while (n-- != 0);
 }
 
@@ -1377,7 +1375,7 @@ void Intermission(void)
     g.TickerNum = GetShifter(NULL);
     int skip = 0;
     while ((int16_t)g.TickerNum >= 0) {
-        const uint8_t *gs = NULL;
+        rp gs = { 0 };
         int16_t d3 = NewTicker2(&gs);
         NewTicker3(d3, gs);
         if (waitxsr(0x96) & 0x80) { skip = 1; break; }

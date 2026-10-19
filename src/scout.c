@@ -9,7 +9,6 @@
 #include "symbols_gen.h"
 #include "scout_strings_gen.h"
 
-#define RAM_W(off) ram_ptr(RAM_BASE + (off))
 #define PRINTZ(s) printz(s, sizeof s)
 #define TEMPBUF (RAM_BASE + RAM_OFF_TempBuffer)
 
@@ -40,8 +39,8 @@ void ScoutingReport(void)
     song(SYM_SngScout);
     g.vbint = SYM_vb2;
     clearTeamStats();
-    Create_HotCold_Table(g.tmstruct);
-    Create_HotCold_Table(g.AwShots);
+    Create_HotCold_Table(RAM(tmstruct));
+    Create_HotCold_Table(RAM(AwShots));
     BuildHotColdLists();
     g.disflags &= (uint16_t)~HI(df32c);
     g.Map1col1 = 6;
@@ -88,8 +87,8 @@ void ScoutingReport(void)
     g.palcount = 0x18;
     g.vbint = SYM_vb2;
     cpu_set_sr(0x2500);
-    uint8_t *list = InitScoutingDisplay();                /* the paragraphs of ScoutTextScript */
-    #define PARA(n) (wr16(list, n), list += 2)
+    rp list = InitScoutingDisplay();                      /* the paragraphs of ScoutTextScript */
+    #define PARA(n) (w16(list, 0, n), list = rp_add(list, 2))
     PARA(0x1B);                                           /* "Hi, I'm Ron Barr ..." */
     PARA(0x1D);                                           /* (a blank line) */
     PARA(0x1A);                                           /* "Welcome to a sold out ^ ..." */
@@ -103,7 +102,7 @@ void ScoutingReport(void)
     PARA(0x20);                                           /* "The ^ crowd record is @ dB." */
     PARA(0x1D);
     PARA(0x21);                                           /* "Hit the start button ..." */
-    wr16(list, 0xFFFF);
+    w16(list, 0, 0xFFFF);
     g.asv = 0;
     g.screentimer = 0x7FFF;
     g.scoutwait = 0x8CA0;
@@ -311,16 +310,16 @@ void PrintMatchupRatings(void)
  * matchup. */
 void GetMatchupPlayers(void)
 {
-    g.matchuphome = GetMatchupPlayer(g.tmstruct);
-    g.matchupvis = GetMatchupPlayer(g.AwShots);
+    g.matchuphome = GetMatchupPlayer(RAM(tmstruct));
+    g.matchupvis = GetMatchupPlayer(RAM(AwShots));
 }
 
 /* scout94.asm:GetMatchupPlayer. -> d0 = the roster index of team a0's player for the matchup:
  * slot MatchupLineSlots[matchup] (matchupslot; 0 goalie, 1 / 2 defense, 3 / 5 wings, 4 center)
  * of the first of its line sets. */
-uint16_t GetMatchupPlayer(const uint8_t *tm)
+uint16_t GetMatchupPlayer(rp tm)
 {
-    uint32_t data = rd32(tm + tmdata);
+    uint32_t data = r32(tm, tmdata);
     const uint8_t *lines = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 6)));
     int16_t slot = (int8_t)rom_ptr(SYM_MatchupLineSlots)[g.matchup];
     g.matchupslot = (uint16_t)slot;
@@ -355,9 +354,9 @@ void PrintAdvantageMarks(void)
 }
 
 /* the team data Strings after the city (city, abbreviation, nickname, arena): String n of team a2 */
-static uint32_t team_string(const uint8_t *tm, int n)
+static uint32_t team_string(rp tm, int n)
 {
-    uint32_t a1 = rd32(tm + tmdata);
+    uint32_t a1 = r32(tm, tmdata);
     a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1 + 4));
     while (n-- > 0) a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1));
     return a1;
@@ -365,15 +364,15 @@ static uint32_t team_string(const uint8_t *tm, int n)
 
 /* scout94.asm:GetTeamNickname. The text player's '=' (a2 the home team) and '*' -> a1 = the
  * team's nickname, or 'Home' / 'Visitors' when it has none (the all-star teams). */
-uint32_t GetTeamNickname(const uint8_t *tm)
+uint32_t GetTeamNickname(rp tm)
 {
     uint32_t a1 = team_string(tm, 2);
-    if (rd16(rom_ptr(a1)) == 2) a1 = tm == g.tmstruct ? SYM_HomeTxt : SYM_VisitorsTxt;
+    if (rd16(rom_ptr(a1)) == 2) a1 = rp_same(tm, RAM(tmstruct)) ? SYM_HomeTxt : SYM_VisitorsTxt;
     return a1;
 }
 
 /* scout94.asm:GetTeamArena. The text player's '^' and ';' -> a1 = the team's arena. */
-uint32_t GetTeamArena(const uint8_t *tm)
+uint32_t GetTeamArena(rp tm)
 {
     return team_string(tm, 3);
 }

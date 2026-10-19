@@ -733,26 +733,26 @@ goal:
     }
     if (g.ScoreSumbytes == 0x168)
         g.ScoreSumbytes -= 6;                            /* summary full: overwrite the last entry */
-    uint8_t *e = g.ScoreSum + g.ScoreSumbytes;
+    rp e = rp_add(RAM(ScoreSum), g.ScoreSumbytes);
     g.ScoreSumbytes += 6;
-    wr16(e, GetPeriodTimeRemaining());
-    e[2] = (uint8_t)(2 + r16(a2, tmap) - r16(a1, tmap));
+    w16(e, 0, GetPeriodTimeRemaining());
+    w8(e, 2, (uint8_t)(2 + r16(a2, tmap) - r16(a1, tmap)));
     g.CwdExciteLvl += 0x1E;
     if (!rp_same(a2, team_struct(0))) {
         g.CwdExciteLvl -= 0x14;                          /* less for an away goal */
-        e[2] |= 0x80;
+        w8(e, 2, (uint8_t)(r8(e, 2) | 0x80));
     }
     int16_t scorer = (int16_t)r16(a2, 0x18);
-    e[3] = (uint8_t)scorer;
-    e[4] = 0xFF; e[5] = 0xFF;                            /* no assists yet */
+    w8(e, 3, (uint8_t)scorer);
+    w8(e, 4, 0xFF); w8(e, 5, 0xFF);                      /* no assists yet */
     w8(a2, 0xB4 + scorer, (uint8_t)(r8(a2, 0xB4 + scorer) + 1));
     int16_t as = (int16_t)r16(a2, 0x1A);
     if (as >= 0 && as != scorer) {
-        e[4] = (uint8_t)as;
+        w8(e, 4, (uint8_t)as);
         w8(a2, 0xCE + as, (uint8_t)(r8(a2, 0xCE + as) + 1));
         as = (int16_t)r16(a2, 0x1C);
         if (as >= 0 && as != scorer) {
-            e[5] = (uint8_t)as;
+            w8(e, 5, (uint8_t)as);
             w8(a2, 0xCE + as, (uint8_t)(r8(a2, 0xCE + as) + 1));
         }
     }
@@ -760,7 +760,7 @@ goal:
     if (gk >= 0)
         w8(a1, 0xB4 + gk, (uint8_t)(r8(a1, 0xB4 + gk) + 1));   /* goal against */
     if (!(g.sflags4 & HI(5)) && !(g.gmode2 & HI(0)))     /* (rules: plus/minus; not a penalty shot's or a shootout's) */
-        rules_count_goal(rp_same(a2, team_struct(1)), e[2] & 0x7F);
+        rules_count_goal(rp_same(a2, team_struct(1)), r8(e, 2) & 0x7F);
     ChkShotStat();
     PenGoalStuff(a1, a2);
     g.BA_PS_flags &= (uint16_t)~HI(3);
@@ -1371,7 +1371,7 @@ int TryAddPlayerToList(rp team, uint16_t player, int slot)
  * his position, or from the whole roster. */
 void SetPlList(rp team)
 {
-    memset(g.PlList, 0, 6);
+    ram_fill(RAM(PlList), 0, 6);
     const uint8_t *prio = rom_ptr(SYM_priolist);
     if ((int16_t)r16(team, tmgoalie) < 0)
         prio++;                                            /* no goalie: an extra attacker */
@@ -1475,19 +1475,19 @@ void forcepldata(rp team)
  * at PBnum, home in the high nibble) and put everyone else on the bench. */
 static void rb(uint8_t d1, rp tm)
 {
-    uint8_t *pb = ram_ptr(RAM_BASE + RAM_OFF_PBnum);
+    rp pb = RAM(PBnum);
     for (int d0 = 0x32; d0 >= 0; d0 -= 2) {
-        *pb = (uint8_t)(*pb + d1);
+        w8(pb, 0, (uint8_t)(r8(pb, 0) + d1));
         uint16_t st = r16(tm, tmpdst + d0);
         if ((int16_t)st > 0) {
             if (!(st & (1u << 12)))
                 continue;
             if (st & 0x7FF)
                 continue;
-            *pb = (uint8_t)(*pb - d1);
+            w8(pb, 0, (uint8_t)(r8(pb, 0) - d1));
             continue;
         }
-        *pb = (uint8_t)(*pb - d1);
+        w8(pb, 0, (uint8_t)(r8(pb, 0) - d1));
         if (st == 0xFFFD || st == 0xFFFC)
             continue;                                      /* injured */
         w16(tm, tmpdst + d0, 0xFFFE);
@@ -1497,7 +1497,7 @@ static void rb(uint8_t d1, rp tm)
 /* collide94.asm:ResetBench. Everyone out of the penalty box and onto his bench. */
 void ResetBench(void)
 {
-    *ram_ptr(RAM_BASE + RAM_OFF_PBnum) = 0;
+    w8(RAM(PBnum), 0, 0);
     rb(0x10, team_struct(0));
     rb(1, team_struct(1));
 }
@@ -1545,8 +1545,8 @@ void setplayer(uint16_t roster, struct SortObj *o)
     w16(tm, tmpdst + idx, 0xFFFF);
     const uint8_t *td = rom_ptr(r32(tm, tmdata));
     const uint8_t *odds = td + (int16_t)rd16(td + 8);     /* the team's ScoreOdds bytes */
-    uint8_t *bonus = ram_ptr(RAM_BASE + RAM_OFF_PPBonus);
-    bonus[0] = bonus[1] = bonus[2] = bonus[3] = 0;        /* PPBonus, PKBonus, ThirdPBonus, HmAwBonus */
+    rp bonus = RAM(PPBonus);
+    ram_fill(bonus, 0, 4);                                /* PPBonus, PKBonus, ThirdPBonus, HmAwBonus */
     if (o->position != 0) {
         if (g.sflags2 & HI(sf2pwrplay)) {
             if (!chkpk2(o))

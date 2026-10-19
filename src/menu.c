@@ -6,14 +6,13 @@
 #include "symbols_gen.h"
 #include "menu_strings_gen.h"
 
-#define RAM_W(off) ram_ptr(RAM_BASE + (off))
 #define PRINTSMALLZ(s) printsmallz(s, sizeof s)
 
 /* menuitem: the selected item, then (+2) the first item shown */
-static uint16_t menu_top(void) { return rd16(RAM_W(RAM_OFF_menuitem + 2)); }
-static void set_menu_top(uint16_t v) { wr16(RAM_W(RAM_OFF_menuitem + 2), v); }
-static uint16_t menu_item(void) { return rd16(RAM_W(RAM_OFF_menuitem)); }
-static void set_menu_item(uint16_t v) { wr16(RAM_W(RAM_OFF_menuitem), v); }
+static uint16_t menu_top(void) { return r16(rp_add(RAM(menuitem), 2), 0); }
+static void set_menu_top(uint16_t v) { w16(rp_add(RAM(menuitem), 2), 0, v); }
+static uint16_t menu_item(void) { return r16(RAM(menuitem), 0); }
+static void set_menu_item(uint16_t v) { w16(RAM(menuitem), 0, v); }
 /* the menu list: a title String, the marker String, then the items (a String and a handler long
  * each; an item whose text word is negative ends the list) */
 static uint32_t skip_string(uint32_t a) { return a + (int16_t)rd16(mem_ptr(a)); }
@@ -137,10 +136,10 @@ void PutTeamBlock(uint16_t off)
 {
     uint16_t saved = g.disflags;
     g.disflags |= HI(dfng);
-    const uint8_t *src = RAM_W(RAM_OFF_TeamBlockMap + off);
+    rp src = rp_add(RAM(TeamBlockMap), off);
     for (int r = 0; r < 2; r++) {
         xyVmMap();
-        for (int i = 0; i < 11; i++, src += 2) vdp_data(rd16(src));
+        for (int i = 0; i < 11; i++, src = rp_add(src, 2)) vdp_data(r16(src, 0));
         g.printy++;
     }
     g.printx += 0xB;

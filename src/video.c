@@ -10,8 +10,6 @@
 #include "rom.h"
 #include "symbols_gen.h"
 
-#define RAM_W(off) ram_ptr(RAM_BASE + (off))
-
 /* the address word pair of a VDP write command for VRAM address a: high word 01aa aaaa
  * aaaa aaaa, low word 0000 0000 0000 00aa (asl.l #2 / lsr.w #2 / ori.w #$4000 / swap) */
 static uint32_t vram_write_cmd(uint16_t a) { return (uint32_t)(0x4000 | (a & 0x3FFF)) << 16 | (a >> 14); }
@@ -21,13 +19,13 @@ static uint32_t vram_write_cmd(uint16_t a) { return (uint32_t)(0x4000 | (a & 0x3
 void UnpackNibbles(uint32_t src, uint16_t count)
 {
     const uint8_t *p = mem_ptr(src);
-    uint8_t *out = RAM_W(RAM_OFF_nibblebuffer);
+    rp out = RAM(nibblebuffer);
     int lo = 0;
     while (count--) {
         uint8_t b = *p;
         if (lo) p++; else b >>= 4;
         lo ^= 1;
-        wr16(out, b & 0xF); out += 2;
+        w16(out, 0, b & 0xF); out = rp_add(out, 2);
     }
 }
 
@@ -36,11 +34,11 @@ void UnpackNibbles(uint32_t src, uint16_t count)
 uint16_t WeightedRandomSelect(uint16_t n)
 {
     uint16_t off = RAM_OFF_nibblebuffer, sum = 0;
-    while (n--) { sum += rd16(RAM_W(off)); off += 2; }
+    while (n--) { sum += r16(ram_at(RAM_BASE + off), 0); off += 2; }
     int16_t r = (int16_t)randomd0(sum);
     do {
         off -= 2;
-        r = (int16_t)(r - rd16(RAM_W(off)));
+        r = (int16_t)(r - r16(ram_at(RAM_BASE + off), 0));
     } while (r >= 0);
     return (uint16_t)((uint16_t)(off - RAM_OFF_nibblebuffer) >> 1);
 }
@@ -539,9 +537,9 @@ uint16_t dobitmap(uint32_t pal, uint32_t map, uint32_t tiles, uint16_t x, uint16
 {
     uint16_t keep_y = g.printy, saved = g.disflags;
     g.disflags |= HI(dfng);
-    uint8_t *dst = RAM_W(RAM_OFF_palfadenew);
-    for (; palbits; palbits >>= 1, pal += 0x20, dst += 0x20)
-        if (palbits & 1) for (int i = 0x1F; i >= 0; i--) dst[i] = mem_ptr(pal)[i];
+    rp dst = RAM(palfadenew);
+    for (; palbits; palbits >>= 1, pal += 0x20, dst = rp_add(dst, 0x20))
+        if (palbits & 1) for (int i = 0x1F; i >= 0; i--) w8(dst, i, mem_ptr(pal)[i]);
     uint16_t attr = g.printa & 0xF800;
     const uint8_t *m = mem_ptr(map);
     uint16_t row = y, rows = h;
@@ -601,7 +599,7 @@ uint16_t DecompressGraphics(uint32_t tiles, uint16_t start)
 
 /* the 256-byte ring buffer at ThreeStars that DecompressBytecode unpacks into */
 #define RING (RAM_OFF_ThreeStars)
-static uint8_t *ring(uint8_t i) { return RAM_W(RING + i); }
+static rp ring(uint8_t i) { return ram_at(RAM_BASE + (RING + i)); }
 
 /* video94.asm:DecompressBytecode. a0 = packed tiles, d1 = VRAM address: run the byte code
  * (one handler per high nibble, jump_table) into the ring buffer, which goes to VRAM each time
@@ -624,7 +622,7 @@ void DecompressBytecode(uint32_t src, uint16_t vram)
 /* put one byte in the ring buffer; a full buffer goes to VRAM */
 static void ring_put(struct Unpack *u, uint8_t b)
 {
-    *ring(u->idx) = b;
+    w8(ring(u->idx), 0, b);
     if (++u->idx == 0) FlushOutputBuffer(u);
 }
 static uint8_t op_byte(const struct Unpack *u) { return mem_ptr(u->src)[-1]; }   /* -1(a0) */
@@ -657,7 +655,7 @@ int Opcode_Fillbytes(struct Unpack *u)
 int CopyBackwardRun(struct Unpack *u, uint16_t count, uint8_t dist)
 {
     uint8_t from = (uint8_t)(u->idx - dist);
-    do ring_put(u, *ring(from++)); while (count-- != 0);
+    do ring_put(u, r8(ring(from++), 0)); while (count-- != 0);
     return 0;
 }
 
@@ -665,7 +663,7 @@ int CopyBackwardRun(struct Unpack *u, uint16_t count, uint8_t dist)
 int CopyBackwardReverseRun(struct Unpack *u, uint16_t count, uint8_t dist)
 {
     uint8_t from = (uint8_t)(u->idx - dist);
-    do ring_put(u, *ring(from--)); while (count-- != 0);
+    do ring_put(u, r8(ring(from--), 0)); while (count-- != 0);
     return 0;
 }
 
@@ -753,16 +751,16 @@ void FlushOutputBuffer(struct Unpack *u)
 /* ---- printing --------------------------------------------------------------------------- */
 
 /* the map selected by printm: VmMap1/2/3 (VRAM base) and the shift for a row */
-static const uint8_t *print_map(void) { return RAM_W(RAM_OFF_VmMap1 + (int16_t)g.printm); }
+static rp print_map(void) { return rp_add(RAM(VmMap1), (int16_t)g.printm); }
 /* asl.w Dn: the count is taken mod 64 and 16 or more clears the word */
 static uint16_t asl_w(uint16_t v, uint16_t n) { n &= 63; return n >= 16 ? 0 : (uint16_t)(v << n); }
 
 /* video94.asm:xyVmMap. Set the VDP to write at printx/printy on the map printm. */
 void xyVmMap(void)
 {
-    const uint8_t *m = print_map();
-    uint16_t row = asl_w(g.printy, rd16(m + 2));
-    Vmaddr((uint16_t)(((uint16_t)(g.printx + row) << 1) + rd16(m)));
+    rp m = print_map();
+    uint16_t row = asl_w(g.printy, r16(m, 2));
+    Vmaddr((uint16_t)(((uint16_t)(g.printx + row) << 1) + r16(m, 0)));
 }
 
 /* video94.asm:eraser. d0/d1 = width/height, d2 = map word: fill the rectangle at
@@ -847,7 +845,7 @@ static const uint8_t *printsmall_p(const uint8_t *s)
         uint16_t tile;
         if (c == 0x40) tile = 0x7FF;
         else if (c == 0x5E) { g.printx++; xyVmMap(); continue; }
-        else tile = (uint16_t)(font_char((uint8_t)c) + rd16(RAM_W(chars + g.printfontset)));
+        else tile = (uint16_t)(font_char((uint8_t)c) + r16(ram_at(RAM_BASE + (chars + g.printfontset)), 0));
         vdp_data((uint16_t)(tile + st.attr));
         g.printx++;
     }
@@ -949,39 +947,39 @@ void FormatAndPrintTime(uint16_t v)
 
 /* the String length word and padding that end PushTime / PushNumber: the text runs from p to
  * end; a pad byte keeps the String even. -> its address */
-static uint32_t push_string(uint8_t *p, const uint8_t *end)
+static uint32_t push_string(rp p, rp end)
 {
-    uint16_t len = (uint16_t)(end - p + 2);
-    if (len & 1) { *--p = 0; len++; }
-    p -= 2;
-    wr16(p, len);
-    return ram_addr(p);
+    uint16_t len = (uint16_t)(rp_diff(end, p) + 2);
+    if (len & 1) { w8_prev(&p, 0); len++; }
+    p = rp_add(p, -2);
+    w16(p, 0, len);
+    return rp_addr(p);
 }
 
 /* video94.asm:PushTime. d0 = seconds -> a1 = a String " m:ss" (or "mm:ss") in mesarea. */
 uint32_t PushTime(uint16_t t)
 {
-    uint8_t *end = RAM_W(RAM_OFF_mesarea + 30), *p = end;
+    rp end = rp_add(RAM(mesarea), 30), p = end;
     uint32_t d0 = m68k_divu((uint32_t)(int32_t)(int16_t)t, 10);
-    *--p = (uint8_t)((d0 >> 16) + '0');
+    w8_prev(&p, (uint8_t)((d0 >> 16) + '0'));
     d0 = m68k_divu((uint32_t)(int32_t)(int16_t)d0, 6);
-    *--p = (uint8_t)((d0 >> 16) + '0');
-    *--p = ':';
+    w8_prev(&p, (uint8_t)((d0 >> 16) + '0'));
+    w8_prev(&p, ':');
     d0 = m68k_divu((uint32_t)(int32_t)(int16_t)d0, 10);
-    *--p = (uint8_t)((d0 >> 16) + '0');
-    *--p = ' ';
-    if ((uint16_t)d0) *p = (uint8_t)(d0 + '0');
+    w8_prev(&p, (uint8_t)((d0 >> 16) + '0'));
+    w8_prev(&p, ' ');
+    if ((uint16_t)d0) w8(p, 0, (uint8_t)(d0 + '0'));
     return push_string(p, end);
 }
 
 /* video94.asm:PushNumber. d0 -> a1 = a String of it in decimal, no leading zeros. */
 uint32_t PushNumber(uint16_t n)
 {
-    uint8_t *end = RAM_W(RAM_OFF_PushNumberBuf), *p = end;
+    rp end = RAM(PushNumberBuf), p = end;
     uint32_t d0 = n;
     do {
         d0 = m68k_divu((uint32_t)(int32_t)(int16_t)d0, 10);
-        *--p = (uint8_t)((d0 >> 16) + '0');
+        w8_prev(&p, (uint8_t)((d0 >> 16) + '0'));
     } while ((uint16_t)d0);
     return push_string(p, end);
 }
@@ -990,7 +988,7 @@ uint32_t PushNumber(uint16_t n)
  * in width columns (spaces before the first digit) at PushWidthBuf. */
 uint32_t PushNumberWidth(uint16_t n, uint16_t width)
 {
-    uint8_t *buf = RAM_W(RAM_OFF_PushWidthBuf), *p = buf + 2;
+    rp buf = RAM(PushWidthBuf), p = rp_add(buf, 2);
     uint32_t div = 1;
     for (uint16_t i = (uint16_t)(width - 1); i; i--) div = (uint16_t)div * 10u;
     uint8_t fill = ' ';
@@ -999,35 +997,35 @@ uint32_t PushNumberWidth(uint16_t n, uint16_t width)
         d0 = m68k_divu((uint32_t)(int32_t)(int16_t)d0, (uint16_t)div);
         if ((uint16_t)d0 == 0 && (uint16_t)div != 1) d0 = (d0 & 0xFFFF0000) | fill;
         else { fill = '0'; d0 = (d0 & 0xFFFF0000) | (uint16_t)(d0 + '0'); }
-        *p++ = (uint8_t)d0;
+        w8_next(&p, (uint8_t)d0);
         d0 = d0 >> 16 | d0 << 16;                    /* swap: the remainder goes on */
         div = m68k_divu(div, 10);                    /* divu.w #10 of the whole long */
     } while ((uint16_t)div);
-    uint16_t len = (uint16_t)(p - buf);
-    if (len & 1) { *p++ = 0; len++; }
-    wr16(buf, len);
-    return ram_addr(buf);
+    uint16_t len = (uint16_t)(rp_diff(p, buf));
+    if (len & 1) { w8_next(&p, 0); len++; }
+    w16(buf, 0, len);
+    return rp_addr(buf);
 }
 
 /* video94.asm:appstring. a1 = String, a3 = String in RAM: append the first to the second (the
  * text of a3 ends at its first zero byte after the first character). */
 static void appstring_p(const uint8_t *src, uint32_t buf)
 {
-    uint8_t *dst = ram_ptr(buf), *a0 = dst + 2;
-    int16_t n = (int16_t)(rd16(dst) - 3);
+    rp dst = ram_at(buf), a0 = rp_add(dst, 2);
+    int16_t n = (int16_t)(r16(dst, 0) - 3);
     if (n >= 0) {
-        do a0++; while (*a0 != 0 && n-- != 0);
+        do a0 = rp_add(a0, 1); while (r8(a0, 0) != 0 && n-- != 0);
     }
     n = (int16_t)(rd16(src) - 3);
     src += 2;
     if (n < 0) return;
     do {
         uint8_t b = *src++;
-        *a0++ = b;
-        if (b == 0) a0--;
+        w8_next(&a0, b);
+        if (b == 0) a0 = rp_add(a0, -1);
     } while (n-- != 0);
-    if ((a0 - (uint8_t *)&g) & 1) *a0++ = 0;
-    wr16(dst, (uint16_t)(a0 - dst));
+    if ((rp_addr(a0)) & 1) w8_next(&a0, 0);
+    w16(dst, 0, (uint16_t)(rp_diff(a0, dst)));
 }
 
 void appstring(uint32_t src, uint32_t buf) { appstring_p(mem_ptr(src), buf); }
@@ -1096,9 +1094,9 @@ void PrintBigChar(uint8_t c, struct BigPen *pen)
 /* video94.asm:PutBigTile. d3 = tile: write it plus the pen attribute at d4/d5 on printm. */
 void PutBigTile(uint16_t tile, const struct BigPen *pen)
 {
-    const uint8_t *m = print_map();
-    uint16_t row = asl_w(pen->y, rd16(m + 2));
-    Vmaddr((uint16_t)(((uint16_t)(row + pen->x) << 1) + rd16(m)));
+    rp m = print_map();
+    uint16_t row = asl_w(pen->y, r16(m, 2));
+    Vmaddr((uint16_t)(((uint16_t)(row + pen->x) << 1) + r16(m, 0)));
     vdp_data((uint16_t)(tile + pen->attr));
 }
 

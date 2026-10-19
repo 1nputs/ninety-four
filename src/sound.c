@@ -18,17 +18,16 @@
 #include "symbols_gen.h"
 #include <string.h>
 
-#define RAM_W(off) ram_ptr(RAM_BASE + (off))
-#define CMD(i) RAM_W(RAM_OFF_Z80_command_buffer + (i))
-#define ATTEN RAM_W(RAM_OFF_per_channel_attenuation_table)
-#define SLOTS RAM_W(RAM_OFF_fm_track_slots)
-#define CHAN0 RAM_W(RAM_OFF_fm_channel_structs)
-#define CHAN6 RAM_W(RAM_OFF_fm_channel_struct6)
-#define VOICES RAM_W(RAM_OFF_fm_voice_usage_table)
+#define CMD(i) rp_add(RAM(Z80_command_buffer), (i))
+#define ATTEN RAM(per_channel_attenuation_table)
+#define SLOTS RAM(fm_track_slots)
+#define CHAN0 RAM(fm_channel_structs)
+#define CHAN6 RAM(fm_channel_struct6)
+#define VOICES RAM(fm_voice_usage_table)
 #define IO_CT1_PORT 0xA10003u
 #define IO_CT2_PORT 0xA10005u
 
-static void bset(uint8_t *p, unsigned bit) { *p |= (uint8_t)(1u << (bit & 7)); }
+static void bset(rp p, unsigned bit) { w8(p, 0, (uint8_t)(r8(p, 0) | (uint8_t)(1u << (bit & 7)))); }
 static void needs_update(void) { g.music_needs_z80_update = 0xFF; }
 
 /* take the Z80 bus and wait for it (move.w #$100,(IO_Z80BUS) / btst #0 / bne) */
@@ -78,15 +77,15 @@ void handle_command_skip(uint32_t ev, uint16_t track) {}
  * (output channels 0, 1, 2, 4, 5, 6). */
 void ClearAllTrackAndSFXSlots(void)
 {
-    for (int i = 0; i < 8; i++) wr32(SLOTS + 6 * i, 0xFFFFFFFF);
-    uint8_t *ch = SLOTS;
+    for (int i = 0; i < 8; i++) w32(SLOTS, 6 * i, 0xFFFFFFFF);
+    rp ch = SLOTS;
     for (int n = 5; n >= 0; n--) {
-        ch -= 8;
-        ch[4] = (uint8_t)(n >= 3 ? n + 1 : n);
-        ch[3] = 0xFF;
-        ch[0] = 0xFF;
-        ch[1] = 0;
-        ch[6] = 0;
+        ch = rp_add(ch, -8);
+        w8(ch, 4, (uint8_t)(n >= 3 ? n + 1 : n));
+        w8(ch, 3, 0xFF);
+        w8(ch, 0, 0xFF);
+        w8(ch, 1, 0);
+        w8(ch, 6, 0);
     }
 }
 
@@ -95,9 +94,9 @@ void ClearAllTrackAndSFXSlots(void)
 void p_turnoff(void)
 {
     ClearAllTrackAndSFXSlots();
-    *CMD(0) = 0x77;                                      /* key off channels 0-2, 4-6 */
-    *CMD(2) = 0x77;                                      /* volume change on them */
-    for (int i = 0; i < 7; i++) ATTEN[i] = 0x7F;
+    w8(CMD(0), 0, 0x77);                                      /* key off channels 0-2, 4-6 */
+    w8(CMD(2), 0, 0x77);                                      /* volume change on them */
+    for (int i = 0; i < 7; i++) w8(ATTEN, i, 0x7F);
     UploadCommandBufferToZ80();
     StopPCMChannel();
 }
@@ -109,22 +108,22 @@ void play_sfx_or_music_track(uint16_t n)
 {
     if (n > 0x7A) { rtsfx(); return; }
     if ((int16_t)n >= 0x30) stop_current_song(n);
-    uint8_t *slot = SLOTS;
-    int32_t low = (int32_t)rd32(slot);
+    rp slot = SLOTS;
+    int32_t low = (int32_t)r32(slot, 0);
     uint16_t track = 7;
     for (int i = 1; i < 8; i++)
-        if (low > (int32_t)rd32(SLOTS + 6 * i)) { slot = SLOTS + 6 * i; low = (int32_t)rd32(slot); track = (uint16_t)(7 - i); }
-    if ((int16_t)rd16(slot) >= 0) return;                /* no free slot */
+        if (low > (int32_t)r32(SLOTS, 6 * i)) { slot = rp_add(SLOTS, 6 * i); low = (int32_t)r32(slot, 0); track = (uint16_t)(7 - i); }
+    if ((int16_t)r16(slot, 0) >= 0) return;              /* no free slot */
     uint32_t stream = rd32(rom_ptr(SYM_SoundStreamTable + (uint16_t)(n << 2)));
-    wr32(slot, stream);
-    wr16(slot + 4, 0);
-    slot[5] = *mem_ptr(stream);                          /* the first delay */
-    uint8_t *v = VOICES + (uint16_t)(track << 3);
-    for (int i = 0; i < 8; i++, v += 0x40) {
-        wr16(v, 0);
-        v[2] = 0;
-        v[3] = 0;
-        wr16(v + 4, 0x7F);
+    w32(slot, 0, stream);
+    w16(slot, 4, 0);
+    w8(slot, 5, *mem_ptr(stream));                       /* the first delay */
+    rp v = rp_add(VOICES, (uint16_t)(track << 3));
+    for (int i = 0; i < 8; i++, v = rp_add(v, 0x40)) {
+        w16(v, 0, 0);
+        w8(v, 2, 0);
+        w8(v, 3, 0);
+        w16(v, 4, 0x7F);
     }
 }
 
@@ -138,24 +137,24 @@ void stop_current_song(uint16_t d0)
     uint16_t sr = cpu_get_sr();
     cpu_set_sr(0x2700);                                   /* no interrupts while the slots change */
     int32_t first = (int32_t)rd32(rom_ptr(SYM_SongPointerTable));
-    uint8_t *slot = SLOTS;
+    rp slot = SLOTS;
     int16_t track = 7;
     int found;
     for (;;) {                                           /* cmpa.l / dble */
-        found = first <= (int32_t)rd32(slot);
-        slot += 6;
+        found = first <= (int32_t)r32(slot, 0);
+        slot = rp_add(slot, 6);
         if (found || track-- == 0) break;
     }
     if (!found) { cpu_set_sr(sr); return; }
-    memset(CMD(0), 0, 5);
-    wr32(slot - 6, 0xFFFFFFFF);
-    uint8_t *ch = CHAN0;
-    for (int i = 0; i < 6; i++, ch += 8) {
-        if ((ch[0] & 7) != track) continue;
+    ram_fill(CMD(0), 0, 5);
+    w32(slot, -6, 0xFFFFFFFF);
+    rp ch = CHAN0;
+    for (int i = 0; i < 6; i++, ch = rp_add(ch, 8)) {
+        if ((r8(ch, 0) & 7) != track) continue;
         ReleaseChannelAndNote(ch);
-        uint8_t out = ch[4];
+        uint8_t out = r8(ch, 4);
         d0 = (uint16_t)((d0 & 0xFF00) | out);
-        RAM_W(RAM_OFF_per_channel_attenuation_table + (int16_t)d0)[0] = 0x7F;
+        w8(rp_add(RAM(per_channel_attenuation_table), (int16_t)d0), 0, 0x7F);
         bset(CMD(2), out);
     }
     UploadCommandBufferToZ80();
@@ -241,17 +240,17 @@ void p_music_vblank(void)
 {
     ReadJoyData();
     g.music_needs_z80_update = 0;
-    memset(CMD(0), 0, 5);
+    ram_fill(CMD(0), 0, 5);
     for (;;) {
-        for (int i = 0; i < 8; i++) ProcessOneMusicTrack(SLOTS + 6 * i, (uint16_t)(7 - i));
-        if (!(RAM_W(RAM_OFF_PALflag)[0] & 1)) break;
+        for (int i = 0; i < 8; i++) ProcessOneMusicTrack(rp_add(SLOTS, 6 * i), (uint16_t)(7 - i));
+        if (!(r8(RAM(PALflag), 0) & 1)) break;
         if ((int16_t)--g.music_tick_divider >= 0) break;
         g.music_tick_divider += 6;
     }
     if (g.music_needs_z80_update) UploadCommandBufferToZ80();
-    uint8_t *ch = CHAN0;
-    for (int i = 0; i < 6; i++, ch += 8)
-        if (++ch[5] == 0) ch[5] = 0xFF;                  /* age, held at $FF */
+    rp ch = CHAN0;
+    for (int i = 0; i < 6; i++, ch = rp_add(ch, 8))
+        if (r8_inc(ch, 5) == 0) w8(ch, 5, 0xFF);         /* age, held at $FF */
 }
 
 /* sound94.asm:z80_bus_release_delay. The Z80 is busy: give the bus back and wait a little
@@ -272,35 +271,35 @@ void UploadCommandBufferToZ80(void)
     }
     z80_ram_write8(0x96, 0xD1);
     z80_ram_write8(0x97, 0);
-    for (int i = 0; i < 0x21; i++) z80_ram_write8((uint16_t)(2 + i), *CMD(i));
+    for (int i = 0; i < 0x21; i++) z80_ram_write8((uint16_t)(2 + i), r8(CMD(i), 0));
     z80_busreq(0);
 }
 
 /* sound94.asm:ProcessOneMusicTrack. Count down track slot a5 (track d7) and run every event
  * that is due (4 bytes: delay, status, two data bytes; the delay of the next event follows).
  * Status 0 ends the stream, or loops to the pointer after it when that is not negative. */
-void ProcessOneMusicTrack(uint8_t *slot, uint16_t track)
+void ProcessOneMusicTrack(rp slot, uint16_t track)
 {
     static void (*const command_jump_table[8])(uint32_t, uint16_t) = {
         handle_command_00, handle_command_10, handle_command_skip, handle_command_30,
         handle_command_40, handle_command_skip, handle_command_60, handle_command_skip,
     };
     for (;;) {
-        uint16_t delay = (uint16_t)(rd16(slot + 4) - 1);
-        wr16(slot + 4, delay);
+        uint16_t delay = (uint16_t)(r16(slot, 4) - 1);
+        w16(slot, 4, delay);
         if ((int16_t)delay >= 0) { rtsfx(); return; }
         uint32_t ev;
         for (;;) {                                       /* .event */
-            if ((int16_t)rd16(slot) < 0) { rtsfx(); return; }
-            ev = rd32(slot);
-            wr32(slot, ev + 4);
+            if ((int16_t)r16(slot, 0) < 0) { rtsfx(); return; }
+            ev = r32(slot, 0);
+            w32(slot, 0, ev + 4);
             const uint8_t *e = mem_ptr(ev);
-            wr16(slot + 4, 0);
-            slot[5] = e[4];
+            w16(slot, 4, 0);
+            w8(slot, 5, e[4]);
             if (e[1] != 0) break;
-            slot[0] = 0xFF;                              /* end of the stream */
+            w8(slot, 0, 0xFF);                           /* end of the stream */
             if ((int16_t)rd16(e + 2) < 0) { rtsfx(); return; }
-            wr32(slot, rd32(e + 2));                     /* loop */
+            w32(slot, 0, rd32(e + 2));                   /* loop */
         }
         command_jump_table[(mem_ptr(ev)[1] & 0x70) >> 4](ev, track);
     }
@@ -312,13 +311,13 @@ void handle_command_00(uint32_t ev, uint16_t track)
 {
     const uint8_t *e = mem_ptr(ev);
     uint16_t key = (uint16_t)(voice_key(e[1], track) << 8 | e[2]);
-    uint8_t *ch = SLOTS;
+    rp ch = SLOTS;
     int16_t n = 5;
     for (;;) {
         int eq;
-        do { ch -= 8; eq = rd16(ch) == key; } while (!eq && n-- != 0);     /* dbeq */
+        do { ch = rp_add(ch, -8); eq = r16(ch, 0) == key; } while (!eq && n-- != 0);   /* dbeq */
         if (!eq) { rtsfx(); return; }
-        if (ch[6] & 1) break;                                               /* dbne */
+        if (r8(ch, 6) & 1) break;                                           /* dbne */
         if (n-- == 0) { rtsfx(); return; }
     }
     ReleaseChannelAndNote(ch);
@@ -326,13 +325,13 @@ void handle_command_00(uint32_t ev, uint16_t track)
 
 /* sound94.asm:ReleaseChannelAndNote. Key off channel struct a2 if it is on; a PCM patch stops
  * the PCM channel instead. */
-void ReleaseChannelAndNote(uint8_t *ch)
+void ReleaseChannelAndNote(rp ch)
 {
-    int on = ch[6] & 1;
-    ch[6] &= (uint8_t)~1;
+    int on = r8(ch, 6) & 1;
+    w8(ch, 6, (uint8_t)(r8(ch, 6) & (uint8_t)~1));
     if (!on) { rtsfx(); return; }
-    if ((int8_t)ch[3] >= 0x60) { StopPCMChannel(); return; }
-    bset(CMD(0), ch[4]);
+    if ((int8_t)r8(ch, 3) >= 0x60) { StopPCMChannel(); return; }
+    bset(CMD(0), r8(ch, 4));
     needs_update();
 }
 
@@ -354,18 +353,18 @@ void handle_command_10(uint32_t ev, uint16_t track)
 {
     const uint8_t *e = mem_ptr(ev);
     if (e[3] == 0) { handle_command_00(ev, track); return; }
-    uint8_t *ch = CHAN6, *voices = VOICES;
+    rp ch = CHAN6, voices = VOICES;
     uint16_t key = voice_key(e[1], track);
-    uint8_t patch = voices[(uint16_t)(key << 3) + 3];
+    uint8_t patch = r8(voices, (uint16_t)(key << 3) + 3);
     if ((int8_t)patch >= 0x60) {                          /* PCM */
-        int on = ch[6] & 1;
-        ch[6] |= 1;
-        if (on && (int8_t)patch <= (int8_t)ch[3]) { rtscmd10(); return; }
-        ch[3] = patch;
-        ch[5] = 0;
-        ch[0] = (uint8_t)key;
-        ch[1] = e[2];
-        ch[2] = e[3];
+        int on = r8(ch, 6) & 1;
+        w8(ch, 6, (uint8_t)(r8(ch, 6) | 1));
+        if (on && (int8_t)patch <= (int8_t)r8(ch, 3)) { rtscmd10(); return; }
+        w8(ch, 3, patch);
+        w8(ch, 5, 0);
+        w8(ch, 0, (uint8_t)key);
+        w8(ch, 1, e[2]);
+        w8(ch, 2, e[3]);
         const uint8_t *t = rom_ptr(SYM_pcm_sample_table + (uint16_t)(((int8_t)patch - 0x60) << 3));
         uint32_t start = rd32(t), end = rd32(t + 4);
         take_bus();
@@ -383,36 +382,36 @@ void handle_command_10(uint32_t ev, uint16_t track)
         return;
     }
     /* the oldest of the five FM channels (ties: the lower struct) */
-    uint8_t *oldest = ch - 8;
-    for (uint8_t *c = ch - 16; c >= CHAN0; c -= 8)
-        if (!(oldest[5] > c[5])) oldest = c;
+    rp oldest = rp_add(ch, -8);
+    for (rp c = rp_add(ch, -16); rp_diff(c, CHAN0) >= 0; c = rp_add(c, -8))
+        if (!(r8(oldest, 5) > r8(c, 5))) oldest = c;
     /* a free channel, preferably one with the patch already */
-    uint8_t *use = oldest;
+    rp use = oldest;
     int16_t n = 4;
     int keyon;
     for (;;) {
         int free_;
-        do { ch -= 8; free_ = !(ch[6] & 1); } while (!free_ && n-- != 0);   /* dbeq */
-        if (!free_) { keyon = use[3] == patch; break; }                       /* .0 */
+        do { ch = rp_add(ch, -8); free_ = !(r8(ch, 6) & 1); } while (!free_ && n-- != 0);   /* dbeq */
+        if (!free_) { keyon = r8(use, 3) == patch; break; }                   /* .0 */
         use = ch;
-        if (use[3] == patch) { keyon = 1; break; }
+        if (r8(use, 3) == patch) { keyon = 1; break; }
         if (n-- == 0) { keyon = 0; break; }
     }
     if (!keyon) {                                         /* .patch */
         ch = use;
-        ch[3] = patch;
-        uint8_t out = ch[4];
+        w8(ch, 3, patch);
+        uint8_t out = r8(ch, 4);
         bset(CMD(4), out);
-        RAM_W(RAM_OFF_per_channel_patch_table)[out] = patch;
+        w8(RAM(per_channel_patch_table), out, patch);
         needs_update();
     }
-    ch[5] = 0;                                            /* .keyon */
-    ch[6] |= 1;
-    ch[0] = (uint8_t)key;
-    ch[1] = e[2];
-    ch[2] = e[3];
-    bset(CMD(0), ch[4]);
-    bset(CMD(1), ch[4]);
+    w8(ch, 5, 0);                                         /* .keyon */
+    w8(ch, 6, (uint8_t)(r8(ch, 6) | 1));
+    w8(ch, 0, (uint8_t)key);
+    w8(ch, 1, e[2]);
+    w8(ch, 2, e[3]);
+    bset(CMD(0), r8(ch, 4));
+    bset(CMD(1), r8(ch, 4));
     SetChannelVolume(ch, voices);
     UpdateChannelFrequencyAndVolume(ch, voices);
 }
@@ -421,30 +420,30 @@ void handle_command_10(uint32_t ev, uint16_t track)
  * (octave and the note's F-number) and its key's pitch bend (a3 = voice table) scaled by the
  * patch's bend range (12 for PCM). FM: block and F-number to the frequency table; PCM: the
  * rate to Z80 RAM $8E while the channel is on. */
-void UpdateChannelFrequencyAndVolume(uint8_t *ch, const uint8_t *voices)
+void UpdateChannelFrequencyAndVolume(rp ch, rp voices)
 {
-    uint32_t oct = m68k_divu(ch[1], 12);
+    uint32_t oct = m68k_divu(r8(ch, 1), 12);
     uint16_t octave = (uint16_t)oct;
     uint16_t f = rd16(fnum_table() + 2 * (oct >> 16));
-    int16_t bend = (int16_t)rd16(voices + (uint16_t)(ch[0] << 3));
+    int16_t bend = (int16_t)r16(voices, (uint16_t)(r8(ch, 0) << 3));
     if (bend != 0) {
         int16_t range = 0xC;
-        if ((int8_t)ch[3] < 0x60) range = (int8_t)rom_ptr(SYM_fm_instrument_patches)[(uint16_t)(ch[3] << 5) + 0x1E];
+        if ((int8_t)r8(ch, 3) < 0x60) range = (int8_t)rom_ptr(SYM_fm_instrument_patches)[(uint16_t)(r8(ch, 3) << 5) + 0x1E];
         int32_t b = ((int32_t)bend * range) >> 2;
         int16_t idx = (int16_t)((int16_t)b >> 7);
         idx = (int16_t)((idx + 0xC0) * 2);
         uint32_t prod = (uint32_t)f * rd16(bend_table() + idx);
         f = (uint16_t)((prod << 1) >> 16);
     }
-    if ((int8_t)ch[3] < 0x60) {
+    if ((int8_t)r8(ch, 3) < 0x60) {
         f |= (uint16_t)(octave << 11);
-        uint8_t out = ch[4];
+        uint8_t out = r8(ch, 4);
         bset(CMD(3), out);
-        wr16(RAM_W(RAM_OFF_per_channel_frequency_table) + 2 * out, f);
+        w16(RAM(per_channel_frequency_table), 2 * out, f);
         needs_update();
         return;
     }
-    if (!(ch[6] & 1)) return;
+    if (!(r8(ch, 6) & 1)) return;
     take_bus();
     uint16_t shift = (uint16_t)(8 - octave) & 63;
     z80_ram_write8(0x8E, (uint8_t)(shift >= 16 ? 0 : f >> shift));
@@ -454,13 +453,13 @@ void UpdateChannelFrequencyAndVolume(uint8_t *ch, const uint8_t *voices)
 /* sound94.asm:SetChannelVolume. The volume of channel struct a2: note volume * the voice volume
  * (a3 + 4) / 128. FM: an attenuation (.veltab by volume / 8) to the attenuation table; PCM: Z80
  * RAM $83 (at least 3). */
-void SetChannelVolume(uint8_t *ch, const uint8_t *voices)
+void SetChannelVolume(rp ch, rp voices)
 {
-    uint16_t v = (uint16_t)((uint16_t)(ch[2] * rd16(voices + (uint16_t)(ch[0] << 3) + 4)) >> 7);
-    if ((int8_t)ch[3] < 0x60) {
+    uint16_t v = (uint16_t)((uint16_t)(r8(ch, 2) * r16(voices, (uint16_t)(r8(ch, 0) << 3) + 4)) >> 7);
+    if ((int8_t)r8(ch, 3) < 0x60) {
         uint8_t att = vel_table()[v >> 3];
-        uint8_t out = ch[4];
-        ATTEN[out] = att;
+        uint8_t out = r8(ch, 4);
+        w8(ATTEN, out, att);
         bset(CMD(2), out);
         needs_update();
         return;
@@ -476,7 +475,7 @@ void SetChannelVolume(uint8_t *ch, const uint8_t *voices)
 void handle_command_40(uint32_t ev, uint16_t track)
 {
     const uint8_t *e = mem_ptr(ev);
-    VOICES[(uint16_t)(voice_key(e[1], track) << 3) + 3] = e[2];
+    w8(VOICES, (uint16_t)(voice_key(e[1], track) << 3) + 3, e[2]);
 }
 
 /* sound94.asm:handle_command_60. Event $6x: the pitch bend of the key = word +2 - $2000, and a
@@ -485,10 +484,10 @@ void handle_command_60(uint32_t ev, uint16_t track)
 {
     const uint8_t *e = mem_ptr(ev);
     uint16_t key = voice_key(e[1], track);
-    wr16(VOICES + (uint16_t)(key << 3), (uint16_t)(rd16(e + 2) - 0x2000));
-    uint8_t *ch = CHAN0;
-    for (int i = 0; i < 6; i++, ch += 8)
-        if (ch[0] == (uint8_t)key) UpdateChannelFrequencyAndVolume(ch, VOICES);
+    w16(VOICES, (uint16_t)(key << 3), (uint16_t)(rd16(e + 2) - 0x2000));
+    rp ch = CHAN0;
+    for (int i = 0; i < 6; i++, ch = rp_add(ch, 8))
+        if (r8(ch, 0) == (uint8_t)key) UpdateChannelFrequencyAndVolume(ch, VOICES);
 }
 
 /* sound94.asm:handle_command_30. Event $3x: controller +2 = +3. Only controller 7, the volume:
@@ -498,10 +497,10 @@ void handle_command_30(uint32_t ev, uint16_t track)
     const uint8_t *e = mem_ptr(ev);
     if (e[2] != 7) return;
     uint16_t key = voice_key(e[1], track);
-    VOICES[(uint16_t)(key << 3) + 5] = e[3];
-    uint8_t *ch = CHAN0;
-    for (int i = 0; i < 6; i++, ch += 8)
-        if (ch[0] == (uint8_t)key) SetChannelVolume(ch, VOICES);
+    w8(VOICES, (uint16_t)(key << 3) + 5, e[3]);
+    rp ch = CHAN0;
+    for (int i = 0; i < 6; i++, ch = rp_add(ch, 8))
+        if (r8(ch, 0) == (uint8_t)key) SetChannelVolume(ch, VOICES);
 }
 
 /* sound94.asm:p_initialZ80. Free all slots, load the Z80 program ($295 bytes) into Z80 RAM,

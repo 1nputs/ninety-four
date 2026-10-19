@@ -7,8 +7,6 @@
 #include "symbols_gen.h"
 #include "attract_strings_gen.h"
 
-#define RAM_W(off) ram_ptr(RAM_BASE + (off))
-
 /* attract94.asm:EASportsScreen. The EA Sports screen, faded in with the fades-only vblank,
  * until a button or $50 x 4 frames (about 5 s). */
 void EASportsScreen(void)
@@ -23,7 +21,7 @@ void EASportsScreen(void)
     g.VmMap3 = 0xF000;
     g.VSPRITES = 0xF800;
     g.VSCRLPM = 0xFC00;
-    memset(RAM_W(RAM_OFF_palfadenew), 0, 0x80);          /* all 64 colours black */
+    ram_fill(RAM(palfadenew), 0, 0x80);                  /* all 64 colours black */
     CopyPaletteToCRAM();
     setVram_0();
     printz(str_EASportsScreen_1, sizeof str_EASportsScreen_1);
@@ -33,14 +31,14 @@ void EASportsScreen(void)
     g.palfadenew[7] = 0;
     g.palcount = 0x18;                                    /* fade in */
     cpu_set_sr(0x2500);
-    uint8_t *count = RAM_W(RAM_OFF_seed);                 /* (the seed's high word counts down) */
-    wr16(count, 0x50);
+    rp count = RAM(seed);                                 /* (the seed's high word counts down) */
+    w16(count, 0, 0x50);
     do {
         uint16_t d0, d1, d2, d3;
         waitx(4, &d0, &d1, &d2, &d3);
         if (d1) break;
-        wr16(count, (uint16_t)(rd16(count) - 1));
-    } while ((int16_t)rd16(count) >= 0);
+        w16(count, 0, (uint16_t)(r16(count, 0) - 1));
+    } while ((int16_t)r16(count, 0) >= 0);
     cpu_set_sr(0x2700);
 }
 
@@ -63,11 +61,11 @@ void DrawMatchupBitmaps(void)
     }
     printz(str_DrawMatchupBitmaps_1, sizeof str_DrawMatchupBitmaps_1);
     uint16_t t = g.VisTeam;
-    memcpy(RAM_W(RAM_OFF_palfadenew + 0x26), rom_ptr(LG(TeamPalettes) + (uint32_t)(int16_t)(uint16_t)(t << 6) + 0x26), 4);
+    ram_write(rp_add(RAM(palfadenew), 0x26), rom_ptr(LG(TeamPalettes) + (uint32_t)(int16_t)(uint16_t)(t << 6) + 0x26), 4);
     DrawTeamBitmap(t, g.teambitmapchars);
     printz(str_DrawMatchupBitmaps_2, sizeof str_DrawMatchupBitmaps_2);
     t = g.HomeTeam;
-    memcpy(RAM_W(RAM_OFF_palfadenew + 0x22), rom_ptr(LG(TeamPalettes) + (uint32_t)(int16_t)(uint16_t)(t << 6) + 2), 4);
+    ram_write(rp_add(RAM(palfadenew), 0x22), rom_ptr(LG(TeamPalettes) + (uint32_t)(int16_t)(uint16_t)(t << 6) + 2), 4);
     g.palfadenew[0x15] = 0xEEE;
     DrawTeamBitmap(t, 2);
     setteams();

@@ -32,10 +32,13 @@ static inline void w8(rp p, int32_t off, uint8_t v) { *ram_byte_(p, off) = v; }
 static inline void w16(rp p, int32_t off, uint16_t v) { w8(p, off, (uint8_t)(v >> 8)); w8(p, off + 1, (uint8_t)v); }
 static inline void w32(rp p, int32_t off, uint32_t v) { w16(p, off, (uint16_t)(v >> 16)); w16(p, off + 2, (uint16_t)v); }
 
-/* the 68000's (a0)+ on a byte: read or write at *p, then p one on; and (*a0)++: the byte at p, kept
- * one more */
+/* the 68000's (a0)+ on a byte: read or write at *p, then p one on; -(a0): p one back, then read or
+ * write; and (*a0)++: the byte at p, kept one more */
 static inline uint8_t r8_next(rp *p) { uint8_t v = r8(*p, 0); *p = rp_add(*p, 1); return v; }
 static inline void w8_next(rp *p, uint8_t v) { w8(*p, 0, v); *p = rp_add(*p, 1); }
+static inline uint8_t r8_prev(rp *p) { *p = rp_add(*p, -1); return r8(*p, 0); }      /* -(a0) */
+static inline void w8_prev(rp *p, uint8_t v) { *p = rp_add(*p, -1); w8(*p, 0, v); }
+static inline uint8_t r8_inc(rp p, int32_t off) { uint8_t v = (uint8_t)(r8(p, off) + 1); w8(p, off, v); return v; }   /* ++p[off] */
 static inline uint8_t r8_postinc(rp p) { uint8_t v = r8(p, 0); w8(p, 0, (uint8_t)(v + 1)); return v; }
 static inline uint8_t r8_postdec(rp p) { uint8_t v = r8(p, 0); w8(p, 0, (uint8_t)(v - 1)); return v; }
 

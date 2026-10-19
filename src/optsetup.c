@@ -15,9 +15,8 @@
 #include "symbols_gen.h"
 #include "optsetup_strings_gen.h"
 
-#define RAM_W(off) ram_ptr(RAM_BASE + (off))
 #define CARD(n) HI(n)                                    /* setupcardflags bits (btst on the word's high byte) */
-static uint16_t option(uint16_t line) { return rd16(RAM_W(RAM_OFF_OptPlayMode) + line); }
+static uint16_t option(uint16_t line) { return r16(RAM(OptPlayMode), line); }
 
 /* (rules: more period lengths) their names as the setup prints them, padded like PerLengthValues */
 #define LENGTH_TEXT(s) "\x00\x16" s                    /* (a String: its length, 22, then the text) */
@@ -34,7 +33,7 @@ static const uint8_t more_lengths[7][22] = {
 void GameSetUp(void)
 {
     ReadLineData();
-    ReadPassBits(g.pwddatabuffer);
+    ReadPassBits(RAM(pwddatabuffer));
     g.OptLine = g.TmpOptLine2;
     g.OptPlayMode = g.TempOptPlayMode;
     g.sflags7 &= (uint8_t)~2;
@@ -243,9 +242,9 @@ void ChangeOption(uint16_t line, int16_t d2)
             g.OptLine = g.TmpOptLine;
         }
     }
-    uint8_t *opt = RAM_W(RAM_OFF_OptPlayMode) + line;
+    rp opt = rp_add(RAM(OptPlayMode), line);
     uint32_t limits = g.FourWayPlay ? SYM_OptionLimits4Way : SYM_OptionLimits;
-    uint16_t lo = 0, hi = rd16(rom_ptr(limits + line)), v = rd16(opt);
+    uint16_t lo = 0, hi = rd16(rom_ptr(limits + line)), v = r16(opt, 0);
     if (line == 4 || line == 6) hi = league.teams;        /* (the league's; the cartridge's table says 28) */
     if ((int16_t)g.OptPlayMode >= 2 && g.OptPlayMode != 4 && line == 4) hi = league.playoff_teams;
     if (line == 8 && rules[RULE_PERIOD_LENGTHS]) hi = 7;  /* (rules: more period lengths) */
@@ -267,7 +266,7 @@ void ChangeOption(uint16_t line, int16_t d2)
             if (d2 >= 0) { if (v == 9 || v == 0xA) v = 0xB; }
             else if (v == 0xA) v = 8;
         }
-        wr16(opt, v);
+        w16(opt, 0, v);
         if (d2 == 0) return;
         if (g.OptPlayMode == 1 && line == 0) {
             ContinuePlayoffs();
@@ -499,8 +498,8 @@ uint16_t ReadSetupPads(void)
 void SetupDemo(void)
 {
     g.demoflag = 0;
-    wr16(RAM_W(RAM_OFF_seed), vdp_hv16());
-    wr16(RAM_W(RAM_OFF_seed) + 2, vdp_hv16());
+    w16(RAM(seed), 0, vdp_hv16());
+    w16(RAM(seed), 2, vdp_hv16());
     g.OptPlayMode = 0;
     g.OptNOP = 0;
     g.OptLine = 0;
@@ -517,8 +516,8 @@ void SetupStart(void)
     g.goaliemode1 = g.OptGoalie;
     g.goaliemode2 = g.OptGoalie;
     UpdatePlayoffLevel();
-    wr16(RAM_W(RAM_OFF_seed), vdp_hv16());
-    wr16(RAM_W(RAM_OFF_seed) + 2, vdp_hv16());
+    w16(RAM(seed), 0, vdp_hv16());
+    w16(RAM(seed), 2, vdp_hv16());
     g.TmpOptLine2 = g.OptLine;
     if (g.OptLine == 2) {
         g.OptLine = 0;
@@ -622,9 +621,9 @@ void DrawTeamLogo(void)
     uint32_t bmp = rd32(rom_ptr(LG(TeamLogoBitmaps) + (uint16_t)(team << 2)));
     uint32_t pal = LG(TeamLogoPalettes) + (uint32_t)(int16_t)(uint16_t)((uint16_t)(team << 5) - (home ? 0x20 : 0x40));
     uint8_t keep[8];
-    memcpy(keep, RAM_W(RAM_OFF_palfadenew + 0x22), 8);
+    ram_read(keep, rp_add(RAM(palfadenew), 0x22), 8);
     dobitmap(pal, pic_map(bmp), bmp + 8, 0, 0, 6, 6, chars, home ? 2 : 4);
-    memcpy(RAM_W(RAM_OFF_palfadenew + 0x22), keep, 8);
+    ram_write(rp_add(RAM(palfadenew), 0x22), keep, 8);
     g.palcount = 0x64;
 }
 

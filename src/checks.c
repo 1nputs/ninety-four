@@ -297,7 +297,7 @@ void checkanim(rp tm, struct SortObj *o)
             ST_W(o->temp5);
     }
     int16_t d0, d1, d2, d3;
-    const uint8_t *pc;
+    rp pc;
     if (TICK_HIB(o->temp1) >= 0)
         goto nodec;
     goalie_timer_reload(o);
@@ -353,9 +353,9 @@ void checkanim(rp tm, struct SortObj *o)
     g.crowdlevel += 0x96;
     return;
 de1:
-    pc = ram_ptr(RAM_BASE + RAM_OFF_puckcross);           /* x / frames to the goal line, top then bottom */
+    pc = RAM(puckcross);                                  /* x / frames to the goal line, top then bottom */
     d3 = 0x104;
-    if (PFLAG(o, pfgoal)) { pc += 4; d3 = (int16_t)-d3; }
+    if (PFLAG(o, pfgoal)) { pc = rp_add(pc, 4); d3 = (int16_t)-d3; }
     if (o->Ypos > 0x104 || o->Ypos <= -0x104) {          /* behind the goal line: back to the post */
         d2 = 0;
         d0 = 0;
@@ -400,8 +400,8 @@ de1:
         && (pucky() > 0xD0 || pucky() < -0xD0)
         && o->Xpos <= 0x14 && o->Xpos >= -0x14 && !(g.gameclock & 2))
         goto save;
-    if (rd16(pc + 2) > 0x22) goto de5;                    /* not reaching the line soon (or never) */
-    if ((int16_t)rd16(pc) > 0x18 || (int16_t)rd16(pc) < -0x18) {   /* wide of the net */
+    if (r16(pc, 2) > 0x22) goto de5;                      /* not reaching the line soon (or never) */
+    if ((int16_t)r16(pc, 0) > 0x18 || (int16_t)r16(pc, 0) < -0x18) {   /* wide of the net */
         if (puckc() >= 0 || (g.iflags & 4)) goto de5;
         {
             rp a1 = team_struct(0), a2 = team_struct(1);
@@ -422,14 +422,14 @@ de1:
         assinsert(0xF, o);                                /* go get it behind the net */
         return;
     }
-    if (rd16(pc + 2) > 0xC) goto twenty;
+    if (r16(pc, 2) > 0xC) goto twenty;
 save:
     if (pucky() <= 0x108 && pucky() >= -0x108 && !(o->pflags2 & 2)) {
         o->pflags2 |= 2;
         goaliesave(pc, d3, o);
     }
 twenty:
-    d0 = (int16_t)rd16(pc);
+    d0 = (int16_t)r16(pc, 0);
     if (pucky() > 0xFC || pucky() <= -0xFC)
         d0 = (int16_t)g.TmpPuckX >= 0 ? 0x18 : -0x18;
 de5:
@@ -478,21 +478,21 @@ void AdjustFacingDirection(int16_t dir, struct SortObj *o)
 /* checks94.asm:goaliesave. Set the save animation for goalie a3 from where the puck will cross
  * (a0 = puckcross entry, d3 = his goal line): the direction of the shot relative to his facing
  * picks the side, the height and distance pick the type. Slows him down. */
-void goaliesave(const uint8_t *pcross, int16_t goalline, struct SortObj *gk)
+void goaliesave(rp pcross, int16_t goalline, struct SortObj *gk)
 {
-    int16_t d0 = (int16_t)(rd16(pcross) - gk->Xpos);
+    int16_t d0 = (int16_t)(r16(pcross, 0) - gk->Xpos);
     int16_t d1 = (int16_t)(goalline - gk->Ypos);
     d0 = (int16_t)((vtoa(d0, d1) - gk->facedir) & 7);
     int16_t d3 = d0;
     d0 = (int16_t)(d0 >> 2);
     if (gk->attribute & HI(3)) d0 ^= 1;
     if (puckz() > 8 || puckvz() > 0x800) {                /* a high shot */
-        int16_t dx = (int16_t)(gk->Xpos - rd16(pcross));
+        int16_t dx = (int16_t)(gk->Xpos - r16(pcross, 0));
         if (dx <= 0x10 && dx >= -0x10) d0 = (int16_t)(d0 + 6);
     } else {
         d0 = (int16_t)(d0 + 4);
-        if (rd16(pcross + 2) <= 8) {                      /* arriving now */
-            int16_t dx = (int16_t)(gk->Xpos - rd16(pcross));
+        if (r16(pcross, 2) <= 8) {                        /* arriving now */
+            int16_t dx = (int16_t)(gk->Xpos - r16(pcross, 0));
             if (dx > 0x10 || dx <= -0x10) d0 = (int16_t)(d0 + 4);
         } else if (gk->facedir != 2 && gk->facedir != 6 && puckc() >= 0) {
             d0 = (int16_t)(d0 - 2);
@@ -1314,8 +1314,8 @@ void puckpenshot(rp tm, struct SortObj *o)
             assinsert(0x11, pl);                          /* assnearest */
         } else if (d2 == (int16_t)g.BA_Goalie_SCnum) {
             if (g.gmode2 & HI(0)) {                       /* shootout: the goalie of the shooting order */
-                pl->pnum = *(ram_ptr(RAM_BASE + RAM_OFF_shootoutteam) - 1);
-                if (g.shootoutteam != 0) pl->pnum = *(ram_ptr(RAM_BASE + RAM_OFF_homeshootnum) - 1);
+                pl->pnum = r8(RAM(shootoutteam), -1);
+                if (g.shootoutteam != 0) pl->pnum = r8(RAM(homeshootnum), -1);
                 setplayer(pl->pnum, pl);
             } else if (pl->position < 0 && (pl->pflags2 & 4)) {
                 pl->pflags2 &= (uint8_t)~4;
@@ -1780,16 +1780,16 @@ void puckfaceoff2(rp tm, struct SortObj *o)
     }
     o->temp1 = d0;
     g.palcount = 0x18;
-    uint8_t *fof = ram_ptr(RAM_BASE + RAM_OFF_fofdata2);  /* the two faceoff men: frame, attribute */
-    wr16(fof, 1);
-    wr16(fof + 2, 0x8000);
-    wr16(fof + 4, 4);
-    wr16(fof + 6, 0xA800);
-    wr16(fof + 8, 7);                                     /* frame of the ref */
-    wr16(fof + 0xA, 0x8000);
+    rp fof = RAM(fofdata2);                               /* the two faceoff men: frame, attribute */
+    w16(fof, 0, 1);
+    w16(fof, 2, 0x8000);
+    w16(fof, 4, 4);
+    w16(fof, 6, 0xA800);
+    w16(fof, 8, 7);                                       /* frame of the ref */
+    w16(fof, 0xA, 0x8000);
     if (!(g.gmode & (1 << gmdir))) {
-        wr16(fof + 2, (uint16_t)(rd16(fof + 2) ^ 0x800));
-        wr16(fof + 6, (uint16_t)(rd16(fof + 6) ^ 0x800));
+        w16(fof, 2, (uint16_t)(r16(fof, 2) ^ 0x800));
+        w16(fof, 6, (uint16_t)(r16(fof, 6) ^ 0x800));
     }
     g.fodir1 = 0xFFFF;
     g.fodir2 = 0xFFFF;
@@ -1868,14 +1868,14 @@ void Endfaceoff(struct SortObj *puck)
     g.sflags3 |= 0x10;
     int16_t d3 = (int16_t)g.fodir1;
     int16_t d4 = 0x800;
-    const uint8_t *a1 = ram_ptr(RAM_BASE + RAM_OFF_fofdata2);
+    rp a1 = RAM(fofdata2);
     uint8_t d2 = 0x10;
-    d2 = (uint8_t)(d2 - fo_ftab[(int16_t)rd16(a1) - 1]);
-    d2 = (uint8_t)(d2 + fo_ftab[(int16_t)rd16(a1 + 4) - 1]);
+    d2 = (uint8_t)(d2 - fo_ftab[(int16_t)r16(a1, 0) - 1]);
+    d2 = (uint8_t)(d2 + fo_ftab[(int16_t)r16(a1, 4) - 1]);
     uint16_t d0 = randomd0(0x21);
     if (!(d2 <= (uint8_t)d0))
-        a1 += 4;                                          /* the second man won */
-    if (rd16(a1 + 2) & 0x800) {
+        a1 = rp_add(a1, 4);                               /* the second man won */
+    if (r16(a1, 2) & 0x800) {
         d3 = (int16_t)g.fodir2;
         d4 = (int16_t)-d4;
     }
@@ -1909,9 +1909,9 @@ void pucknorm(rp tm, struct SortObj *puck)
         puck->temp1 = 0;
         puck->temp2 = 0x78;
     }
-    uint8_t *pc = ram_ptr(RAM_BASE + RAM_OFF_puckcross);
-    wr16(pc + 2, (uint16_t)(rd16(pc + 2) - elapsed));
-    wr16(pc + 6, (uint16_t)(rd16(pc + 6) - elapsed));
+    rp pc = RAM(puckcross);
+    w16(pc, 2, (uint16_t)(r16(pc, 2) - elapsed));
+    w16(pc, 6, (uint16_t)(r16(pc, 6) - elapsed));
     puck->temp1 = (int16_t)(puck->temp1 - elapsed);
     if (puck->temp1 < 0) {
         puck->temp1 = (int16_t)(puck->temp1 + 5);
@@ -2124,7 +2124,7 @@ void puckshadow(rp tm, struct SortObj *shadow)
 }
 
 /* one goal line of findpc: a1 = the puckcross entry, d1 = the sideline, d4 = the goal line */
-static void findpc_calc(uint8_t *a1, int16_t d1, int16_t d4)
+static void findpc_calc(rp a1, int16_t d1, int16_t d4)
 {
     int16_t d0 = (int16_t)(d4 - pucky());
     int ovf;
@@ -2132,7 +2132,7 @@ static void findpc_calc(uint8_t *a1, int16_t d1, int16_t d4)
         int32_t d2 = ((int32_t)d0 << 16) >> 4;
         int32_t q = divs_ovf(d2, puckvy(), &ovf);
         if ((int16_t)q >= 0 && !ovf) {
-            wr16(a1 + 2, (uint16_t)q);                    /* frames until it crosses */
+            w16(a1, 2, (uint16_t)q);                      /* frames until it crosses */
             int32_t p = (int32_t)d0 * puckvx();
             q = divs_ovf(p, puckvy(), &ovf);
             if (!ovf) {
@@ -2140,21 +2140,21 @@ static void findpc_calc(uint8_t *a1, int16_t d1, int16_t d4)
                 if (!(d0 < d1)) d0 = (int16_t)(-d0 + d1 + d1 + d1);   /* off the boards */
                 d1 = (int16_t)-d1;
                 if (!(d0 > d1)) d0 = (int16_t)(-d0 + d1 + d1 + d1);
-                wr16(a1, (uint16_t)d0);
+                w16(a1, 0, (uint16_t)d0);
                 return;
             }
         }
     }
-    wr16(a1 + 2, 0xFFFF);
+    w16(a1, 2, 0xFFFF);
 }
 
 /* checks94.asm:findpc. Find where and when the puck will cross each goal line (if at all),
  * into puckcross (x, frames) x 2. */
 void findpc(void)
 {
-    uint8_t *a1 = ram_ptr(RAM_BASE + RAM_OFF_puckcross);
+    rp a1 = RAM(puckcross);
     findpc_calc(a1, 0x88, 0x108);
-    findpc_calc(a1 + 4, 0x88, -0x108);
+    findpc_calc(rp_add(a1, 4), 0x88, -0x108);
 }
 
 /* checks94.asm:skateto. Skate player a3 toward d0/d1, every 12 frames: the direction to the

@@ -9,7 +9,6 @@
 #include "anim_gen.h"
 #include "title_strings_gen.h"
 
-#define RAM_W(off) ram_ptr(RAM_BASE + (off))
 static inline int16_t puckx(void) { return (int16_t)g.puckx[0]; }
 static inline int16_t abs16(int16_t v) { return v < 0 ? (int16_t)-v : v; }   /* sub / bpl / neg */
 
@@ -191,9 +190,9 @@ void chgplayer(uint16_t pad, struct SortObj *o)
     if (g.sflags5 & 0x40) { rtsChgplayer(); return; }    /* never set */
     int16_t tx = (int16_t)(((int16_t)g.puckvx >> 8) + puckx());
     int16_t ty = (int16_t)(((int16_t)g.puckvy >> 8) + (int16_t)g.pucky);
-    uint8_t *cont = RAM_W(RAM_OFF_cont1team), *cur = RAM_W(RAM_OFF_c1playernum);
-    struct SortObj *pl = sortobj(rd16(cont + pad) == 1 ? 0 : 6);
-    uint16_t mine = rd16(cur + pad), other = rd16(cur + (pad ^ 2));
+    rp cont = RAM(cont1team), cur = RAM(c1playernum);
+    struct SortObj *pl = sortobj(r16(cont, pad) == 1 ? 0 : 6);
+    uint16_t mine = r16(cur, pad), other = r16(cur, (pad ^ 2));
     uint32_t best = 0xFFFFFFFF;
     int found = 0;
     uint16_t pick = 0;
@@ -223,11 +222,11 @@ void chgplayer(uint16_t pad, struct SortObj *o)
 void CountButtonPress(int16_t pad, struct SortObj *o)
 {
     if (g.gmode & 1) return;
-    uint8_t *cnt = RAM_W(pad ? RAM_OFF_awaypresses : RAM_OFF_homepresses);
+    rp cnt = ram_at(RAM_BASE + (pad ? RAM_OFF_awaypresses : RAM_OFF_homepresses));
     uint16_t dir = g.TempWord1;
-    wr32(cnt, rd32(cnt) + 1);
+    w32(cnt, 0, r32(cnt, 0) + 1);
     if (dir == 8 || dir == (uint16_t)o->facedir) return;
-    wr32(cnt + 4, rd32(cnt + 4) + 1);
+    w32(cnt, 4, r32(cnt, 4) + 1);
 }
 
 /* title94.asm:PSandSOpassdir. Penalty shot / shootout: passdir = the direction at the end of
@@ -288,7 +287,7 @@ void ClearPenalties(void)
     g.PBnum = 0;
     g.Penaltytimer = 0;
     g.Pencntdwn = 0;
-    for (int i = 0; i < 0x44; i++) RAM_W(RAM_OFF_PenBuf)[i] = 0;    /* 17 longs */
+    for (int i = 0; i < 0x44; i++) w8(RAM(PenBuf), i, 0);           /* 17 longs */
     clrTmPdst(team_struct(0));
     clrTmPdst(team_struct(1));
 }
@@ -392,7 +391,7 @@ void HiScoreScreen(void)
     g.disflags &= (uint16_t)~HI(df32c);
     screen_layout();
     forceblack();
-    memset(RAM_W(RAM_OFF_palfadenew), 0, 0x80);
+    ram_fill(RAM(palfadenew), 0, 0x80);
     setVram_0();
     uint8_t at[2][sizeof str_HiScoreScreen_1];            /* (str_HiScoreScreen_1 and _2 at the league's places) */
     for (int k = 0; k < 2; k++) {
@@ -408,14 +407,14 @@ void HiScoreScreen(void)
     dobitmap(p.pal, p.map, p.tiles, 0, 0, p.w, p.h, c, 0);
     g.palcount = 0x18;
     cpu_set_sr(0x2500);
-    uint8_t *count = RAM_W(RAM_OFF_seed);                 /* (the seed's high word counts down) */
-    wr16(count, 0x50);
+    rp count = RAM(seed);                                 /* (the seed's high word counts down) */
+    w16(count, 0, 0x50);
     do {
         uint16_t d0, d1, d2, d3;
         waitx(4, &d0, &d1, &d2, &d3);
         if (d1) break;
-        wr16(count, (uint16_t)(rd16(count) - 1));
-    } while ((int16_t)rd16(count) >= 0);
+        w16(count, 0, (uint16_t)(r16(count, 0) - 1));
+    } while ((int16_t)r16(count, 0) >= 0);
     cpu_set_sr(0x2700);
 }
 
@@ -426,8 +425,8 @@ void newTitleScreen(void)
 {
     static const uint8_t font[8] = { 0x0D, 0x10, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
     cpu_set_sr(0x2700);
-    wr16(RAM_W(RAM_OFF_seed), vdp_hv16());
-    wr16(RAM_W(RAM_OFF_seed) + 2, vdp_hv16());
+    w16(RAM(seed), 0, vdp_hv16());
+    w16(RAM(seed), 2, vdp_hv16());
     g.vbint = SYM_VBlank_TitleScreen;
     g.disflags |= HI(df32c);
     screen_layout();
@@ -458,7 +457,7 @@ void newTitleScreen(void)
     c = dobitmap(p.pal, p.map, p.tiles, 0, 0, p.w, p.h, c, 8);
     g.palfadenew[0] = 0;
     g.fofdata2[0] = 0;
-    wr16(RAM_W(RAM_OFF_fofdata2) + 4, 0);
+    w16(RAM(fofdata2), 4, 0);
     g.smallfontchars = c;
     DecompressGraphicsWithCallback(ART(SmallFontMap) + 8, c, rom_find(SYM_newTitleScreen, SYM_CreditsPrintRow, font, 8));
     printz(str_newTitleScreen_8, sizeof str_newTitleScreen_8);
@@ -544,14 +543,14 @@ void CreditsLineScroll(void)
 {
     g.Hscroll = 0x14;
     g.TempWord2 = 0x50;
-    uint8_t *a0 = RAM_W(RAM_OFF_SortCords);
+    rp a0 = RAM(SortCords);
     uint32_t d1 = 0xFD80;
-    for (int16_t d0 = 0x50; d0 >= 0; d0--, a0 += 4) {
-        wr32(a0, d1);
+    for (int16_t d0 = 0x50; d0 >= 0; d0--, a0 = rp_add(a0, 4)) {
+        w32(a0, 0, d1);
         if (!(d0 & 1)) d1 = (d1 & 0xFFFF0000) | (uint16_t)(d1 - 1);
     }
     d1 = 0x100;
-    for (int i = 0; i <= 0x60; i++, a0 += 4, d1 += 4) wr32(a0, d1);
+    for (int i = 0; i <= 0x60; i++, a0 = rp_add(a0, 4), d1 += 4) w32(a0, 0, d1);
 }
 
 /* title94.asm:CreditsScrollStep. Every TempWord2 frames (then every frame) the lines of the
@@ -561,20 +560,20 @@ void CreditsScrollStep(void)
 {
     if ((int16_t)--g.TempWord2 >= 0) return;
     g.TempWord2 = 0;
-    uint8_t *a0 = RAM_W(RAM_OFF_SortCords);
+    rp a0 = RAM(SortCords);
     for (int16_t d0 = 0xDF; d0 >= 0; d0--) {
-        a0 += 4;
+        a0 = rp_add(a0, 4);
         if (d0 <= 0x28) continue;
-        uint8_t *b = a0 - 2;
+        rp b = rp_add(a0, -2);
         if (d0 >= 0x8F) {
-            uint16_t v = rd16(b);
+            uint16_t v = r16(b, 0);
             if (v == 0) continue;
             v = (uint16_t)(v + g.Hscroll);
-            wr16(b, v);
-            if ((v & 0xFC00) != 0xFC00) wr16(b, 0);
+            w16(b, 0, v);
+            if ((v & 0xFC00) != 0xFC00) w16(b, 0, 0);
         } else {
-            uint16_t v = (uint16_t)(rd16(b) - g.Hscroll);
-            wr16(b, (int16_t)v < 0 ? 0 : v);
+            uint16_t v = (uint16_t)(r16(b, 0) - g.Hscroll);
+            w16(b, 0, (int16_t)v < 0 ? 0 : v);
         }
     }
 }
@@ -584,11 +583,11 @@ void CreditsScrollStep(void)
 void UnpackPicture(uint32_t pic)
 {
     const uint8_t *in = mem_ptr(pic);
-    uint8_t *out = g.picturebuf;
+    rp out = RAM(picturebuf);
     uint16_t n = rd16(in);
     in += 2;
-    wr16(out, n);
-    out += 2;
+    w16(out, 0, n);
+    out = rp_add(out, 2);
     uint16_t rows = (uint16_t)((uint16_t)(n << 3) - 1);
     do {
         uint32_t b = (uint32_t)in[0] << 24 | in[1] << 16 | in[2] << 8, v = 0;
@@ -596,8 +595,8 @@ void UnpackPicture(uint32_t pic)
         g.picturebits = b;
         for (int px = 0; px < 8; px++)                    /* pixel px: bits 31-3px .. 29-3px to nibble 7-px */
             v |= ((b & (0xE0000000u >> (3 * px))) >> (px + 1)) + (5u << (28 - 4 * px));
-        wr32(out, v);
-        out += 4;
+        w32(out, 0, v);
+        out = rp_add(out, 4);
     } while (rows-- != 0);
 }
 
@@ -605,11 +604,11 @@ void UnpackPicture(uint32_t pic)
  * Satt (an empty entry when it is off screen), the list ended there (Sattsize). */
 void DrawPlayoffSprite(void)
 {
-    struct Vid v = { NULL, RAM_W(RAM_OFF_Satt), 1 };
+    struct Vid v = { { 0 }, RAM(Satt), 1 };
     SetSframe(ART(PlayoffSprite), (int16_t)g.playoffspritex, (int16_t)g.playoffspritey, 1, (uint16_t)(g.energybarchars | 0x8000), &v);
-    if (v.sat == RAM_W(RAM_OFF_Satt)) { memset(v.sat, 0, 8); v.sat += 8; }
-    v.sat[-5] = 0;                                        /* the last sprite's link */
-    g.Sattsize = (uint16_t)((uint16_t)(v.sat - RAM_W(RAM_OFF_Satt)) >> 1);
+    if (rp_same(v.sat, RAM(Satt))) { ram_fill(v.sat, 0, 8); v.sat = rp_add(v.sat, 8); }
+    w8(v.sat, -5, 0);                                     /* the last sprite's link */
+    g.Sattsize = (uint16_t)((uint16_t)(rp_diff(v.sat, RAM(Satt))) >> 1);
 }
 
 /* title94.asm:PlayedByHome. The text player's '#' -> a1 = "(played by NAME)" for homeuser
@@ -628,7 +627,7 @@ uint32_t PlayedByText(uint16_t user)
     GetLogName(RAM_BASE + RAM_OFF_nameentrybuf + 2);
     g.nameentrybuf[2 + (int16_t)g.namelength] = 0;
     g.namelength = (uint16_t)(((g.namelength + 1) & 0xFFFE) + 2);
-    wr16(g.nameentrybuf, g.namelength);
+    w16(RAM(nameentrybuf), 0, g.namelength);
     CopyString(SYM_PlayedByTxt, RAM_BASE + RAM_OFF_TempBuffer);
     appstring(RAM_BASE + RAM_OFF_nameentrybuf, RAM_BASE + RAM_OFF_TempBuffer);
     appendz(str_PlayedByText_1, sizeof str_PlayedByText_1, RAM_BASE + RAM_OFF_TempBuffer);
@@ -680,7 +679,7 @@ uint16_t GetLeagueCrowdRecord(void)
  * cleared, the $80 bytes written back at TeamRecBase (WriteSRAM, MakeSRAMChecksum). */
 void ClearWinRecords(void)
 {
-    for (int i = 0; i < 8; i++) memset(g.ThreeStars + i * 0x10 + 8, 0, 4);
+    for (int i = 0; i < 8; i++) ram_fill(rp_add(RAM(ThreeStars), i * 0x10 + 8), 0, 4);
     WriteSRAM(SYM_TeamRecBase, 0x80, RAM_BASE + RAM_OFF_ThreeStars);
     MakeSRAMChecksum();
 }

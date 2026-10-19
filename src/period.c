@@ -69,7 +69,7 @@ void ClearGameStats(void)
 /* period94.asm:AddArenaAnimSprite. Add the frame arenaframe of the arena animation to the
  * sprite table (64 sprites at most) for the pieces inside the view. Not in a reverse angle
  * replay, nor on the horizontal rink. */
-void AddArenaAnimSprite(uint8_t **sat, uint16_t *link)
+void AddArenaAnimSprite(rp *sat, uint16_t *link)
 {
     if ((int16_t)g.arenaanim < 0) return;
     if (g.arenaspritelist == 0) return;
@@ -86,17 +86,17 @@ void AddArenaAnimSprite(uint8_t **sat, uint16_t *link)
     a0 += rd16(a0 + d0 * 2);
     int16_t x0 = (int16_t)((int16_t)g.Hpos + 0xC0 - 0x90), x1 = (int16_t)((int16_t)g.Hpos + 0xC0 + 0x80);
     int16_t y0 = (int16_t)(0x170 - (int16_t)g.Vpos - 0x80), y1 = (int16_t)(0x170 - (int16_t)g.Vpos + 0x70);
-    uint8_t *a6 = *sat;
+    rp a6 = *sat;
     uint16_t d6 = *link;
     for (; n >= 0; n--, a0 += 8) {
         int16_t sx = (int16_t)rd16(a0), sy = (int16_t)rd16(a0 + 2);
         if (y0 > sy || y1 < sy || x0 - view_more() > sx || x1 + view_more() < sx) continue;
-        wr16(a6, (uint16_t)(sy + 0x70 - y0));
-        a6[2] = a0[7];
-        a6[3] = (uint8_t)d6;
-        wr16(a6 + 4, (uint16_t)((rd16(a0 + 6) & 0xF800) + rd16(a0 + 4) + g.arenaanimchars));
-        wr16(a6 + 6, (uint16_t)(sx + 0x70 - x0 + view_shift()));   /* (the wide view: to the middle) */
-        a6 += 8;
+        w16(a6, 0, (uint16_t)(sy + 0x70 - y0));
+        w8(a6, 2, a0[7]);
+        w8(a6, 3, (uint8_t)d6);
+        w16(a6, 4, (uint16_t)((rd16(a0 + 6) & 0xF800) + rd16(a0 + 4) + g.arenaanimchars));
+        w16(a6, 6, (uint16_t)(sx + 0x70 - x0 + view_shift()));     /* (the wide view: to the middle) */
+        a6 = rp_add(a6, 8);
         d6++;
         if (d6 == 0x40) break;
     }
@@ -110,12 +110,12 @@ void PrintPlayerNameRight(uint16_t player, rp tm)
 {
     g.iconplayer = player;
     uint32_t a1 = FormatPlayerName(player, tm);
-    const uint8_t *a0 = ram_ptr(a1);
-    uint16_t d5 = rd16(a0);
+    rp a0 = ram_at(a1);
+    uint16_t d5 = r16(a0, 0);
     int16_t d0 = (int16_t)d5;
-    if (a0[d5 - 1] == 0) {
+    if (r8(a0, d5 - 1) == 0) {
         d0--;
-        if (a0[d5 - 2] == 0) d0--;
+        if (r8(a0, d5 - 2) == 0) d0--;
     }
     d0 = (int16_t)(d0 + g.printx - 0x29);
     if (d0 >= 0) g.printx -= d0;
@@ -128,8 +128,8 @@ void PrintPlayerNameRight(uint16_t player, rp tm)
 uint32_t SkipNameNumber(uint16_t player, rp tm)
 {
     uint32_t a1 = FormatPlayerNumInitial(player, tm);
-    uint8_t *p = ram_ptr(a1);
-    wr16(p + 2, (uint16_t)(rd16(p) - 2));
+    rp p = ram_at(a1);
+    w16(p, 2, (uint16_t)(r16(p, 0) - 2));
     return a1 + 2;
 }
 
@@ -191,7 +191,7 @@ void DisplayTeamStatsScreen(void)
 void PrintStatValue(const uint8_t *a0, rp tm)
 {
     uint32_t mes = RAM_BASE + RAM_OFF_mesarea;
-    wr16(ram_ptr(mes), 2);
+    w16(ram_at(mes), 0, 2);
     uint16_t off = rd16(a0);
     if (off == 0xFFFF) {
         uint32_t d0 = (uint32_t)r16(tm, tmscore) * 0x64;
@@ -222,7 +222,7 @@ void PrintStatValue(const uint8_t *a0, rp tm)
             }
         }
     }
-    g.printx -= rd16(ram_ptr(mes)) >> 1;
+    g.printx -= r16(ram_at(mes), 0) >> 1;
     print(mes);
 }
 
@@ -324,8 +324,8 @@ void PeriodStatsScreen(void)
     Framer(8, 8);
     printz(str_PeriodStatsScreen_3, sizeof str_PeriodStatsScreen_3);
     c = team_logo(g.VisTeam, c);
-    uint8_t *pal = ram_ptr(RAM_BASE + RAM_OFF_palfadenew);
-    memcpy(pal + 0x60, pal + 0x40, 0x20);
+    rp pal = RAM(palfadenew);
+    ram_copy(rp_add(pal, 0x60), rp_add(pal, 0x40), 0x20);
     printz(str_PeriodStatsScreen_4, sizeof str_PeriodStatsScreen_4);
     team_logo(g.HomeTeam, c);
     printz(str_PeriodStatsScreen_5, sizeof str_PeriodStatsScreen_5);

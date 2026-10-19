@@ -115,15 +115,15 @@ void checkcornercoll(int16_t x, int16_t y, struct SortObj *o)
 }
 
 /* crowd94.asm:HotColdLoop. The loop of Create_HotCold_Table from entry d1 down. */
-void HotColdLoop(uint8_t *tm, int16_t d1)
+void HotColdLoop(rp tm, int16_t d1)
 {
     for (; d1 >= 0; d1--)
-        tm[tmhotcold + d1] = (uint8_t)randomd0s(9);
+        w8(tm, tmhotcold + d1, (uint8_t)randomd0s(9));
 }
 
 /* crowd94.asm:Create_HotCold_Table. Fill the hot / cold table of team a0 with 416 random
  * values (-9 ... 8). */
-void Create_HotCold_Table(uint8_t *tm)
+void Create_HotCold_Table(rp tm)
 {
     HotColdLoop(tm, 0x19F);
 }
@@ -153,7 +153,7 @@ uint8_t AttributeCalc(uint8_t v, struct SortObj *o)
 
 /* crowd94.asm:NextHomeHotPlayer etc. The next hot / cold player of a team for the matchups
  * text (the one entry lists at homehotplayer ...), with its team struct. */
-static uint16_t listed(uint16_t list, uint16_t idx) { return rd16(ram_ptr(RAM_BASE + list + idx * 2)); }
+static uint16_t listed(uint16_t list, uint16_t idx) { return r16(ram_at(RAM_BASE + list + idx * 2), 0); }
 uint16_t NextHomeHotPlayer(rp *team)
 {
     *team = team_struct(0);
@@ -189,11 +189,11 @@ void BuildHotColdLists(void)
     g.awayhotidx = 0;
     g.homehotidx = 0;
     SortHotColdStarters(team_struct(0));
-    CopyHottestPlayer(ram_ptr(RAM_BASE + RAM_OFF_homehotplayer));
-    CopyColdestPlayer(ram_ptr(RAM_BASE + RAM_OFF_homecoldplayer));
+    CopyHottestPlayer(RAM(homehotplayer));
+    CopyColdestPlayer(RAM(homecoldplayer));
     SortHotColdStarters(team_struct(1));
-    CopyHottestPlayer(ram_ptr(RAM_BASE + RAM_OFF_awayhotplayer));
-    CopyColdestPlayer(ram_ptr(RAM_BASE + RAM_OFF_awaycoldplayer));
+    CopyHottestPlayer(RAM(awayhotplayer));
+    CopyColdestPlayer(RAM(awaycoldplayer));
 }
 
 /* crowd94.asm:SortHotColdStarters. Sum the hot / cold values of the 6 starters of team a0 into
@@ -203,44 +203,44 @@ void SortHotColdStarters(rp tm)
     rp hc = rp_add(tm, tmhotcold);
     const uint8_t *a0 = rom_ptr(r32(tm, tmdata));
     a0 += rd16(a0 + 6);                                   /* the starters */
-    uint8_t *a1 = g.TempBuffer;
+    rp a1 = RAM(TempBuffer);
     for (int i = 0; i < 6; i++) {
         uint8_t d1 = (uint8_t)(*a0++ - 1);
-        *a1++ = d1;
+        w8_next(&a1, d1);
         int16_t idx = (int16_t)((int8_t)d1 << 4);
-        *a1 = 0;
+        w8(a1, 0, 0);
         idx = (int16_t)(idx + 3);
         for (int d7 = 3; d7 != 0x10; d7++, idx++) {
             if (d7 == 9 || d7 == 0xD) continue;
-            *a1 = (uint8_t)(*a1 + r8(hc, idx));
+            w8(a1, 0, (uint8_t)(r8(a1, 0) + r8(hc, idx)));
         }
-        a1++;
+        a1 = rp_add(a1, 1);
     }
     int swapped;
     do {
         swapped = 0;
-        a1 = g.TempBuffer;
-        for (int i = 0; i < 5; i++, a1 += 2) {
-            if ((int8_t)a1[3] <= (int8_t)a1[1]) continue;
+        a1 = RAM(TempBuffer);
+        for (int i = 0; i < 5; i++, a1 = rp_add(a1, 2)) {
+            if ((int8_t)r8(a1, 3) <= (int8_t)r8(a1, 1)) continue;
             swapped = 1;
-            uint8_t t0 = a1[0], t1 = a1[1];
-            a1[0] = a1[2]; a1[1] = a1[3];
-            a1[2] = t0; a1[3] = t1;
+            uint8_t t0 = r8(a1, 0), t1 = r8(a1, 1);
+            w8(a1, 0, r8(a1, 2)); w8(a1, 1, r8(a1, 3));
+            w8(a1, 2, t0); w8(a1, 3, t1);
         }
     } while (swapped);
 }
 
 /* crowd94.asm:CopyHottestPlayer / CopyColdestPlayer. The hottest (first) or coldest (sixth)
  * player of TempBuffer to the one entry list at a0. */
-void CopyHottestPlayer(uint8_t *a0)
+void CopyHottestPlayer(rp a0)
 {
-    a0[0] = 0;
-    a0[1] = g.TempBuffer[0];
+    w8(a0, 0, 0);
+    w8(a0, 1, g.TempBuffer[0]);
 }
-void CopyColdestPlayer(uint8_t *a0)
+void CopyColdestPlayer(rp a0)
 {
-    a0[0] = 0;
-    a0[1] = g.TempBuffer[10];
+    w8(a0, 0, 0);
+    w8(a0, 1, g.TempBuffer[10]);
 }
 
 /* crowd94.asm:CompareHotColdTotals. awayhotter = 1 when the away total is higher; d0 = -1, $22

@@ -6,8 +6,6 @@
 #include "symbols_gen.h"
 #include "shootout_strings_gen.h"
 
-#define RAM_W(off) ram_ptr(RAM_BASE + (off))
-
 /* shootout94.asm:ShootoutModeBox. "SHOOTOUT MODE": the shooter vs. the goalie, both teams'
  * shootout goals and the round. */
 void ShootoutModeBox(void)
@@ -43,9 +41,9 @@ void NextShooter(struct SortObj *o)
     StartShootoutPath(o);
     g.BA_Team = g.shootoutteam;
     g.BA_Goalie_SCnum = 0xB;
-    const uint8_t *list = RAM_W(RAM_OFF_homeshooters);
-    if (g.shootoutteam) { g.BA_Goalie_SCnum = 5; list = RAM_W(RAM_OFF_awayshooters); }
-    g.BA_Skater_Offset = rd16(list + (int16_t)(g.homeshootnum << 1));
+    rp list = RAM(homeshooters);
+    if (g.shootoutteam) { g.BA_Goalie_SCnum = 5; list = RAM(awayshooters); }
+    g.BA_Skater_Offset = r16(list, (int16_t)(g.homeshootnum << 1));
     sortobj(puckscnum)->pflags &= (uint8_t)~4;
 }
 
@@ -88,7 +86,7 @@ void InitShooters(void)
     const uint8_t *a1 = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 6)));
     for (int i = 0; i < 6; i++) {
         at -= 2;
-        wr16(ram_ptr(RAM_BASE + at), (uint16_t)(*a1++ - 1));
+        w16(ram_at(RAM_BASE + at), 0, (uint16_t)(*a1++ - 1));
     }
 }
 
@@ -96,7 +94,7 @@ void InitShooters(void)
  * shootout state: round 1, no goals, both shooter lists. */
 void ClearShootout(void)
 {
-    memset(ram_ptr(RAM_BASE + RAM_OFF_SortCords), 0, 0x800);
+    ram_fill(RAM(SortCords), 0, 0x800);
     g.shootoutdelay = 0;
     g.shootoutround = 1;
     g.gmode2 &= (uint16_t)~HI(3);
@@ -113,7 +111,7 @@ void ClearShootout(void)
 /* ---- the Shootout Shooters menu item ------------------------------------------------------------- */
 
 /* the shooter list of team a2 (6 words: 5 shooters, then the goalie) */
-static uint8_t *shooters(rp tm) { return rp_same(tm, team_struct(0)) ? g.homeshooters : g.awayshooters; }
+static rp shooters(rp tm) { return rp_same(tm, team_struct(0)) ? RAM(homeshooters) : RAM(awayshooters); }
 
 /* shootout94.asm:ShootoutShooters. Shootout Shooters for team a2 (a menu item, in a shootout
  * only): the 5 shooter slots and the goalie's; up / down a shooter slot, left / right the first
@@ -166,8 +164,8 @@ void ShootoutShooters(rp tm)
  * the player, left / right the attribute column, C takes him, Start goes back. */
 void ShooterSelectList(rp tm)
 {
-    uint8_t *list = shooters(tm);
-    uint16_t cur = rd16(list + (int16_t)(uint16_t)(g.TestList[0] << 1));
+    rp list = shooters(tm);
+    uint16_t cur = r16(list, (int16_t)(uint16_t)(g.TestList[0] << 1));
     uint16_t first = GetGoalieCount(tm);
     uint16_t n = (uint16_t)(GetPlayerCount(tm) - first - 1);
     if (g.TestList[0] == 5) {
@@ -177,10 +175,10 @@ void ShooterSelectList(rp tm)
     g.screentimer = n;
     g.PlayerScrollCtr = 0;
     g.VertLineScrolling = 0;
-    uint8_t *satt = RAM_W(RAM_OFF_Satt);
+    rp satt = RAM(Satt);
     uint16_t p = first, i = 0;
     do {
-        satt[(int16_t)i] = (uint8_t)p;
+        w8(satt, (int16_t)i, (uint8_t)p);
         if (p == cur) g.VertLineScrolling = i;
         p++;
         i++;
@@ -217,7 +215,7 @@ void ShooterSelectList(rp tm)
             ProcessInputWithRepeat(&d1, d2, d3);
             if (d1 & 0x80) return;
             if (d1 & 0x20) {                              /* .pick */
-                wr16(list + (int16_t)(uint16_t)(g.TestList[0] << 1), satt[(int16_t)g.VertLineScrolling]);
+                w16(list, (int16_t)(uint16_t)(g.TestList[0] << 1), r8(satt, (int16_t)g.VertLineScrolling));
                 return;
             }
             if (d1 & 2) { by = 1; scroll = 1; break; }
@@ -253,14 +251,14 @@ void PrintShooterList(rp tm)
     if (a1 == SYM_GAttribOverall) a1 = SYM_ShooterOverallTxt2;
     a1 = print(a1);
     uint32_t sel = rd32(rom_ptr(a1));
-    const uint8_t *satt = RAM_W(RAM_OFF_Satt);
+    rp satt = RAM(Satt);
     uint16_t row = g.PlayerScrollCtr, rows = (uint16_t)(g.screentimer - row);
     if (rows > 5) rows = 5;
     g.printy = 2;
     do {
         printsmallz(str_PrintShooterList_2, sizeof str_PrintShooterList_2);
         if (row == g.VertLineScrolling) g.printa = 0xC000;
-        GetNameandAttrib(satt[(int16_t)row], sel, tm);
+        GetNameandAttrib(r8(satt, (int16_t)row), sel, tm);
         row++;
     } while (rows-- != 0);
 }
@@ -315,7 +313,7 @@ void PrintShooterBox(rp tm)
     printsmallz(str_PrintShooterBox_1, sizeof str_PrintShooterBox_1);
     Framer(0x18, 3);
     printsmallz(str_PrintShooterBox_2, sizeof str_PrintShooterBox_2);
-    uint16_t p = rd16(shooters(tm) + (int16_t)(uint16_t)(g.TestList[0] << 1));
+    uint16_t p = r16(shooters(tm), (int16_t)(uint16_t)(g.TestList[0] << 1));
     uint32_t a1 = getname(p, tm);
     g.printx -= (uint16_t)(rd16(mem_ptr(a1)) >> 1);
     printsmall(a1);
@@ -327,9 +325,9 @@ void PrintShooterBox(rp tm)
 void PrintShooterNames(rp tm)
 {
     printsmallz(str_PrintShooterNames_1, sizeof str_PrintShooterNames_1);
-    const uint8_t *list = shooters(tm);
+    rp list = shooters(tm);
     for (uint16_t n = 0; n < 6; n++) {
-        uint32_t a1 = FormatPlayerNameShort(rd16(list + n * 2), tm);
+        uint32_t a1 = FormatPlayerNameShort(r16(list, n * 2), tm);
         uint16_t x = g.printx;
         if (n == g.TestList[0]) g.printfontset = 2;
         if (n == 5) {

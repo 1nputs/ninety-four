@@ -16,7 +16,7 @@
 /* hockey94.asm:ClearShotData. Clear $E4 words at outputbuffer. */
 void ClearShotData(void)
 {
-    for (int i = 0; i < 0xE4; i++) wr16(g.outputbuffer + i * 2, 0);
+    for (int i = 0; i < 0xE4; i++) w16(RAM(outputbuffer), i * 2, 0);
 }
 
 /* hockey94.asm:restoreteams. Put both teams' rosters on the bench. */
@@ -187,11 +187,11 @@ void clockcont_0(void)
     if (g.gamelevel == 3) {
         if (g.bosgames == 7) cup = 1;
         else {                                            /* the Stanley Cup after 3 series wins */
-            const uint8_t *gs = ram_ptr(RAM_BASE + RAM_OFF_gsstruct) + 0x10 * g.gamenum;
+            rp gs = rp_add(RAM(gsstruct), 0x10 * g.gamenum);
             uint16_t d3 = 0;
-            if (gs[0xE] & 1) d3 ^= 2;
+            if (r8(gs, 0xE) & 1) d3 ^= 2;
             if ((int16_t)(g.HmGoals[0] - g.AwGoals[0]) < 0) d3 ^= 2;
-            if (rd16(gs + 4 + d3) == 3) cup = 1;
+            if (r16(gs, 4 + d3) == 3) cup = 1;
         }
     }
     if (cup) {
@@ -380,7 +380,7 @@ void Pausemode(void)
         vcountwait();
         uint16_t d0, d1, d2, d3;
         getpzjoy(&d0, &d1, &d2, &d3);
-        struct Vid vid = { ram_ptr(g.DMAlistend), ram_ptr(RAM_BASE + RAM_OFF_Satt), 1 };   /* a5 as setvideo left it */
+        struct Vid vid = { ram_at(g.DMAlistend), RAM(Satt), 1 };                           /* a5 as setvideo left it */
         showclock(&vid);
         ProcessInputWithRepeat(&d1, d2, d3);
         if (HandleMenuInput(&d1)) break;
@@ -411,11 +411,11 @@ void Pausemode(void)
 void Begin(void)
 {
     cpu_set_sr(0x2700);
-    memset(ram_ptr(RAM_BASE + RAM_OFF_VSCRLPM), 0, 0xDEF4 - RAM_OFF_VSCRLPM);
-    uint8_t *palflag = ram_ptr(RAM_BASE + RAM_OFF_PALflag);
-    wr16(palflag, 0);
+    ram_fill(RAM(VSCRLPM), 0, 0xDEF4 - RAM_OFF_VSCRLPM);
+    rp palflag = RAM(PALflag);
+    w16(palflag, 0, 0);
     g.PalMode = vdp_status() & 1;                         /* status bit 0: PAL (50 Hz) */
-    if (g.PalMode) palflag[0] |= 1;
+    if (g.PalMode) w8(palflag, 0, (uint8_t)(r8(palflag, 0) | 1));
     p_initialZ80();
     p_turnoff();
     p_music_vblank();
@@ -452,8 +452,8 @@ void StartGame(void)
     if ((int16_t)g.OptPlayMode > 1) ClearShotData();
     clearTeamStats();
     if (g.gmode2 & HI(0)) {
-        Create_HotCold_Table(g.tmstruct);
-        Create_HotCold_Table(g.AwShots);
+        Create_HotCold_Table(RAM(tmstruct));
+        Create_HotCold_Table(RAM(AwShots));
     }
     g.ScoreSumbytes = 0;
     g.PenSumLength = 0;

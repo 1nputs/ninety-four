@@ -171,9 +171,9 @@ void doinput_cbut(uint16_t d1, uint16_t d3, struct SortObj *o)
     }
     if (o->pflags2 & 2) { doinput_chkanim(o); return; }
     o->pflags2 |= 2;
-    const uint8_t *pc = ram_ptr(RAM_BASE + RAM_OFF_puckcross);
+    rp pc = RAM(puckcross);
     int16_t line = 0x108;
-    if (PFLAG(o, pfgoal)) { line = (int16_t)-line; pc += 4; }
+    if (PFLAG(o, pfgoal)) { line = (int16_t)-line; pc = rp_add(pc, 4); }
     goaliesave(pc, line, o);
 }
 
@@ -316,9 +316,9 @@ void SetLCmode2(rp tm)
             if ((uint16_t)d4 != r16(tm, tmlchoice)) { g.printy -= 1; continue; }
             line = (int16_t)r16(tm, tmline);
         }
-        uint8_t *mes = ram_ptr(RAM_BASE + RAM_OFF_mesarea);   /* "A " .. "C " */
-        wr32(mes, 0x00044120);
-        mes[2] = (uint8_t)(mes[2] + d4);
+        rp mes = RAM(mesarea);                                /* "A " .. "C " */
+        w32(mes, 0, 0x00044120);
+        w8(mes, 2, (uint8_t)(r8(mes, 2) + d4));
         print(RAM_BASE + RAM_OFF_mesarea);
         PrintStringFromList(SYM_linelist, (uint16_t)line);
         linebar((uint16_t)line, tm);

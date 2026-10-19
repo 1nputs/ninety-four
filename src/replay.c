@@ -65,7 +65,7 @@ void EraseReplayBanner(void)
 /* replay94.asm:suba4. a4 = the current replay frame. Back up one frame (wrapping from M68K_RAM to
  * the end when the buffer has wrapped) and show it. Returns d7: the frame's delay, or 0 at the
  * start of the replay. */
-uint16_t suba4(uint32_t *frame, uint8_t *cam)
+uint16_t suba4(uint32_t *frame, rp cam)
 {
     uint32_t a4 = *frame;
     if (a4 == M68K_RAM) {
@@ -84,7 +84,7 @@ end:
 /* replay94.asm:adda4. Step forward one frame. First handles a reverse angle switch (sflags4 bit
  * 6): fade out, reload the rink for the other angle, redraw, and show the icon again. With
  * sf2drec (recording stopped) it stops one frame before the record point. */
-uint16_t adda4(uint32_t *frame, uint8_t *cam)
+uint16_t adda4(uint32_t *frame, rp cam)
 {
     if (g.sflags4 & HI(6)) {
         g.sflags4 &= (uint16_t)~HI(6);
@@ -118,7 +118,7 @@ uint16_t adda4(uint32_t *frame, uint8_t *cam)
 
 /* replay94.asm:adda42. adda4 without the look-ahead: stop at the record point (d7 = 0), else show
  * the frame and step past it. */
-uint16_t adda42(uint32_t *frame, uint8_t *cam)
+uint16_t adda42(uint32_t *frame, rp cam)
 {
     if (*frame == g.recbpr) return 0;
     uint16_t d7 = RestoreReplayFrame(*frame, cam);
@@ -135,13 +135,13 @@ void adda43(uint32_t *frame)
 
 /* replay94.asm:UpdateCameraPos. Camera object a5 = object a3's x / y (negated for the reverse
  * angle), Hpos / Vpos clamped to the rink. */
-void UpdateCameraPos(const struct SortObj *o, uint8_t *cam)
+void UpdateCameraPos(const struct SortObj *o, rp cam)
 {
     int16_t d0 = o->Xpos, d1 = o->Ypos;
     if (g.sflags4 & HI(7)) d0 = (int16_t)-d0;
-    wr16(cam, (uint16_t)d0);
+    w16(cam, 0, (uint16_t)d0);
     if (g.sflags4 & HI(7)) d1 = (int16_t)-d1;
-    wr16(cam + 0x14, (uint16_t)d1);
+    w16(cam, 0x14, (uint16_t)d1);
     if (!(d0 < 0x3C)) d0 = 0x3C;
     if (!(d0 > -0x3C)) d0 = -0x3C;
     g.Hpos = (uint16_t)d0;
@@ -152,7 +152,7 @@ void UpdateCameraPos(const struct SortObj *o, uint8_t *cam)
 
 /* replay94.asm:RevReplayAdj. Flag a reverse angle frame conversion (sflags4 bit 7), then
  * RestoreReplayFrame. */
-uint16_t RevReplayAdj(uint32_t frame, uint8_t *cam)
+uint16_t RevReplayAdj(uint32_t frame, rp cam)
 {
     if (g.sflags4 & HI(4)) g.sflags4 |= HI(7);
     return RestoreReplayFrame(frame, cam);
@@ -161,18 +161,18 @@ uint16_t RevReplayAdj(uint32_t frame, uint8_t *cam)
 /* replay94.asm:RestoreReplayFrame. Unpack replay frame a4 into the 16 objects and the other
  * replay variables (the inverse of updatereplay). Flips x / y and frames for the reverse angle.
  * Returns d7 = the frame's elapsed count. */
-uint16_t RestoreReplayFrame(uint32_t frame, uint8_t *cam)
+uint16_t RestoreReplayFrame(uint32_t frame, rp cam)
 {
-    const uint8_t *a0 = ram_ptr(frame);
+    rp a0 = ram_at(frame);
     const uint8_t *revtbl = rom_ptr(SYM_revframetbl);
     int rev = (g.sflags4 & HI(4)) != 0;
-    for (int d1 = 0xF; d1 >= 0; d1--, a0 += 4) {
+    for (int d1 = 0xF; d1 >= 0; d1--, a0 = rp_add(a0, 4)) {
         struct SortObj *o = sortobj(0xF - d1);
-        int16_t d2 = (int16_t)(rd16(a0 + 2) & 0x3FF);
+        int16_t d2 = (int16_t)(r16(a0, 2) & 0x3FF);
         if (d2 & 0x200) d2 = (int16_t)(d2 | 0xFC00);
         if (rev) d2 = (int16_t)-d2;
         o->Xpos = d2;
-        int32_t l = (int32_t)rd32(a0);
+        int32_t l = (int32_t)r32(a0, 0);
         d2 = (int16_t)((int16_t)(uint16_t)(l >> 4) >> 6);
         if (d2 & 0x200) d2 = (int16_t)(d2 | 0xFC00);
         if (rev) {
@@ -180,7 +180,7 @@ uint16_t RestoreReplayFrame(uint32_t frame, uint8_t *cam)
             if (d1 == 0) d2 = (int16_t)(d2 + 2);                 /* the puck shadow */
         }
         o->Ypos = d2;
-        int16_t raw = (int16_t)(((int16_t)rd16(a0) >> 4) & 0x3FF);
+        int16_t raw = (int16_t)(((int16_t)r16(a0, 0) >> 4) & 0x3FF);
         d2 = raw;
         if (rev) {
             d2 = (int16_t)rd16(revtbl + d2 * 2);
@@ -189,43 +189,43 @@ uint16_t RestoreReplayFrame(uint32_t frame, uint8_t *cam)
         }
         o->frame = (uint16_t)d2;
         if (d2 >= (int16_t)SYM_SPFbglass && d2 < (int16_t)(SYM_SPFbglass + 5) && rev) o->Ypos = 0x190;
-        uint16_t attr = (uint16_t)(((int16_t)rd16(a0) >> 3) & 0x1800);
+        uint16_t attr = (uint16_t)(((int16_t)r16(a0, 0) >> 3) & 0x1800);
         o->attribute = (uint16_t)((o->attribute & 0xE7FF) | attr);
         if (rev && (int16_t)o->frame >= (int16_t)SYM_SPFfight && (int16_t)o->frame < (int16_t)SYM_SPFPen)
             o->attribute ^= HI(3);                                /* the old fight frames face the other way */
     }
     for (int i = 0; i < 6; i++) {                                 /* roster numbers and positions, 2 players per 3 bytes */
         struct SortObj *a = sortobj(i * 2), *b = sortobj(i * 2 + 1);
-        a->rostnum = *a0++;
-        uint16_t d0 = *a0 & 0xF;
+        a->rostnum = r8_next(&a0);
+        uint16_t d0 = r8(a0, 0) & 0xF;
         a->position = (int16_t)(d0 == 0xF ? -1 : d0);
-        b->rostnum = (uint8_t)(*a0++ >> 4);
-        b->rostnum |= (uint8_t)(*a0 << 4);
-        d0 = (*a0++ >> 4) & 0xF;
+        b->rostnum = (uint8_t)(r8_next(&a0) >> 4);
+        b->rostnum |= (uint8_t)(r8(a0, 0) << 4);
+        d0 = (r8_next(&a0) >> 4) & 0xF;
         b->position = (int16_t)(d0 == 0xF ? -1 : d0);
     }
-    g.puckz[0] = (uint16_t)(int16_t)(int8_t)*a0++;
-    sortobj(0xF)->Zpos = (int8_t)*a0++;
-    g.lastsfx = (uint16_t)(int16_t)(int8_t)*a0++;
-    uint16_t d7 = *a0++;
-    g.PadControlBits = (uint16_t)((g.PadControlBits & 0xF000) | (rd16(a0) & 0xFFF));
-    a0 += 2;
-    g.crowdframe = rd16(a0);
-    a0 += 2;
-    g.glovecords = rd16(a0);
-    a0 += 2;
-    g.PBnum = (uint16_t)((*a0++ << 8) | (g.PBnum & 0xFF));
-    g.PadControlBits34 = (uint16_t)((*a0++ << 4) | 0xF00F);
+    g.puckz[0] = (uint16_t)(int16_t)(int8_t)r8_next(&a0);
+    sortobj(0xF)->Zpos = (int8_t)r8_next(&a0);
+    g.lastsfx = (uint16_t)(int16_t)(int8_t)r8_next(&a0);
+    uint16_t d7 = r8_next(&a0);
+    g.PadControlBits = (uint16_t)((g.PadControlBits & 0xF000) | (r16(a0, 0) & 0xFFF));
+    a0 = rp_add(a0, 2);
+    g.crowdframe = r16(a0, 0);
+    a0 = rp_add(a0, 2);
+    g.glovecords = r16(a0, 0);
+    a0 = rp_add(a0, 2);
+    g.PBnum = (uint16_t)((r8_next(&a0) << 8) | (g.PBnum & 0xFF));
+    g.PadControlBits34 = (uint16_t)((r8_next(&a0) << 4) | 0xF00F);
     if (g.sflags & HI(sfscrl)) {
-        const struct SortObj *o = (const struct SortObj *)cam;
+        const struct SortObj *o = (const struct SortObj *)ptr_of(cam);
         if (g.sflags3 & 0x20) {
-            wr16(cam + 0x18, 0);
-            o = sortobj((int16_t)rd16(cam + 0x16));
+            w16(cam, 0x18, 0);
+            o = sortobj((int16_t)r16(cam, 0x16));
         }
         UpdateCameraPos(o, cam);
     } else {
-        g.Hpos = rd16(a0);
-        g.Vpos = rd16(a0 + 2);
+        g.Hpos = r16(a0, 0);
+        g.Vpos = r16(a0, 2);
         if (rev) {
             g.Hpos = (uint16_t)-g.Hpos;
             g.Vpos = (uint16_t)-g.Vpos;
@@ -268,44 +268,44 @@ void updatereplay(void)
             g.recbpr = M68K_RAM;
         }
     }
-    uint8_t *a0 = ram_ptr(g.recbpr);
-    for (int i = 0; i < 16; i++, a0 += 4) {
+    rp a0 = ram_at(g.recbpr);
+    for (int i = 0; i < 16; i++, a0 = rp_add(a0, 4)) {
         const struct SortObj *o = sortobj(i);
         uint32_t l = (uint32_t)(o->Xpos & 0x3FF);                 /* clr.l, then x at 2 */
         l |= (uint32_t)(uint16_t)((uint16_t)o->Ypos << 6) << 4;  /* asl.w #6 then asl.l #4 */
         uint16_t hi = (uint16_t)(l >> 16);
         hi |= (uint16_t)(o->frame << 4);
         hi |= (uint16_t)((o->attribute & 0x1800) << 3);
-        wr32(a0, ((uint32_t)hi << 16) | (l & 0xFFFF));
+        w32(a0, 0, ((uint32_t)hi << 16) | (l & 0xFFFF));
     }
     for (int i = 0; i < 6; i++) {
         const struct SortObj *a = sortobj(i * 2), *b = sortobj(i * 2 + 1);
-        *a0++ = a->rostnum;
+        w8_next(&a0, a->rostnum);
         uint16_t d0 = (uint16_t)a->position;
         if ((int16_t)d0 < 0) d0 = 0xF;
-        *a0 = (uint8_t)(d0 & 0xF);
-        *a0++ |= (uint8_t)(b->rostnum << 4);
-        *a0 = (uint8_t)(b->rostnum >> 4);
+        w8(a0, 0, (uint8_t)(d0 & 0xF));
+        w8_next(&a0, (uint8_t)(r8(a0, 0) | (uint8_t)(b->rostnum << 4)));
+        w8(a0, 0, (uint8_t)(b->rostnum >> 4));
         d0 = (uint16_t)b->position;
         if ((int16_t)d0 < 0) d0 = 0xF;
-        *a0++ |= (uint8_t)(d0 << 4);
+        w8_next(&a0, (uint8_t)(r8(a0, 0) | (uint8_t)(d0 << 4)));
     }
-    *a0++ = (uint8_t)g.puckz[0];
-    *a0++ = (uint8_t)sortobj(0xF)->Zpos;
-    *a0++ = (uint8_t)g.lastsfx;
+    w8_next(&a0, (uint8_t)g.puckz[0]);
+    w8_next(&a0, (uint8_t)sortobj(0xF)->Zpos);
+    w8_next(&a0, (uint8_t)g.lastsfx);
     g.lastsfx |= 0x80;
-    *a0++ = (uint8_t)elapsed;
-    wr16(a0, g.PadControlBits);
-    a0 += 2;
-    wr16(a0, g.crowdframe);
-    a0 += 2;
-    wr16(a0, g.glovecords);
-    a0 += 2;
-    *a0++ = (uint8_t)(g.PBnum >> 8);
-    *a0++ = (uint8_t)(g.PadControlBits34 >> 4);
-    wr16(a0, g.Hpos);
-    a0 += 2;
-    wr16(a0, g.Vpos);
+    w8_next(&a0, (uint8_t)elapsed);
+    w16(a0, 0, g.PadControlBits);
+    a0 = rp_add(a0, 2);
+    w16(a0, 0, g.crowdframe);
+    a0 = rp_add(a0, 2);
+    w16(a0, 0, g.glovecords);
+    a0 = rp_add(a0, 2);
+    w8_next(&a0, (uint8_t)(g.PBnum >> 8));
+    w8_next(&a0, (uint8_t)(g.PadControlBits34 >> 4));
+    w16(a0, 0, g.Hpos);
+    a0 = rp_add(a0, 2);
+    w16(a0, 0, g.Vpos);
 }
 
 /* the assignment dispatch table (data94.asm:asstab), indexed by asslist[assnum] */
@@ -641,14 +641,14 @@ void ReplayMode(void)
     ShowReplayIcon();
     g.sflags &= (uint16_t)~HI(sfscrl);
     g.sflags3 &= (uint8_t)~0x20;
-    ram_ptr(RAM_BASE + RAM_OFF_replayactive)[0] = 0xFF;
-    uint8_t *cam = ram_ptr(RAM_BASE + RAM_OFF_ReplayStarStruct);   /* a5 (not read while sfscrl is clear) */
+    w8(RAM(replayactive), 0, 0xFF);
+    rp cam = RAM(ReplayStarStruct);                                /* a5 (not read while sfscrl is clear) */
     uint32_t a4 = g.recbpr;
     do elapsed = (int16_t)suba4(&a4, cam); while (elapsed != 0);
     SprSort();
     setvideo();
     g.sflags3 &= (uint8_t)~2;
-    memset(ram_ptr(RAM_BASE + RAM_OFF_padcont), 0, 12);
+    ram_fill(RAM(padcont), 0, 12);
     g.palcount = 0x18;
     elapsed = 1;
     for (;;) {                                            /* .top */
@@ -671,17 +671,17 @@ void ReplayMode(void)
         int manual = !(d0 & 8);
         if ((g.sflags3 & 0x20) && (d1 & 0xF) == 0) manual = 0;
         if (manual) {                                     /* .dir: move or retarget the camera */
-            if ((int16_t)rd16(cam) <= -0xA0) wr16(cam, 0);
-            if ((int16_t)rd16(cam + 0x14) <= -0x130) wr16(cam + 0x14, 0);
+            if ((int16_t)r16(cam, 0) <= -0xA0) w16(cam, 0, 0);
+            if ((int16_t)r16(cam, 0x14) <= -0x130) w16(cam, 0x14, 0);
             int scrolling = (g.sflags & HI(sfscrl)) != 0;
             g.sflags |= HI(sfscrl);
-            if (!scrolling) { wr16(cam, g.Hpos); wr16(cam + 0x14, g.Vpos); }
+            if (!scrolling) { w16(cam, 0, g.Hpos); w16(cam, 0x14, g.Vpos); }
             uint16_t dir = (uint16_t)((d0 & 7) ^ 4);
             uint16_t skip = 0xFF;                         /* st d3 */
             int tracking = (g.sflags3 & 0x20) != 0;
             g.sflags3 &= (uint8_t)~0x20;
-            if (tracking) skip = rd16(cam + 0x16);
-            int16_t cx = (int16_t)rd16(cam), cy = (int16_t)rd16(cam + 0x14);
+            if (tracking) skip = r16(cam, 0x16);
+            int16_t cx = (int16_t)r16(cam, 0), cy = (int16_t)r16(cam, 0x14);
             uint32_t best = 0x100;
             for (int i = 0; i < 12; i++) {
                 const struct SortObj *o = sortobj(i);
@@ -693,11 +693,11 @@ void ReplayMode(void)
                 uint32_t dist = (uint32_t)((int32_t)dx * dx) + (uint32_t)((int32_t)dy * dy);
                 if (dist <= 4 || dist > best) continue;
                 best = dist;
-                wr16(cam + 0x16, (uint16_t)o->SCnum);
+                w16(cam, 0x16, (uint16_t)o->SCnum);
                 g.sflags3 |= 0x20;
             }
             if (g.sflags3 & 0x20) {                       /* follow the object found */
-                struct SortObj *o = sortobj((int16_t)rd16(cam + 0x16));
+                struct SortObj *o = sortobj((int16_t)r16(cam, 0x16));
                 setpads(4, o);
                 UpdateCameraPos(o, cam);
                 setvideo();
@@ -705,17 +705,17 @@ void ReplayMode(void)
             }
             g.sflags |= HI(sfscrl);                       /* .scrl: move the camera */
             dir ^= 4;
-            int16_t nx = (int16_t)(replay_dirtab[2 * dir] + (int16_t)rd16(cam));
-            if (nx <= 0x88 && nx >= -0x88) wr16(cam, (uint16_t)nx);
-            int16_t ny = (int16_t)(replay_dirtab[2 * dir + 1] + (int16_t)rd16(cam + 0x14));
-            if (ny <= 0x126 && ny >= -0x126) wr16(cam + 0x14, (uint16_t)ny);
-            wr16(cam + 0x18, 0);
+            int16_t nx = (int16_t)(replay_dirtab[2 * dir] + (int16_t)r16(cam, 0));
+            if (nx <= 0x88 && nx >= -0x88) w16(cam, 0, (uint16_t)nx);
+            int16_t ny = (int16_t)(replay_dirtab[2 * dir + 1] + (int16_t)r16(cam, 0x14));
+            if (ny <= 0x126 && ny >= -0x126) w16(cam, 0x14, (uint16_t)ny);
+            w16(cam, 0x18, 0);
             g.PadControlBits = (uint16_t)((g.PadControlBits & 0xFFF) | 0xE000);
-            UpdateCameraPos((const struct SortObj *)cam, cam);
+            UpdateCameraPos((const struct SortObj *)ptr_of(cam), cam);
             setvideo();
             continue;
         }
-        cam[0x18] = 0xFF;                                 /* .nomans */
+        w8(cam, 0x18, 0xFF);                              /* .nomans */
         if ((d1 & 0x20) && !(g.sflags5 & 1)) g.sflags3 ^= 1 << sf3rmplay;
         if ((d3 & 0x40) && !(g.sflags5 & 1)) {            /* A: rewind */
             for (int i = 0; i < 4; i++) elapsed = (int16_t)suba4(&a4, cam);
@@ -753,7 +753,7 @@ void ReplayMode(void)
             if (!up) continue;
         }
         if (d1 & 0x80) {                                  /* start: resume the game */
-            wr16(ram_ptr(RAM_BASE + RAM_OFF_menuitem), 0);
+            w16(RAM(menuitem), 0, 0);
             g.sflags5 |= 2;
             break;
         }

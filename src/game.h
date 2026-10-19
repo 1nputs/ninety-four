@@ -224,17 +224,17 @@ void ResetZ80Bus(void);
 void p_music_vblank(void);
 void z80_bus_release_delay(void);
 void UploadCommandBufferToZ80(void);
-void ProcessOneMusicTrack(uint8_t *slot, uint16_t track);        /* a5, d7 */
+void ProcessOneMusicTrack(rp slot, uint16_t track);              /* a5, d7 */
 void handle_command_00(uint32_t ev, uint16_t track);             /* a0 = event, d7 */
 void handle_command_10(uint32_t ev, uint16_t track);
 void handle_command_30(uint32_t ev, uint16_t track);
 void handle_command_40(uint32_t ev, uint16_t track);
 void handle_command_60(uint32_t ev, uint16_t track);
 void handle_command_skip(uint32_t ev, uint16_t track);
-void ReleaseChannelAndNote(uint8_t *ch);                         /* a2 */
+void ReleaseChannelAndNote(rp ch);                               /* a2 */
 void StopPCMChannel(void);
-void UpdateChannelFrequencyAndVolume(uint8_t *ch, const uint8_t *voices);   /* a2, a3 */
-void SetChannelVolume(uint8_t *ch, const uint8_t *voices);                  /* a2, a3 */
+void UpdateChannelFrequencyAndVolume(rp ch, rp voices);                     /* a2, a3 */
+void SetChannelVolume(rp ch, rp voices);                                    /* a2, a3 */
 void p_initialZ80(void);
 void ClearAllTrackAndSFXSlots(void);
 
@@ -272,7 +272,7 @@ void StartGame(void);                                   /* does not return */
 /* The sprite builders share three registers: a5 = the DMA list being filled (long
  * source, word length in words, word VRAM address per entry), a6 = the sprite attribute table
  * being filled, d6 = the sprite link counter. */
-struct Vid { uint8_t *dma; uint8_t *sat; uint16_t link; };
+struct Vid { rp dma; rp sat; uint16_t link; };
 void VBlank(void);                                       /* the game play vblank handler */
 void vb2(void);                                          /* the fades-only vblank handler */
 void DumpSprites(void);
@@ -291,8 +291,8 @@ void checksso(struct Vid *v);                            /* a5, a6, d6 */
 void setsortcords(struct Vid *v);
 void setffo(struct Vid *v);
 void uppads(struct Vid *v);                              /* a5 */
-void QueuePadLabel(uint16_t code, uint8_t *pad, struct Vid *v);              /* d1, a0, a5 */
-void RenderSmallFontChar(uint16_t ch, uint16_t slot, uint8_t *pad, struct Vid *v);   /* d2, d0, a0, a5 */
+void QueuePadLabel(uint16_t code, rp pad, struct Vid *v);                    /* d1, a0, a5 */
+void RenderSmallFontChar(uint16_t ch, uint16_t slot, rp pad, struct Vid *v);         /* d2, d0, a0, a5 */
 void addframe(struct SortObj *o, struct Vid *v);         /* a3, a5, a6, d6 */
 void addframe2(int16_t x, int16_t y, struct SortObj *o, struct Vid *v);      /* d0, d1, a3, a5, a6, d6 */
 void find3d(int16_t *x, int16_t *y, int16_t z);          /* d0, d1, d2 -> d0, d1 ($4E20 = off screen) */
@@ -305,13 +305,13 @@ void ShowReplayIcon(void);
 void EraseReplayIcon(void);
 void ShowReplayBanner(void);
 void EraseReplayBanner(void);
-uint16_t suba4(uint32_t *frame, uint8_t *cam);           /* a4 = frame address (in/out), a5 = camera object -> d7 */
-uint16_t adda4(uint32_t *frame, uint8_t *cam);           /* a4 (in/out), a5 -> d7 */
-uint16_t adda42(uint32_t *frame, uint8_t *cam);         /* a4 (in/out), a5 -> d7 (0 at the record point) */
+uint16_t suba4(uint32_t *frame, rp cam);                 /* a4 = frame address (in/out), a5 = camera object -> d7 */
+uint16_t adda4(uint32_t *frame, rp cam);                 /* a4 (in/out), a5 -> d7 */
+uint16_t adda42(uint32_t *frame, rp cam);               /* a4 (in/out), a5 -> d7 (0 at the record point) */
 void adda43(uint32_t *frame);                            /* a4 += $62, wrapping */
-void UpdateCameraPos(const struct SortObj *o, uint8_t *cam);   /* a3, a5 */
-uint16_t RevReplayAdj(uint32_t frame, uint8_t *cam);     /* a4, a5 -> d7 */
-uint16_t RestoreReplayFrame(uint32_t frame, uint8_t *cam);   /* a4, a5 -> d7 (the frame's elapsed count) */
+void UpdateCameraPos(const struct SortObj *o, rp cam);         /* a3, a5 */
+uint16_t RevReplayAdj(uint32_t frame, rp cam);           /* a4, a5 -> d7 */
+uint16_t RestoreReplayFrame(uint32_t frame, rp cam);         /* a4, a5 -> d7 (the frame's elapsed count) */
 void ClampReplayView(void);
 void updatereplay(void);                                 /* d7 = elapsed */
 void updateplayers(void);                                /* d7 = elapsed */
@@ -331,7 +331,7 @@ void assgoaliecpu(rp tm, struct SortObj *o);
 void checkanim(rp tm, struct SortObj *o);
 void ClampYPosition(int16_t *d0, int16_t *d1, int16_t goalline, const struct SortObj *o);
 void AdjustFacingDirection(int16_t dir, struct SortObj *o);     /* d0 */
-void goaliesave(const uint8_t *pcross, int16_t goalline, struct SortObj *gk); /* a0, d3, a3 */
+void goaliesave(rp pcross, int16_t goalline, struct SortObj *gk);             /* a0, d3, a3 */
 void assgoalietopuck(rp tm, struct SortObj *o);
 int breakaway(struct SortObj *o);                      /* -> N flag (1 = not skating at the net) */
 int BreakawayOffsidesFlagSet(struct SortObj *o);       /* -> d0 (1 = breakaway) */
@@ -544,21 +544,21 @@ void ChkShotStat(void);
 void SetupTeamForIntermission(void);
 void RestoreTeamEnergy(rp tm);                          /* a2 */
 void reenergizeteam(rp tm);                             /* a2 */
-void SetScore(uint8_t *a0);                             /* a0 = gsstruct entry */
+void SetScore(rp a0);                                   /* a0 = gsstruct entry */
 void InitScores(void);
 void UpdateScores(void);
-int16_t NewTicker(const uint8_t **gs);                  /* -> d3, a0 */
-int16_t NewTicker2(const uint8_t **gs);
-int16_t CheckGameTickerStatus(int16_t d3, const uint8_t **gs);
-void NewTicker3(int16_t d3, const uint8_t *gs);
+int16_t NewTicker(rp *gs);                              /* -> d3, a0 */
+int16_t NewTicker2(rp *gs);
+int16_t CheckGameTickerStatus(int16_t d3, rp *gs);
+void NewTicker3(int16_t d3, rp gs);
 void ClearTickerArea(void);
 void SetTickerAreaPosition(uint16_t *d0, uint16_t *d1);
 void PrintStringFromList(uint32_t list, uint16_t n);    /* a1, d0 */
 uint32_t AdvanceStringPtr(uint32_t list, uint16_t n);   /* a1, d0 -> a1 */
 void Intermission(void);
 void DoHiLights(void);
-void StartHL(uint8_t *gs, int16_t game);                /* a0 = the game's gsstruct, d1 = its number */
-void StartHL2(uint8_t *gs, int16_t game);
+void StartHL(rp gs, int16_t game);                      /* a0 = the game's gsstruct, d1 = its number */
+void StartHL2(rp gs, int16_t game);
 
 /* ---- goalie94.asm: Manual Goalie, arena and faceoff animations ---- */
 void ManualGoalieMenu(void);
@@ -584,8 +584,8 @@ void LoadCrowdRec(void);
 void Crowd_Noise(void);
 void stopna2(struct SortObj *o);
 void checkcornercoll(int16_t x, int16_t y, struct SortObj *o);   /* d2, d3, a3 */
-void HotColdLoop(uint8_t *tm, int16_t d1);              /* a0, d1 */
-void Create_HotCold_Table(uint8_t *tm);                 /* a0 */
+void HotColdLoop(rp tm, int16_t d1);                    /* a0, d1 */
+void Create_HotCold_Table(rp tm);                       /* a0 */
 uint16_t Clamp0to100(int16_t v);                        /* d3 -> d3 */
 uint8_t AttributeCalc(uint8_t v, struct SortObj *o);    /* d3, a3 -> d3 */
 uint16_t NextHomeHotPlayer(rp *team);                   /* -> d1, a1 */
@@ -594,8 +594,8 @@ uint16_t NextHomeColdPlayer(rp *team);
 uint16_t NextAwayColdPlayer(rp *team);
 void BuildHotColdLists(void);
 void SortHotColdStarters(rp tm);                        /* a0 */
-void CopyHottestPlayer(uint8_t *a0);
-void CopyColdestPlayer(uint8_t *a0);
+void CopyHottestPlayer(rp a0);
+void CopyColdestPlayer(rp a0);
 uint16_t CompareHotColdTotals(void);                    /* -> d0 */
 uint16_t GetHotColdTotal(rp tm);                        /* a0 -> d1 */
 
@@ -603,7 +603,7 @@ uint16_t GetHotColdTotal(rp tm);                        /* a0 -> d1 */
 void EndShootout(void);
 void ClampPositionBox(struct SortObj *o);
 void ClearGameStats(void);
-void AddArenaAnimSprite(uint8_t **sat, uint16_t *link);   /* a6, d6 */
+void AddArenaAnimSprite(rp *sat, uint16_t *link);         /* a6, d6 */
 void PrintPlayerNameRight(uint16_t player, rp tm);        /* d0, a2 */
 uint32_t SkipNameNumber(uint16_t player, rp tm);          /* d0, a2 -> a1 */
 void SetStatScroll(void);
@@ -677,11 +677,11 @@ void ShowGoalBox(void);
 void PenaltyShotBox(void);
 void ShowThreeStars(void);
 void CalcStarScores(uint16_t d2);                       /* d2 = extra ice time a goalie needs */
-int16_t CalcTeamStarScores(rp tm, rp other, uint8_t **out, uint16_t mintime);                     /* a2, a3, a4, d5 -> d3 */
+int16_t CalcTeamStarScores(rp tm, rp other, rp *out, uint16_t mintime);                           /* a2, a3, a4, d5 -> d3 */
 uint16_t TakeTopStarScore(rp *tm);                      /* -> d0, a2 */
 uint32_t GetPlayerNamePointer(uint16_t player, rp tm);               /* d0, a2 -> a0 */
-uint8_t *ConvertByteToDigits(uint16_t bcd, uint8_t *dst);          /* d0, a1 -> a1 */
-uint32_t FinalizeTextBuffer(uint8_t *end);              /* a1 -> a1 = mesarea */
+rp ConvertByteToDigits(uint16_t bcd, rp dst);                      /* d0, a1 -> a1 */
+uint32_t FinalizeTextBuffer(rp end);                    /* a1 -> a1 = mesarea */
 uint32_t FormatPlayerName(uint16_t player, rp tm);              /* d0, a2 -> a1 */
 uint32_t FormatPlayerNumInitial(uint16_t player, rp tm);        /* d0, a2 -> a1 */
 uint32_t getname(uint16_t player, rp tm);                       /* d0, a2 -> a1 */
@@ -692,22 +692,22 @@ uint16_t GetShifter(uint16_t *first_bit);               /* -> d1, d2 */
 void AddPlayoffTeamStats(void);
 void ReadTeamStats(void);
 void DefaultMenus(void);
-uint16_t SuperDiv(uint8_t *bits, uint16_t div);         /* a3, d0 -> d0 */
-void ReadPassBits(uint8_t *bits);                       /* a3 */
+uint16_t SuperDiv(rp bits, uint16_t div);               /* a3, d0 -> d0 */
+void ReadPassBits(rp bits);                             /* a3 */
 uint16_t GetRandomUnusedTeam(uint32_t *used);           /* d3 -> d0 */
 void InitializeGameStructures(void);
 void FigureJoy(void);
 void maketree(void);
 void NewPO(void);
 void ContinuePlayoffs(void);
-void ClrPassBits(uint8_t *bits);                        /* a3 */
-void SuperAdd(uint8_t *bits, uint32_t v);               /* a3, d0 */
-void SuperMult(uint8_t *bits, uint16_t m);              /* a3, d0 */
-void PushBits(uint8_t *bits, uint16_t v, uint16_t range);   /* a3, d0, d1 */
-void WritePassBits(uint8_t *bits);                      /* a3 */
+void ClrPassBits(rp bits);                              /* a3 */
+void SuperAdd(rp bits, uint32_t v);                     /* a3, d0 */
+void SuperMult(rp bits, uint16_t m);                    /* a3, d0 */
+void PushBits(rp bits, uint16_t v, uint16_t range);         /* a3, d0, d1 */
+void WritePassBits(rp bits);                            /* a3 */
 void ResolveGames(void);
 void EncodePW(void);
-uint32_t FormatLastName(uint32_t name, uint8_t *out);   /* a0, a1 -> a1 = mesarea */
+uint32_t FormatLastName(uint32_t name, rp out);         /* a0, a1 -> a1 = mesarea */
 uint32_t FormatPlayerNameShort(uint16_t player, rp tm);              /* d0, a2 -> a1 */
 uint32_t FormatPlayerNameLast(uint16_t player, rp tm);               /* d0, a2 -> a1 */
 
@@ -724,7 +724,7 @@ void setupice(void);
 uint16_t defaultsprites(uint16_t chars);                /* d4 -> d4 */
 uint16_t defaultsprites2(uint16_t chars);               /* d4 -> d4 */
 uint16_t setupTeamBlocksMap(uint16_t chars);            /* d4 -> d4 */
-uint8_t *CopyTeamBlockMapData(uint32_t map, uint16_t team, uint16_t vram, uint8_t *dst);  /* a0, d0, d1, a1 -> a1 */
+rp CopyTeamBlockMapData(uint32_t map, uint16_t team, uint16_t vram, rp dst);              /* a0, d0, d1, a1 -> a1 */
 uint16_t ReloadRefHorTiles(void);                       /* -> d4 */
 void setupice_highlight(void);
 void clearTeamStats(void);                              /* falls into setteams */
@@ -742,11 +742,11 @@ int HandlePlayoffInput(void);                           /* -> 1: Start (PlayoffS
 void UpdatePlayoffScroll(void);
 void PlayoffScreenExit(void);
 void PlayoffScreen_waitvsync(void);
-void PrintSeriesScore(const uint8_t *gs);               /* a2 */
+void PrintSeriesScore(rp gs);                           /* a2 */
 void DrawTreeArrow(uint16_t col);                       /* d0 */
 void DrawTeamBlocks(uint16_t row);                      /* d1 */
 void VBlank_Playoff(void);
-uint8_t *InitScoutingDisplay(void);                     /* -> a0 */
+rp InitScoutingDisplay(void);                           /* -> a0 */
 void UpdateScoutingDisplay(void);
 void ScrollDisplayUp(void);
 void GameOver(void);                                    /* the password, the playoff screens, back to the title */
@@ -806,11 +806,11 @@ void DrawMatchupBitmap(uint32_t pal, uint32_t map, uint32_t tiles, uint16_t char
 uint32_t GetTeamLogo(uint16_t *d3);                     /* d3 -> a0, d3 */
 void PrintMatchupRatings(void);
 void GetMatchupPlayers(void);
-uint16_t GetMatchupPlayer(const uint8_t *tm);           /* a0 -> d0 */
+uint16_t GetMatchupPlayer(rp tm);                       /* a0 -> d0 */
 void RestartAdvantageMarks(void);
 void PrintAdvantageMarks(void);
-uint32_t GetTeamNickname(const uint8_t *tm);            /* a2 -> a1 */
-uint32_t GetTeamArena(const uint8_t *tm);               /* a2 -> a1 */
+uint32_t GetTeamNickname(rp tm);                        /* a2 -> a1 */
+uint32_t GetTeamArena(rp tm);                           /* a2 -> a1 */
 
 /* ---- records94.asm: the user records: the name entry, Record Holders ---- */
 void UserNameEntry(void);                               /* the name entry */
@@ -903,7 +903,7 @@ void DrawPictureBox(void);
 rp GetCardTeam(void);                                   /* -> a0 */
 uint16_t GetCardPlayer(void);                           /* -> d0 */
 void BuildCardPlayerLists(void);
-void BuildCardPlayerList(rp tm, uint8_t *list);               /* a0, a1 */
+void BuildCardPlayerList(rp tm, rp list);                     /* a0, a1 */
 
 /* ---- stats94.asm: the statistics and menu screens ---- */
 uint16_t GetPlayerCount(rp team);                       /* a2 -> d0 */
