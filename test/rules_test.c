@@ -317,6 +317,42 @@ static void overall_ratings(void)
     CHECK(players > 600 && same == players);
 }
 
+/* the League page's other ratings (native/ratings.c's rating_column) as the roster screen shows
+ * them (GetNameandAttrib: CalcAttrib with the column's mask, no streak; AttribRating's x 100 / its
+ * divisor, AttribAdjust; AttribWeight's pounds): every player of the cartridge, every column of
+ * PAttribColumns (skaters) or GAttribColumns (goalies) those show, the overall ratings aside */
+static void column_ratings(void)
+{
+    int checked = 0, same = 0, columns = 0;
+    for (int t = 0; t < (int)SYM_NumTeams; t++) {
+        memset(&g, 0, sizeof g);
+        struct Team *tm = team_struct(0);                 /* (no streaks) */
+        tm->team = (uint16_t)t;
+        tm->data = lg((uint16_t)t)->data;
+        uint16_t count = GetPlayerCount(tm), goalies = GetGoalieCount(tm);
+        for (uint16_t p = 0; p < count; p++) {
+            const struct LgPlayer *P = &lg((uint16_t)t)->player[p];
+            int goalie = p < goalies, number = (P->number >> 4) * 10 + (P->number & 15), cols = 0;
+            uint32_t overall = rd32(rom_ptr(goalie ? SYM_GAttribOverallMask : SYM_PAttribOverallMask));
+            for (uint32_t a = goalie ? SYM_GAttribColumns : SYM_PAttribColumns; (int16_t)rd16(rom_ptr(a)) >= 0; a += rd16(rom_ptr(a)) + 4u) {
+                uint32_t sel = rd32(rom_ptr(a + rd16(rom_ptr(a))));
+                uint32_t handler = SYM_attribjmp + (uint32_t)(int16_t)rd16(rom_ptr(SYM_attribjmp + (int16_t)(uint16_t)sel));
+                if ((handler != SYM_AttribRating && handler != SYM_AttribWeight) || sel == overall || (uint16_t)sel <= 2) continue;
+                uint16_t div, v = CalcAttrib(p, tm, sel, &div);
+                int weight = handler == SYM_AttribWeight;
+                int want = weight ? 140 + 8 * v : AttribAdjust((uint16_t)m68k_divu((uint32_t)v * 100u, div));
+                int got = weight ? 140 + 8 * P->rating[LR_WEIGHT] : rating_column(rom_cart, P->rating, number, sel >> 16);
+                checked++;
+                cols++;
+                same += got == want;
+            }
+            if (cols > columns) columns = cols;
+        }
+    }
+    printf("  roster screen ratings: %d of %d as the screen shows them (up to %d columns a player)\n", same, checked, columns);
+    CHECK(checked > 6000 && same == checked);
+}
+
 int main(void)
 {
     const char *rom = getenv("NHL94_ROM");
@@ -330,6 +366,7 @@ int main(void)
     stats_list();
     play_rules();
     overall_ratings();
+    column_ratings();
     printf("rulestest: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }

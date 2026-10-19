@@ -121,9 +121,9 @@ A league has 18 to 32 teams.
 | `conference` | the side of the playoff draws it plays on, when `playoffs.csv` gives none | up to 15 |
 | `art` | the cartridge team whose logo, banners and colours it shows where it has none of its own: `ANH BOS BUF CGY CHI DAL DET EDM FLA HFD LA MTL NJ NYI NYR OTW PHI PIT QUE SJ STL TB TOR VAN WSH WPG ASE ASW` | (its own abbreviation when empty) |
 | `rating` | the team rating its cards and the matchups show | 0-99 |
-| `offense`, `defense` | how its other playoff games are simulated | 0-7 |
-| `pp`, `pk` | its players' bonus on the power play, and killing a penalty | 0-15 |
-| `home`, `away` | its players' bonus at home, and away | 0-15 |
+| `offense`, `defense` | how its other playoff games are simulated: the higher its offense, the more it scores; the higher its defense, the more it lets in | 0-7 |
+| `pp`, `pk` | what its skaters' ratings gain on the power play, and lose killing a penalty | 0-15 |
+| `home`, `away` | what its skaters' ratings gain at home, and lose away | 0-15 |
 | `songs` | the organ's 6 songs, numbers with spaces between | 0-255 each |
 | `banner` | the name on its banners when not its city (letters, digits, `.`, `-`, spaces) | up to 16 |
 
@@ -287,10 +287,23 @@ Esc, **League**: the line to choose a league, and under it what the chosen one h
 - **Files**: the cartridge's own, or its folder or package (and the package's size). Choose it to
   find a league anywhere on disk;
 - **Teams**: how many, and how many play for the cup;
-- **Best skaters**, **Best goalies**: the top five of each from the teams that play for the cup,
-  by the overall rating their cards show (worked out the way the cartridge does, hot and cold
-  streaks aside; a player the All-Stars repeat is listed once);
-- **Best teams**: the top eleven by team rating.
+- then a line to step through sixteen pages of it with left and right (the page stays as you
+  choose another league, to compare them). Each is of the teams that play for the cup, a player
+  the All-Stars repeat counted once:
+  - **Best skaters**, **Best goalies**: the top ten by the overall rating their cards show
+    (worked out the way the cartridge does, hot and cold streaks aside);
+  - **Best teams**: the top ten by team rating;
+  - **Fastest skaters**, **Hardest shots**, **Sharpest shooters**, **Best passers**, **Best
+    stickhandlers**, **Biggest hitters**: the top ten by that rating as the roster screen shows
+    it (speed, shot power, shot accuracy, pass accuracy, stick handling, checking);
+  - **Heaviest skaters**, **Lightest skaters**: ten of each, in pounds as the roster screen has them;
+  - **Power play**, **Penalty killing**, **Home ice**, **On the road**: the teams by the bonus
+    their skaters' ratings gain a man up or at home (`pp`, `home`), or lose a man down or away
+    (`pk`, `away`), those as good on one line;
+  - **The league in numbers**: its players, forwards and defensemen, how many shoot left and
+    right, the average skater's weight, the number worn most, the biggest and smallest rosters,
+    and the teams that score most and allow least when the playoffs simulate their other games
+    (`offense`, `defense`).
 
 The cartridge's own figures appear once its ROM is chosen.
 

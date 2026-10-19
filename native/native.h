@@ -172,6 +172,8 @@ int league_add(const char *path, char *why, size_t why_size);
 /* a player's overall rating as his card shows it, from his 14 ratings and number (ratings.c);
  * *sum (NULL: not wanted) the sum it comes from, past 99 */
 int rating_overall(const uint8_t *cart, const uint8_t nib[14], int number, int goalie, int *sum);
+/* a rating as the roster screen shows it: the column's mask's bits (PAttribColumns' high word) */
+int rating_column(const uint8_t *cart, const uint8_t nib[14], int number, unsigned bits);
 const char *league_sram(const char *base);   /* the next game's save RAM file (base: the cartridge's) */
 
 /* team name banners (banner.c): the cartridge's two sets (Teamblocksmap, TeamBitmaps), 88 x 16

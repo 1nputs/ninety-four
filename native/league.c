@@ -10,8 +10,9 @@
  *   teams.csv     a team a row, in the order the game lists them: team (its abbreviation, how the
  *                 other files name it), city, nickname, arena, conference, art (the cartridge team
  *                 whose logo, banners and colours it shows), rating, offense and defense (0-7:
- *                 its other playoff games, simulated), pp, pk, home, away (0-15: its players'
- *                 bonuses on the power play, killing a penalty, at home, away), songs (the organ's
+ *                 its other playoff games, simulated: offense the more it scores, defense the
+ *                 more it lets in), pp, pk, home, away (0-15: its skaters' ratings gain on the
+ *                 power play and lose killing a penalty, gain at home and lose away), songs (the organ's
  *                 6), banner (the name on its banners, when not its city). An empty one: the art
  *                 team's. A team whose city is not its art team's gets banners of its own, its
  *                 name in the cartridge's letters on its art team's (banner.c), unless it has a
@@ -1652,12 +1653,14 @@ static int by_name(const void *a, const void *b) { return strcmp(a, b); }
 
 /* a league as the League page tells of it, kept when the list is made (before the cartridge is
  * loaded, perhaps: the players' overall ratings are reckoned when the page asks, with its weights) */
+enum { B_PP, B_PK, B_HOME, B_AWAY, B_OFFENSE, B_DEFENSE, BONUSES };   /* (a team's .sr nibbles) */
+struct about_player { char name[LEN_NAME + 1]; uint8_t team, number, goalie, nib[14]; char pos; };
 struct about {
     int teams, playoff_teams, package;
     long bytes;                 /* (a package's) */
-    struct { char name[LEN_CITY + 1], abbr[LEN_ABBR + 1]; int rating, art; } t[LEAGUE_MAX];
+    struct { char name[LEN_CITY + 1], abbr[LEN_ABBR + 1]; int rating, art, bonus[BONUSES], players; } t[LEAGUE_MAX];   /* (-1: its art team's) */
     int players;
-    struct { char name[LEN_NAME + 1]; uint8_t team, number, goalie, nib[14]; } pl[LEAGUE_MAX * ROSTER];
+    struct about_player pl[LEAGUE_MAX * ROSTER];
 };
 static struct about *about[LIST_MAX];
 static int list_unread;                 /* leagues in leagues/ the list leaves out (why: on stderr) */
@@ -1674,6 +1677,9 @@ static void about_teams(struct about *A, const struct team *T, int n, int playof
         snprintf(A->t[t].abbr, sizeof A->t[t].abbr, "%s", T[t].abbr);
         A->t[t].rating = T[t].rating;
         A->t[t].art = T[t].art;
+        const int bonus[BONUSES] = { T[t].pp, T[t].pk, T[t].home, T[t].away, T[t].offense, T[t].defense };
+        memcpy(A->t[t].bonus, bonus, sizeof bonus);
+        A->t[t].players = T[t].players;
         for (int i = 0; i < T[t].players && A->players < LEAGUE_MAX * ROSTER; i++) {
             const struct player *P = &T[t].pl[i];
             int goalie = i < T[t].goalies;
@@ -1681,6 +1687,7 @@ static void about_teams(struct about *A, const struct team *T, int n, int playof
             A->pl[A->players].team = (uint8_t)t;
             A->pl[A->players].number = P->number;
             A->pl[A->players].goalie = (uint8_t)goalie;
+            A->pl[A->players].pos = goalie ? 'G' : i < T[t].goalies + T[t].forwards ? 'F' : 'D';
             memcpy(A->pl[A->players++].nib, P->nib, 14);
         }
     }
@@ -1702,13 +1709,8 @@ static void short_path(char *out, const char *path, int n)
     else snprintf(out, (size_t)n + 1, "%.*s...%.*s", head, path, n - 3 - head, path + len - (n - 3 - head));
 }
 
-/* best first (by the sum the card's number comes from), in the league's order where two are as good */
+/* a player of the League page and his card's overall rating (sum: the sum it comes from) */
 struct rated { int i, rating, sum; };
-static int by_rating(const void *a, const void *b)
-{
-    const struct rated *x = a, *y = b;
-    return x->sum != y->sum ? y->sum - x->sum : x->i - y->i;
-}
 
 /* list entry n, its name given: its label, and what the League page says of it (L read from dir) */
 static void listed(int n, const struct lg *L, const char *dir)
@@ -1780,14 +1782,106 @@ int league_add(const char *path, char *why, size_t why_size)
     return r == 0 ? list_n - 1 : -1;
 }
 
+/* the roster screen's columns the League page ranks players by (PAttribColumns: their masks) */
+#define COL_SPEED 0x0800u
+#define COL_SHOT_POWER 0x0100u
+#define COL_SHOT_ACCURACY 0x0010u
+#define COL_PASS_ACCURACY 0x0002u
+#define COL_STICK_HANDLING 0x0020u
+#define COL_CHECKING 0x0080u
+
+/* a team's bonus (B_: the .sr nibbles), its art team's when the league leaves it to that */
+static int bonus(const struct about *A, int t, int k)
+{
+    int v = A->t[t].bonus[k];
+    if (v >= 0 || !rom_cart) return v < 0 ? 0 : v;
+    uint32_t b = c32(rom_cart, SYM_TeamList + 4u * (uint32_t)A->t[t].art), sr = b + c16(rom_cart, b + 8);
+    uint8_t x0 = rom_cart[sr], x1 = rom_cart[sr + 1], x2 = rom_cart[sr + 2];
+    static const int shift[BONUSES] = { 0, 4, 4, 0, 4, 0 };
+    uint8_t x = k == B_PP || k == B_PK ? x1 : k == B_HOME || k == B_AWAY ? x2 : x0;
+    return x >> shift[k] & (k >= B_OFFENSE ? 7 : 15);
+}
+
+/* the players of the teams that play for the cup (not All-Stars), a player once (an All-Star's copy
+ * aside), with their ratings: r[] (n of them), the overall's sum in sum */
+static int cup_players(const struct about *A, struct rated *r)
+{
+    int n = 0;
+    for (int p = 0; p < A->players; p++) {
+        int dup = 0;
+        for (int k = 0; k < n && !dup; k++) dup = !strcmp(A->pl[r[k].i].name, A->pl[p].name);
+        if (A->pl[p].team >= A->playoff_teams || dup) continue;
+        r[n].i = p;
+        r[n].rating = rating_overall(rom_cart, A->pl[p].nib, A->pl[p].number, A->pl[p].goalie, &r[n].sum);
+        n++;
+    }
+    return n;
+}
+
+#define LINE(...) do { if (*at < size) *at += (size_t)snprintf(text + *at, size - *at, __VA_ARGS__); } while (0)
+
+/* a section of the League page: its title, then ten of players (goalie: the goalies, else the
+ * skaters) best first by key (the shown value, then the rest), each with the value shown */
+struct ranked { int i, shown, key[3]; };
+static int by_ranked(const void *a, const void *b)
+{
+    const struct ranked *x = a, *y = b;
+    for (int k = 0; k < 3; k++) if (x->key[k] != y->key[k]) return y->key[k] - x->key[k];
+    return x->i - y->i;
+}
+static void player_section(const struct about *A, const struct rated *r, int n, const char *title, int goalie, unsigned col,
+                           const char *unit, char *text, size_t size, size_t *at)
+{
+    static struct ranked k[LEAGUE_MAX * ROSTER];
+    int m = 0;
+    for (int j = 0; j < n; j++) {
+        const struct about_player *P = &A->pl[r[j].i];
+        if (P->goalie != goalie) continue;
+        int raw = 0;
+        for (int d2 = 0; d2 < 14; d2++) if (col & 1u << d2) raw += P->nib[13 - d2];
+        int shown = col ? rating_column(rom_cart, P->nib, P->number, col) : r[j].rating;
+        k[m++] = (struct ranked){ r[j].i, shown, { shown, col ? raw : r[j].sum, r[j].sum } };
+    }
+    qsort(k, (size_t)m, sizeof k[0], by_ranked);
+    LINE("\f%s\n", title);
+    char name[LEN_NAME + 1];
+    for (int j = 0; j < m && j < 10; j++) {
+        short_name(name, A->pl[k[j].i].name, 18);
+        LINE("%-18s %-3s\t%d%s\n", name, A->t[A->pl[k[j].i].team].abbr, k[j].shown, unit);
+    }
+}
+
+/* a section of the teams that play for the cup by a bonus of theirs (setplayer adds it to its
+ * skaters' ratings, or takes it off: least, a penalty), the best first, those as good on a line
+ * (their abbreviations, ten to a line), signed as the game adds it */
+static void team_section(const struct about *A, int b, int least, const char *title, const char *what, char *text, size_t size, size_t *at)
+{
+    struct ranked k[LEAGUE_MAX];
+    int m = 0;
+    for (int t = 0; t < A->playoff_teams; t++) {
+        int v = bonus(A, t, b);
+        k[m++] = (struct ranked){ t, v, { least ? -v : v, 0, 0 } };
+    }
+    qsort(k, (size_t)m, sizeof k[0], by_ranked);
+    LINE("\f%s\n%s\n", title, what);
+    for (int j = 0, lines = 1; j < m && lines < 11; lines++) {   /* (eleven lines: a page of the menu's under the League line) */
+        char value[8], abbrs[48] = "";
+        snprintf(value, sizeof value, "%s%d", k[j].shown ? least ? "-" : "+" : "", k[j].shown);
+        int first = j, room = lines == 10 ? 9 : 10;         /* (the last line: room for "...") */
+        for (int c = 0; j < m && k[j].shown == k[first].shown && c < room; j++, c++)
+            snprintf(abbrs + strlen(abbrs), sizeof abbrs - strlen(abbrs), "%s%s", c ? " " : "", A->t[k[j].i].abbr);
+        if (lines == 10 && j < m) snprintf(abbrs + strlen(abbrs), sizeof abbrs - strlen(abbrs), " ...");
+        LINE("  %s\t%s\n", first && k[first - 1].shown == k[first].shown ? "" : value, abbrs);
+    }
+}
+
 void league_about(int i, char *text, size_t size)
 {
     static struct about *cart;            /* (the cartridge's: made when first asked, it loaded) */
     static struct rated r[LEAGUE_MAX * ROSTER];
     struct team *T;
     struct about *A = i == 0 ? cart : i > 0 && i < LIST_MAX ? about[i] : NULL;
-    char name[LEN_NAME + 1];
-    size_t at = 0;
+    size_t at0 = 0, *at = &at0;
     text[0] = 0;
     if (i == 0 && !A && rom_cart && (A = calloc(1, sizeof *A)) && (T = calloc(SYM_NumTeams, sizeof *T))) {
         for (int t = 0; t < (int)SYM_NumTeams; t++) cart_team(rom_cart, t, &T[t]);
@@ -1796,46 +1890,87 @@ void league_about(int i, char *text, size_t size)
         cart = A;
     }
     if (!A) { snprintf(text, size, "%s", i == 0 ? "The cartridge's teams: once its ROM is chosen\n" : ""); return; }
-#define LINE(...) do { if (at < size) at += (size_t)snprintf(text + at, size - at, __VA_ARGS__); } while (0)
     LINE("Teams\t%d (%d cup)\n", A->teams, A->playoff_teams);
     if (!rom_cart) { LINE("Ratings\tonce the cartridge's ROM is chosen\n"); return; }
-    /* the best of the teams that play for the cup (not All-Stars), as their cards rate them: the
-     * skaters and goalies apart (weighed differently), a player once (an All-Star's copy aside) */
-    static struct rated tr[LEAGUE_MAX];
-    int n = 0, cup = A->playoff_teams;
-    for (int p = 0; p < A->players; p++) {
-        int dup = 0;
-        for (int k = 0; k < n && !dup; k++) dup = !strcmp(A->pl[r[k].i].name, A->pl[p].name);
-        if (A->pl[p].team >= cup || dup) continue;
-        r[n].i = p;
-        r[n].rating = rating_overall(rom_cart, A->pl[p].nib, A->pl[p].number, A->pl[p].goalie, &r[n].sum);
-        r[n].sum += A->pl[p].goalie ? -10000 : 0;         /* (the goalies after the skaters) */
-        n++;
-    }
-    qsort(r, (size_t)n, sizeof r[0], by_rating);
-    for (int t = 0; t < cup; t++) {
-        int rating = A->t[t].rating >= 0 ? A->t[t].rating : rom_cart[SYM_TeamRatings + (uint32_t)A->t[t].art];   /* (-1: its art team's) */
-        tr[t] = (struct rated){ t, rating, rating };
-    }
-    qsort(tr, (size_t)cup, sizeof tr[0], by_rating);
-    int goalie = 0;
-    while (goalie < n && !A->pl[r[goalie].i].goalie) goalie++;
-    /* two columns: the best five skaters and five goalies at the left, the best eleven teams at the right */
-    for (int row = 0; row < 12; row++) {
-        int t = row - 1, k = row <= 5 ? row - 1 : goalie + row - 7;
-        char left[40] = "";
-        if (row == 0) snprintf(left, sizeof left, "Best skaters");
-        else if (row == 6) snprintf(left, sizeof left, "Best goalies");
-        else if (row <= 5 ? k < goalie : k < n) {
-            short_name(name, A->pl[r[k].i].name, 16);
-            snprintf(left, sizeof left, "%-16s %-3s %2d", name, A->t[A->pl[r[k].i].team].abbr, r[k].rating);
+    int n = cup_players(A, r);
+    /* the players, as their cards rate them, then by a rating as the roster screen shows it */
+    player_section(A, r, n, "Best skaters", 0, 0, "", text, size, at);
+    player_section(A, r, n, "Best goalies", 1, 0, "", text, size, at);
+    {                                                      /* the teams, by the rating the game gives each */
+        struct ranked k[LEAGUE_MAX];
+        int m = 0;
+        for (int t = 0; t < A->playoff_teams; t++) {
+            int rating = A->t[t].rating >= 0 ? A->t[t].rating : rom_cart[SYM_TeamRatings + (uint32_t)A->t[t].art];   /* (-1: its art team's) */
+            k[m++] = (struct ranked){ t, rating, { rating, 0, 0 } };
         }
-        if (row == 0) LINE("%s\tBest teams\n", left);
-        else if (t < cup) LINE("%s\t%-17s %2d\n", left, A->t[tr[t].i].name, tr[t].rating);
-        else LINE("%s\n", left);
+        qsort(k, (size_t)m, sizeof k[0], by_ranked);
+        LINE("\fBest teams\n");
+        for (int j = 0; j < m && j < 10; j++) LINE("%-18s %-3s\t%d\n", A->t[k[j].i].name, A->t[k[j].i].abbr, k[j].shown);
     }
-#undef LINE
+    player_section(A, r, n, "Fastest skaters", 0, COL_SPEED, "", text, size, at);
+    player_section(A, r, n, "Hardest shots", 0, COL_SHOT_POWER, "", text, size, at);
+    player_section(A, r, n, "Sharpest shooters", 0, COL_SHOT_ACCURACY, "", text, size, at);
+    player_section(A, r, n, "Best passers", 0, COL_PASS_ACCURACY, "", text, size, at);
+    player_section(A, r, n, "Best stickhandlers", 0, COL_STICK_HANDLING, "", text, size, at);
+    player_section(A, r, n, "Biggest hitters", 0, COL_CHECKING, "", text, size, at);
+    {                                                      /* the heaviest skaters and the lightest (the roster screen's Weight) */
+        static struct ranked k[LEAGUE_MAX * ROSTER];
+        int m = 0;
+        for (int j = 0; j < n; j++)
+            if (!A->pl[r[j].i].goalie) k[m++] = (struct ranked){ r[j].i, 140 + 8 * A->pl[r[j].i].nib[0], { A->pl[r[j].i].nib[0], r[j].sum, 0 } };
+        qsort(k, (size_t)m, sizeof k[0], by_ranked);
+        char name[LEN_NAME + 1];
+        LINE("\fHeaviest skaters\n");
+        for (int j = 0; j < m && j < 10; j++) {
+            short_name(name, A->pl[k[j].i].name, 18);
+            LINE("%-18s %-3s\t%d lb\n", name, A->t[A->pl[k[j].i].team].abbr, k[j].shown);
+        }
+        LINE("\fLightest skaters\n");
+        for (int j = m - 1; j >= 0 && j >= m - 10; j--) {
+            short_name(name, A->pl[k[j].i].name, 18);
+            LINE("%-18s %-3s\t%d lb\n", name, A->t[A->pl[k[j].i].team].abbr, k[j].shown);
+        }
+    }
+    team_section(A, B_PP, 0, "Power play", "What its skaters gain a man up", text, size, at);
+    team_section(A, B_PK, 1, "Penalty killing", "What its skaters lose a man down", text, size, at);
+    team_section(A, B_HOME, 0, "Home ice", "What its skaters gain at home", text, size, at);
+    team_section(A, B_AWAY, 1, "On the road", "What its skaters lose away", text, size, at);
+    {                                                      /* the league in numbers */
+        int skaters = 0, goalies = 0, forwards = 0, right = 0, weight = 0, numbers[100] = { 0 }, most = 0;
+        for (int j = 0; j < n; j++) {
+            const struct about_player *P = &A->pl[r[j].i];
+            if (P->goalie) { goalies++; continue; }
+            skaters++;
+            forwards += P->pos == 'F';
+            right += P->nib[LR_HANDED_FIGHTING] & 1;
+            weight += P->nib[0];
+            if (P->number < 100) numbers[P->number]++;
+        }
+        for (int k = 1; k < 100; k++) if (numbers[k] > numbers[most]) most = k;
+        LINE("\fThe league in numbers\n");
+        LINE("Players\t%d: %d skaters, %d goalies\n", skaters + goalies, skaters, goalies);
+        LINE("Skaters\t%d forwards, %d defensemen\n", forwards, skaters - forwards);
+        LINE("Shooting\t%d left, %d right\n", skaters - right, right);
+        if (skaters) LINE("The average skater\t%d lb\n", 140 + (8 * weight + skaters / 2) / skaters);
+        if (numbers[most]) LINE("Number worn most\t#%d, by %d skaters\n", most, numbers[most]);
+        int big = 0, small = 0;
+        for (int t = 0; t < A->playoff_teams; t++) {
+            if (A->t[t].players > A->t[big].players) big = t;
+            if (A->t[t].players < A->t[small].players) small = t;
+        }
+        if (A->playoff_teams) LINE("Most on a roster\t%s, %d\n", A->t[big].name, A->t[big].players);
+        if (A->playoff_teams) LINE("Fewest on a roster\t%s, %d\n", A->t[small].name, A->t[small].players);
+        int off = 0, def = 0;                              /* (the playoffs' other games: getscore's rows, the scorer's offense
+                                                             and the other team's defense: the higher, the more goals) */
+        for (int t = 0; t < A->playoff_teams; t++) {
+            if (bonus(A, t, B_OFFENSE) > bonus(A, off, B_OFFENSE)) off = t;
+            if (bonus(A, t, B_DEFENSE) < bonus(A, def, B_DEFENSE)) def = t;
+        }
+        if (A->playoff_teams) LINE("Scores most when simulated\t%s\n", A->t[off].name);
+        if (A->playoff_teams) LINE("Allows least when simulated\t%s\n", A->t[def].name);
+    }
 }
+#undef LINE
 
 int league_list(const char *const **names, const char *const **labels)
 {

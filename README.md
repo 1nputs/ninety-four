@@ -74,9 +74,9 @@ Esc (or a controller's Back button) opens it; arrows and Enter, or the d-pad, A 
   cartridge: set it, Reset, then choose Players: Three or Four in the game's setup screen).
 - **League**: who plays (below).
 - **Game rules**: how the game plays (below).
-- **Options** and **Keys**: pausing when the window loses focus, fast-forward's speed, and every
-  key of the pads and the controls (pick one and press the new key, with Shift, Ctrl or Alt if you
-  like).
+- **Options** and **Keys**: pausing when the window loses focus, fast-forward's speed, quick
+  resume, the frames a second at the picture's top right, and every key of the pads and the
+  controls (pick one and press the new key, with Shift, Ctrl or Alt if you like).
 
 All of it is kept in `settings.ini`, in the folder you run the game from, beside its saves; you
 can edit it while the game is closed. On a Mac, hold Fn for the function keys.
@@ -142,9 +142,11 @@ packed in one zip.
 
 Choose one on the menu's **League** page and Reset: those in `leagues/` are listed, and its
 **Files** line finds one anywhere else (a folder, or a package). The page says what the chosen
-league holds: where its files are, how many teams it has (and how many play for the cup), and its
-best five skaters, five goalies and eleven teams, by the overall and team ratings the game's cards
-show. Each league keeps its own records, and a saved state plays on with the league it was saved
+league holds: where its files are, how many teams it has (and how many play for the cup), and
+sixteen pages of it to step through with left and right: its best skaters, goalies and teams, its
+fastest skaters, hardest shots, sharpest shooters, passers, stickhandlers and hitters (rated as the
+game's cards and roster screen rate them), its heaviest and lightest players, the teams' power
+play, penalty killing, home and road bonuses, and the league in numbers. Each league keeps its own records, and a saved state plays on with the league it was saved
 in. The cartridge's own league, exported and built again, plays the original frame for frame.
 
 Community hacks made on the 32-team template (NHL 94 2025, NHL 2026 94 Edition, the 30th

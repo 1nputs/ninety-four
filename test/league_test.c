@@ -416,25 +416,35 @@ static void listed(const char *dir, const char *name)
  * loaded): printed, and its lines checked */
 static void about(const char *dir)
 {
-    char here[1024], text[4096];
+    static char text[16384];
+    char here[1024];
     const char *const *names, *const *labels;
     if (!getcwd(here, sizeof here) || chdir(dir) != 0) { CHECK(0, "cannot go to %s", dir); return; }
     int n = league_list(&names, &labels);
     CHECK(league_unread() == 1, "%s/leagues: %d left out of the list, not its one broken league", dir, league_unread());
     for (int i = 0; i < n; i++) {
         league_about(i, text, sizeof text);
-        printf("  the League page, %s:\n", labels[i]);
-        int lines = 0, best = 0, width = 1;
+        printf("  the League page, %s (its sections: the first whole, the others' first lines):\n", labels[i]);
+        int sections = 0, lines = 0, most = 0, best = 0, width = 1, empty = 0;
         for (char *l = text, *e; *l; l = e + 1) {
             if (!(e = strchr(l, '\n'))) break;
             *e = 0;
+            if (*l == '\f') {                             /* (a section: its title, a page of the menu's pager) */
+                empty += sections && !lines;
+                best += !sections && !strcmp(l + 1, "Best skaters");
+                sections++;
+                lines = 0;
+                printf("    [%s]\n", l + 1);
+                continue;
+            }
             char *tab = strchr(l, '\t');
             width &= (int)strlen(l) + 1 <= 49;            /* (the menu's room: label, two spaces, the right) */
-            printf("    %-24s %s\n", tab ? (*tab = 0, l) : l, tab ? tab + 1 : "");
-            best += !strcmp(l, "Best skaters");
-            lines++;
+            if (++lines > most) most = lines;
+            if (sections <= 1 || lines == 1) printf("    %-24s %s\n", tab ? (*tab = 0, l) : l, tab ? tab + 1 : "");
         }
-        CHECK(lines >= 7 && lines <= 14 && best == 1 && width, "%s: the League page's lines (%d)", labels[i], lines);
+        empty += sections && !lines;
+        CHECK(sections == 16 && most <= 11 && !empty && best == 1 && width, "%s: the League page's sections (%d, %d lines at most, %d empty)",
+              labels[i], sections, most, empty);
     }
     /* a league found elsewhere (the menu's Files line): made an entry of the list; one listed
      * already, by another name, is that entry; a folder that is no league says why */
