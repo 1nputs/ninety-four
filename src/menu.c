@@ -9,10 +9,10 @@
 #define PRINTSMALLZ(s) printsmallz(s, sizeof s)
 
 /* menuitem: the selected item, then (+2) the first item shown */
-static uint16_t menu_top(void) { return r16(rp_add(RAM(menuitem), 2), 0); }
-static void set_menu_top(uint16_t v) { w16(rp_add(RAM(menuitem), 2), 0, v); }
-static uint16_t menu_item(void) { return r16(RAM(menuitem), 0); }
-static void set_menu_item(uint16_t v) { w16(RAM(menuitem), 0, v); }
+static uint16_t menu_top(void) { return g.menu.top; }
+static void set_menu_top(uint16_t v) { g.menu.top = v; }
+static uint16_t menu_item(void) { return g.menu.item; }
+static void set_menu_item(uint16_t v) { g.menu.item = v; }
 /* the menu list: a title String, the marker String, then the items (a String and a handler long
  * each; an item whose text word is negative ends the list) */
 static uint32_t skip_string(uint32_t a) { return a + (int16_t)m16(a); }
@@ -136,10 +136,10 @@ void PutTeamBlock(uint16_t off)
 {
     uint16_t saved = g.disflags;
     g.disflags |= HI(dfng);
-    rp src = rp_add(RAM(TeamBlockMap), off);
+    uint8_t *src = g.TeamBlockMap + off;
     for (int r = 0; r < 2; r++) {
         xyVmMap();
-        for (int i = 0; i < 11; i++, src = rp_add(src, 2)) vdp_data(r16(src, 0));
+        for (int i = 0; i < 11; i++, src += 2) vdp_data(rd16(src));
         g.printy++;
     }
     g.printx += 0xB;

@@ -125,7 +125,7 @@ void DumpSprites(void)
 /* display94.asm:DumpSprites2. The sprite table, then the DMA list. */
 void DumpSprites2(void)
 {
-    DoDMA(RAM_BASE + RAM_OFF_Satt, g.Sattsize, g.VSPRITES);
+    DoDMA(ram_addr(g.Satt), g.Sattsize, g.VSPRITES);
     DoDMAList();
 }
 
@@ -210,7 +210,7 @@ void showref(struct Vid *v)
 {
     if (!(g.sflags2 & HI(sf2refref))) return;
     g.sflags2 &= (uint16_t)~HI(sf2refref);
-    uint32_t a0 = RAM_BASE + RAM_OFF_RefRamMap;
+    uint32_t a0 = ram_addr(g.RefRamMap);
     uint16_t d2 = r16(rp_add(RAM(VmMap1), 2), 0);
     uint16_t d0 = (g.sflags & HI(sfhor)) ? 0xF : 2;
     d0 = (uint16_t)(d0 << d2);
@@ -231,15 +231,15 @@ void checkfo(struct Vid *v)
 {
     if (g.sflags & HI(sfpz)) return;
     if (!(g.disflags & HI(4))) return;
-    rp a3 = RAM(fofdata2);
+    const struct FoMan *a3 = g.fomen;
     for (int i = 0; i < 3; i++) {                         /* a3 only advances past a drawn entry */
-        int16_t d4 = (int16_t)r16(a3, 0);
+        int16_t d4 = (int16_t)a3->frame;
         if (d4 <= 0) continue;
         const uint8_t *a2 = rom_ptr(ART(FaceOffSprites) + rd32(rom_ptr(ART(FaceOffSprites)) + 4));
         unsigned idx = (unsigned)d4 * 2;
         int16_t d5 = (int16_t)(((rd16(a2 + idx + 2) - rd16(a2 + idx)) >> 3) - 1);
         a2 += rd16(a2 + idx);
-        uint16_t flags = r16(a3, 2);
+        uint16_t flags = a3->attribute;
         for (; d5 >= 0; d5--, a2 += 8) {
             uint16_t y = (uint16_t)(rd16(a2 + 2) + 0x80 + g.fodropy);
             int16_t x = (int16_t)rd16(a2);
@@ -253,7 +253,7 @@ void checkfo(struct Vid *v)
             tile += g.faceoffvrcset;
             sat_entry(v, y, a2[7], tile, (uint16_t)x);
         }
-        a3 = rp_add(a3, 4);
+        a3++;
     }
 }
 

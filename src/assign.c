@@ -289,11 +289,10 @@ void assfaceoffpl(struct Team *tm, struct SortObj *o)
         o->pflags &= (uint8_t)~(1 << pfna);
         o->temp1 = 0;
     }
-    rp fof = RAM(fofdata2);
-    if (PFLAG(o, pfteam)) fof = rp_add(fof, 4);
+    struct FoMan *fof = &g.fomen[PFLAG(o, pfteam) ? 1 : 0];
     uint16_t d0 = (uint16_t)((o->SPAnum >> 2) + 1);
     if (o->handed[0] == 0) d0 += 3;
-    w16(fof, 0, d0);
+    fof->frame = d0;
     if (PFLAG(o, pfjoycon)) return;
     if (o->pflags2 & (1 << pf2aip)) return;
     o->pflags2 |= 1 << pf2aip;

@@ -37,11 +37,18 @@ static inline struct Team *team_struct(int away) { return &g.teams[away ? 1 : 0]
  * (its newpos and newpnum bytes), so read and written by address (RAM(puckc)) */
 static inline uint16_t puck_carrier(void) { return r16(RAM(puckc), 0); }
 
+/* the message area's text (TextBuffer), after its String's length word */
+static inline uint8_t *text_buffer(void) { return g.mesarea + 2; }
+
 /* big-endian reads and writes of host bytes (the cartridge's data, the game's own buffers) */
 static inline uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
 static inline void wr16(uint8_t *p, uint16_t v) { p[0] = (uint8_t)(v >> 8); p[1] = (uint8_t)v; }
 static inline uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]; }
 static inline void wr32(uint8_t *p, uint32_t v) { p[0] = (uint8_t)(v >> 24); p[1] = (uint8_t)(v >> 16); p[2] = (uint8_t)(v >> 8); p[3] = (uint8_t)v; }
+
+/* palfadenew, the 64 colours the palette fades to: n of them from the cartridge's (big-endian
+ * words) at colour c */
+static inline void pal_load(unsigned c, const uint8_t *src, unsigned n) { for (unsigned i = 0; i < n; i++) g.palfadenew[c + i] = rd16(src + 2 * i); }
 
 /* a 16.16 position as the 68k reads it with move.l */
 #define POS32(o, f) (((int32_t)(o) << 16) | f)
@@ -300,7 +307,7 @@ void assgoaliecpu(struct Team *tm, struct SortObj *o);
 void checkanim(struct Team *tm, struct SortObj *o);
 void ClampYPosition(int16_t *d0, int16_t *d1, int16_t goalline, const struct SortObj *o);
 void AdjustFacingDirection(int16_t dir, struct SortObj *o);     /* d0 */
-void goaliesave(rp pcross, int16_t goalline, struct SortObj *gk);             /* a0, d3, a3 */
+void goaliesave(const struct PuckCross *pcross, int16_t goalline, struct SortObj *gk);   /* a0, d3, a3 */
 void assgoalietopuck(struct Team *tm, struct SortObj *o);
 int breakaway(struct SortObj *o);                      /* -> N flag (1 = not skating at the net) */
 int BreakawayOffsidesFlagSet(struct SortObj *o);       /* -> d0 (1 = breakaway) */
@@ -646,11 +653,11 @@ void ShowGoalBox(void);
 void PenaltyShotBox(void);
 void ShowThreeStars(void);
 void CalcStarScores(uint16_t d2);                       /* d2 = extra ice time a goalie needs */
-int16_t CalcTeamStarScores(struct Team *tm, struct Team *other, rp *out, uint16_t mintime);       /* a2, a3, a4, d5 -> d3 */
+int16_t CalcTeamStarScores(struct Team *tm, struct Team *other, uint8_t **out, uint16_t mintime);   /* a2, a3, a4, d5 -> d3 */
 uint16_t TakeTopStarScore(struct Team **tm);            /* -> d0, a2 */
 uint32_t GetPlayerNamePointer(uint16_t player, struct Team *tm);     /* d0, a2 -> a0 */
-rp ConvertByteToDigits(uint16_t bcd, rp dst);                      /* d0, a1 -> a1 */
-uint32_t FinalizeTextBuffer(rp end);                    /* a1 -> a1 = mesarea */
+uint8_t *ConvertByteToDigits(uint16_t bcd, uint8_t *dst);          /* d0, a1 -> a1 */
+uint32_t FinalizeTextBuffer(uint8_t *end);              /* a1 -> a1 = mesarea */
 uint32_t FormatPlayerName(uint16_t player, struct Team *tm);    /* d0, a2 -> a1 */
 uint32_t FormatPlayerNumInitial(uint16_t player, struct Team *tm);   /* d0, a2 -> a1 */
 uint32_t getname(uint16_t player, struct Team *tm);             /* d0, a2 -> a1 */
@@ -676,7 +683,7 @@ void PushBits(rp bits, uint16_t v, uint16_t range);         /* a3, d0, d1 */
 void WritePassBits(rp bits);                            /* a3 */
 void ResolveGames(void);
 void EncodePW(void);
-uint32_t FormatLastName(uint32_t name, rp out);         /* a0, a1 -> a1 = mesarea */
+uint32_t FormatLastName(uint32_t name, uint8_t *out);   /* a0, a1 -> a1 = mesarea */
 uint32_t FormatPlayerNameShort(uint16_t player, struct Team *tm);    /* d0, a2 -> a1 */
 uint32_t FormatPlayerNameLast(uint16_t player, struct Team *tm);     /* d0, a2 -> a1 */
 
@@ -693,7 +700,7 @@ void setupice(void);
 uint16_t defaultsprites(uint16_t chars);                /* d4 -> d4 */
 uint16_t defaultsprites2(uint16_t chars);               /* d4 -> d4 */
 uint16_t setupTeamBlocksMap(uint16_t chars);            /* d4 -> d4 */
-rp CopyTeamBlockMapData(uint32_t map, uint16_t team, uint16_t vram, rp dst);              /* a0, d0, d1, a1 -> a1 */
+uint8_t *CopyTeamBlockMapData(uint32_t map, uint16_t team, uint16_t vram, uint8_t *dst);  /* a0, d0, d1, a1 -> a1 */
 uint16_t ReloadRefHorTiles(void);                       /* -> d4 */
 void setupice_highlight(void);
 void clearTeamStats(void);                              /* falls into setteams */
@@ -872,7 +879,7 @@ void DrawPictureBox(void);
 struct Team *GetCardTeam(void);                         /* -> a0 */
 uint16_t GetCardPlayer(void);                           /* -> d0 */
 void BuildCardPlayerLists(void);
-void BuildCardPlayerList(struct Team *tm, rp list);           /* a0, a1 */
+void BuildCardPlayerList(struct Team *tm, uint8_t *list);     /* a0, a1 */
 
 /* ---- stats94.asm: the statistics and menu screens ---- */
 uint16_t GetPlayerCount(struct Team *team);             /* a2 -> d0 */

@@ -353,7 +353,7 @@ void PrintPlayerAssists(uint16_t player, struct Team *tm)
  * sflags bit 4 cleared, lastsfx = none, recbpr = M68K_RAM. */
 void ReadLineData(void)
 {
-    ReadSRAM(SYM_LineDataBase, 0x100, RAM_BASE + RAM_OFF_databuffer);
+    ReadSRAM(SYM_LineDataBase, 0x100, ram_addr(g.databuffer));
     g.sflags &= (uint16_t)~HI(sfwrap);
     g.lastsfx = 0xFFFF;
     g.recbpr = RAM_BASE;
@@ -390,7 +390,7 @@ void HiScoreScreen(void)
     g.disflags &= (uint16_t)~HI(df32c);
     screen_layout();
     forceblack();
-    ram_fill(RAM(palfadenew), 0, 0x80);
+    memset(g.palfadenew, 0, sizeof g.palfadenew);
     setVram_0();
     uint8_t at[2][sizeof str_HiScoreScreen_1];            /* (str_HiScoreScreen_1 and _2 at the league's places) */
     for (int k = 0; k < 2; k++) {
@@ -455,8 +455,9 @@ void newTitleScreen(void)
     p = picture(ART(TitleImg));
     c = dobitmap(p.pal, p.map, p.tiles, 0, 0, p.w, p.h, c, 8);
     g.palfadenew[0] = 0;
-    g.fofdata2[0] = 0;
-    w16(RAM(fofdata2), 4, 0);
+    g.fomen[0].frame = 0;                                 /* (clr.l: and its attribute) */
+    g.fomen[0].attribute = 0;
+    g.fomen[1].frame = 0;
     g.smallfontchars = c;
     DecompressGraphicsWithCallback(ART(SmallFontMap) + 8, c, rom_find(SYM_newTitleScreen, SYM_CreditsPrintRow, font, 8));
     printz(str_newTitleScreen_8, sizeof str_newTitleScreen_8);
@@ -526,7 +527,7 @@ void VBlank_TitleScreen(void)
         if (g.Sattsize) {
             uint16_t n = g.Sattsize;
             g.Sattsize = 0;
-            DoDMA(RAM_BASE + RAM_OFF_Satt, n, g.VSPRITES);
+            DoDMA(ram_addr(g.Satt), n, g.VSPRITES);
         }
         cramfade();
     }
@@ -582,11 +583,11 @@ void CreditsScrollStep(void)
 void UnpackPicture(uint32_t pic)
 {
     uint32_t in = pic;
-    rp out = RAM(picturebuf);
+    uint8_t *out = g.picturebuf;
     uint16_t n = m16(in);
     in += 2;
-    w16(out, 0, n);
-    out = rp_add(out, 2);
+    wr16(out, n);
+    out += 2;
     uint16_t rows = (uint16_t)((uint16_t)(n << 3) - 1);
     do {
         uint32_t b = (uint32_t)m8(in) << 24 | m8(in + 1) << 16 | m8(in + 2) << 8, v = 0;
@@ -594,8 +595,8 @@ void UnpackPicture(uint32_t pic)
         g.picturebits = b;
         for (int px = 0; px < 8; px++)                    /* pixel px: bits 31-3px .. 29-3px to nibble 7-px */
             v |= ((b & (0xE0000000u >> (3 * px))) >> (px + 1)) + (5u << (28 - 4 * px));
-        w32(out, 0, v);
-        out = rp_add(out, 4);
+        wr32(out, v);
+        out += 4;
     } while (rows-- != 0);
 }
 
@@ -627,10 +628,10 @@ uint32_t PlayedByText(uint16_t user)
     g.nameentrybuf[2 + (int16_t)g.namelength] = 0;
     g.namelength = (uint16_t)(((g.namelength + 1) & 0xFFFE) + 2);
     w16(RAM(nameentrybuf), 0, g.namelength);
-    CopyString(SYM_PlayedByTxt, RAM_BASE + RAM_OFF_TempBuffer);
-    appstring(RAM_BASE + RAM_OFF_nameentrybuf, RAM_BASE + RAM_OFF_TempBuffer);
-    appendz(str_PlayedByText_1, sizeof str_PlayedByText_1, RAM_BASE + RAM_OFF_TempBuffer);
-    return PlayedByExit(RAM_BASE + RAM_OFF_TempBuffer);
+    CopyString(SYM_PlayedByTxt, ram_addr(g.TempBuffer));
+    appstring(ram_addr(g.nameentrybuf), ram_addr(g.TempBuffer));
+    appendz(str_PlayedByText_1, sizeof str_PlayedByText_1, ram_addr(g.TempBuffer));
+    return PlayedByExit(ram_addr(g.TempBuffer));
 }
 
 /* title94.asm:PlayedByNone. No user: the empty String. */
@@ -650,7 +651,7 @@ uint16_t AttribAdjust(uint16_t v)
  * ReadLineData after. */
 void WriteLineData(void)
 {
-    WriteSRAM(SYM_LineDataBase, 0x100, RAM_BASE + RAM_OFF_databuffer);
+    WriteSRAM(SYM_LineDataBase, 0x100, ram_addr(g.databuffer));
     MakeSRAMChecksum();
     g.sflags &= (uint16_t)~HI(sfwrap);
     g.lastsfx = 0xFFFF;
@@ -663,7 +664,7 @@ uint16_t GetLeagueCrowdRecord(void)
 {
     uint16_t best = 0, team = 0;
     for (int16_t t = (int16_t)(league.teams - 1); t >= 0; t--) {
-        ReadCrowdRecord((uint32_t)t, RAM_BASE + RAM_OFF_ThreeStars);
+        ReadCrowdRecord((uint32_t)t, ram_addr(g.ThreeStars));
         uint16_t db = g.ThreeStars[8];
         if (db == 0) db = 0x50;
         if ((int16_t)db > (int16_t)best) {
@@ -679,7 +680,7 @@ uint16_t GetLeagueCrowdRecord(void)
 void ClearWinRecords(void)
 {
     for (int i = 0; i < 8; i++) ram_fill(rp_add(RAM(ThreeStars), i * 0x10 + 8), 0, 4);
-    WriteSRAM(SYM_TeamRecBase, 0x80, RAM_BASE + RAM_OFF_ThreeStars);
+    WriteSRAM(SYM_TeamRecBase, 0x80, ram_addr(g.ThreeStars));
     MakeSRAMChecksum();
 }
 

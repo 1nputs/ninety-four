@@ -733,26 +733,26 @@ goal:
     }
     if (g.ScoreSumbytes == 0x168)
         g.ScoreSumbytes -= 6;                            /* summary full: overwrite the last entry */
-    rp e = rp_add(RAM(ScoreSum), g.ScoreSumbytes);
+    uint8_t *e = g.ScoreSum + g.ScoreSumbytes;
     g.ScoreSumbytes += 6;
-    w16(e, 0, GetPeriodTimeRemaining());
-    w8(e, 2, (uint8_t)(2 + a2->ap - a1->ap));
+    wr16(e, GetPeriodTimeRemaining());
+    e[2] = (uint8_t)(2 + a2->ap - a1->ap);
     g.CwdExciteLvl += 0x1E;
     if (a2 != team_struct(0)) {
         g.CwdExciteLvl -= 0x14;                          /* less for an away goal */
-        w8(e, 2, (uint8_t)(r8(e, 2) | 0x80));
+        e[2] = (uint8_t)(e[2] | 0x80);
     }
     int16_t scorer = (int16_t)a2->lasttouch;
-    w8(e, 3, (uint8_t)scorer);
-    w8(e, 4, 0xFF); w8(e, 5, 0xFF);                      /* no assists yet */
+    e[3] = (uint8_t)scorer;
+    e[4] = 0xFF; e[5] = 0xFF;                            /* no assists yet */
     a2->pgoals[scorer]++;
     int16_t as = (int16_t)a2->assist1;
     if (as >= 0 && as != scorer) {
-        w8(e, 4, (uint8_t)as);
+        e[4] = (uint8_t)as;
         a2->passists[as]++;
         as = (int16_t)a2->assist2;
         if (as >= 0 && as != scorer) {
-            w8(e, 5, (uint8_t)as);
+            e[5] = (uint8_t)as;
             a2->passists[as]++;
         }
     }
@@ -760,7 +760,7 @@ goal:
     if (gk >= 0)
         a1->pgoals[gk]++;                                      /* goal against */
     if (!(g.sflags4 & HI(5)) && !(g.gmode2 & HI(0)))     /* (rules: plus/minus; not a penalty shot's or a shootout's) */
-        rules_count_goal(a2 == team_struct(1), r8(e, 2) & 0x7F);
+        rules_count_goal(a2 == team_struct(1), e[2] & 0x7F);
     ChkShotStat();
     PenGoalStuff(a1, a2);
     g.BA_PS_flags &= (uint16_t)~HI(3);
@@ -775,8 +775,8 @@ goal:
     o->Ypos = (int16_t)(o->Ypos >= 0 ? 0x110 : -0x110);
     o->Zvel = 0x600;
     o->Zpos = 0;
-    g.puckcross2 = 0xFF;
-    g.puckcross6 = 0xFF;
+    g.puckcross[0].frames |= 0xFF00;                  /* (st puckcross2: the high byte) */
+    g.puckcross[1].frames |= 0xFF00;
     o->pflags |= 1 << pfnc;
     assreplace(0x1A, o);                                 /* puckunflip */
     SetSPA(o + 1, SPAsiren);                             /* the goal light object follows the puck */

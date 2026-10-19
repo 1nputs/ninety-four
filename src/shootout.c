@@ -41,9 +41,9 @@ void NextShooter(struct SortObj *o)
     StartShootoutPath(o);
     g.BA_Team = g.shootoutteam;
     g.BA_Goalie_SCnum = 0xB;
-    rp list = RAM(homeshooters);
-    if (g.shootoutteam) { g.BA_Goalie_SCnum = 5; list = RAM(awayshooters); }
-    g.BA_Skater_Offset = r16(list, (int16_t)(g.homeshootnum << 1));
+    uint8_t *list = g.homeshooters;
+    if (g.shootoutteam) { g.BA_Goalie_SCnum = 5; list = g.awayshooters; }
+    g.BA_Skater_Offset = rd16(list + ((int16_t)(g.homeshootnum << 1)));
     sortobj(puckscnum)->pflags &= (uint8_t)~4;
 }
 
@@ -175,10 +175,10 @@ void ShooterSelectList(struct Team *tm)
     g.screentimer = n;
     g.PlayerScrollCtr = 0;
     g.VertLineScrolling = 0;
-    rp satt = RAM(Satt);
+    uint8_t *satt = g.Satt;
     uint16_t p = first, i = 0;
     do {
-        w8(satt, (int16_t)i, (uint8_t)p);
+        satt[(int16_t)i] = (uint8_t)p;
         if (p == cur) g.VertLineScrolling = i;
         p++;
         i++;
@@ -215,7 +215,7 @@ void ShooterSelectList(struct Team *tm)
             ProcessInputWithRepeat(&d1, d2, d3);
             if (d1 & 0x80) return;
             if (d1 & 0x20) {                              /* .pick */
-                w16(list, (int16_t)(uint16_t)(g.TestList[0] << 1), r8(satt, (int16_t)g.VertLineScrolling));
+                w16(list, (int16_t)(uint16_t)(g.TestList[0] << 1), satt[(int16_t)g.VertLineScrolling]);
                 return;
             }
             if (d1 & 2) { by = 1; scroll = 1; break; }
@@ -251,14 +251,14 @@ void PrintShooterList(struct Team *tm)
     if (a1 == SYM_GAttribOverall) a1 = SYM_ShooterOverallTxt2;
     a1 = print(a1);
     uint32_t sel = rd32(rom_ptr(a1));
-    rp satt = RAM(Satt);
+    uint8_t *satt = g.Satt;
     uint16_t row = g.PlayerScrollCtr, rows = (uint16_t)(g.screentimer - row);
     if (rows > 5) rows = 5;
     g.printy = 2;
     do {
         printsmallz(str_PrintShooterList_2, sizeof str_PrintShooterList_2);
         if (row == g.VertLineScrolling) g.printa = 0xC000;
-        GetNameandAttrib(r8(satt, (int16_t)row), sel, tm);
+        GetNameandAttrib(satt[(int16_t)row], sel, tm);
         row++;
     } while (rows-- != 0);
 }

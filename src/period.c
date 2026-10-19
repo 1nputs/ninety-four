@@ -107,12 +107,12 @@ void PrintPlayerNameRight(uint16_t player, struct Team *tm)
 {
     g.iconplayer = player;
     uint32_t a1 = FormatPlayerName(player, tm);
-    rp a0 = ram_at(a1);
-    uint16_t d5 = r16(a0, 0);
+    const uint8_t *a0 = ram_bytes(ram_at(a1), m16(a1));    /* (mesarea) */
+    uint16_t d5 = rd16(a0);
     int16_t d0 = (int16_t)d5;
-    if (r8(a0, d5 - 1) == 0) {
+    if (a0[d5 - 1] == 0) {
         d0--;
-        if (r8(a0, d5 - 2) == 0) d0--;
+        if (a0[d5 - 2] == 0) d0--;
     }
     d0 = (int16_t)(d0 + g.printx - 0x29);
     if (d0 >= 0) g.printx -= d0;
@@ -188,8 +188,8 @@ void DisplayTeamStatsScreen(void)
 void PrintStatValue(const uint8_t *a0, struct Team *tm)
 {
     rp t = team_place(tm);                                /* (the stats table holds offsets in a team struct) */
-    uint32_t mes = RAM_BASE + RAM_OFF_mesarea;
-    w16(ram_at(mes), 0, 2);
+    uint32_t mes = ram_addr(g.mesarea);
+    wr16(g.mesarea, 2);
     uint16_t off = rd16(a0);
     if (off == 0xFFFF) {
         uint32_t d0 = (uint32_t)tm->score * 0x64;
@@ -220,7 +220,7 @@ void PrintStatValue(const uint8_t *a0, struct Team *tm)
             }
         }
     }
-    g.printx -= r16(ram_at(mes), 0) >> 1;
+    g.printx -= rd16(g.mesarea) >> 1;
     print(mes);
 }
 
@@ -322,8 +322,7 @@ void PeriodStatsScreen(void)
     Framer(8, 8);
     printz(str_PeriodStatsScreen_3, sizeof str_PeriodStatsScreen_3);
     c = team_logo(g.VisTeam, c);
-    rp pal = RAM(palfadenew);
-    ram_copy(rp_add(pal, 0x60), rp_add(pal, 0x40), 0x20);
+    for (int i = 0; i < 0x10; i++) g.palfadenew[0x30 + i] = g.palfadenew[0x20 + i];   /* palette 2 to 3 */
     printz(str_PeriodStatsScreen_4, sizeof str_PeriodStatsScreen_4);
     team_logo(g.HomeTeam, c);
     printz(str_PeriodStatsScreen_5, sizeof str_PeriodStatsScreen_5);

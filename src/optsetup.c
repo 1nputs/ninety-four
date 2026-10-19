@@ -620,10 +620,10 @@ void DrawTeamLogo(void)
     uint16_t chars = home ? g.homepicchars : g.vispicchars, team = g.logoteam;
     uint32_t bmp = rd32(rom_ptr(LG(TeamLogoBitmaps) + (uint16_t)(team << 2)));
     uint32_t pal = LG(TeamLogoPalettes) + (uint32_t)(int16_t)(uint16_t)((uint16_t)(team << 5) - (home ? 0x20 : 0x40));
-    uint8_t keep[8];
-    ram_read(keep, rp_add(RAM(palfadenew), 0x22), 8);
+    uint16_t keep[4];                                     /* (colours $11-$14 kept) */
+    for (int i = 0; i < 4; i++) keep[i] = g.palfadenew[0x11 + i];
     dobitmap(pal, pic_map(bmp), bmp + 8, 0, 0, 6, 6, chars, home ? 2 : 4);
-    ram_write(rp_add(RAM(palfadenew), 0x22), keep, 8);
+    for (int i = 0; i < 4; i++) g.palfadenew[0x11 + i] = keep[i];
     g.palcount = 0x64;
 }
 

@@ -34,11 +34,11 @@ void UnpackNibbles(uint32_t src, uint16_t count)
 uint16_t WeightedRandomSelect(uint16_t n)
 {
     uint16_t off = RAM_OFF_nibblebuffer, sum = 0;
-    while (n--) { sum += r16(ram_at(RAM_BASE + off), 0); off += 2; }
+    while (n--) { sum += m16(RAM_BASE + off); off += 2; }
     int16_t r = (int16_t)randomd0(sum);
     do {
         off -= 2;
-        r = (int16_t)(r - r16(ram_at(RAM_BASE + off), 0));
+        r = (int16_t)(r - m16(RAM_BASE + off));
     } while (r >= 0);
     return (uint16_t)((uint16_t)(off - RAM_OFF_nibblebuffer) >> 1);
 }
@@ -846,7 +846,7 @@ static struct Text printsmall_p(struct Text s)
         uint16_t tile;
         if (c == 0x40) tile = 0x7FF;
         else if (c == 0x5E) { g.printx++; xyVmMap(); continue; }
-        else tile = (uint16_t)(font_char((uint8_t)c) + r16(ram_at(RAM_BASE + (chars + g.printfontset)), 0));
+        else tile = (uint16_t)(font_char((uint8_t)c) + m16(RAM_BASE + (chars + g.printfontset)));
         vdp_data((uint16_t)(tile + st.attr));
         g.printx++;
     }
@@ -950,39 +950,39 @@ void FormatAndPrintTime(uint16_t v)
 
 /* the String length word and padding that end PushTime / PushNumber: the text runs from p to
  * end; a pad byte keeps the String even. -> its address */
-static uint32_t push_string(rp p, rp end)
+static uint32_t push_string(uint8_t *p, const uint8_t *end)
 {
-    uint16_t len = (uint16_t)(rp_diff(end, p) + 2);
-    if (len & 1) { w8_prev(&p, 0); len++; }
-    p = rp_add(p, -2);
-    w16(p, 0, len);
-    return rp_addr(p);
+    uint16_t len = (uint16_t)(end - p + 2);
+    if (len & 1) { *--p = 0; len++; }
+    p -= 2;
+    wr16(p, len);
+    return ram_addr(p);
 }
 
 /* video94.asm:PushTime. d0 = seconds -> a1 = a String " m:ss" (or "mm:ss") in mesarea. */
 uint32_t PushTime(uint16_t t)
 {
-    rp end = rp_add(RAM(mesarea), 30), p = end;
+    uint8_t *end = g.mesarea + 30, *p = end;
     uint32_t d0 = m68k_divu((uint32_t)(int32_t)(int16_t)t, 10);
-    w8_prev(&p, (uint8_t)((d0 >> 16) + '0'));
+    *--p = (uint8_t)((d0 >> 16) + '0');
     d0 = m68k_divu((uint32_t)(int32_t)(int16_t)d0, 6);
-    w8_prev(&p, (uint8_t)((d0 >> 16) + '0'));
-    w8_prev(&p, ':');
+    *--p = (uint8_t)((d0 >> 16) + '0');
+    *--p = ':';
     d0 = m68k_divu((uint32_t)(int32_t)(int16_t)d0, 10);
-    w8_prev(&p, (uint8_t)((d0 >> 16) + '0'));
-    w8_prev(&p, ' ');
-    if ((uint16_t)d0) w8(p, 0, (uint8_t)(d0 + '0'));
+    *--p = (uint8_t)((d0 >> 16) + '0');
+    *--p = ' ';
+    if ((uint16_t)d0) *p = (uint8_t)(d0 + '0');
     return push_string(p, end);
 }
 
 /* video94.asm:PushNumber. d0 -> a1 = a String of it in decimal, no leading zeros. */
 uint32_t PushNumber(uint16_t n)
 {
-    rp end = RAM(PushNumberBuf), p = end;
+    uint8_t *end = g.PushWidthBuf + sizeof g.PushWidthBuf, *p = end;   /* (PushNumberBuf: the text ends there) */
     uint32_t d0 = n;
     do {
         d0 = m68k_divu((uint32_t)(int32_t)(int16_t)d0, 10);
-        w8_prev(&p, (uint8_t)((d0 >> 16) + '0'));
+        *--p = (uint8_t)((d0 >> 16) + '0');
     } while ((uint16_t)d0);
     return push_string(p, end);
 }
@@ -991,7 +991,7 @@ uint32_t PushNumber(uint16_t n)
  * in width columns (spaces before the first digit) at PushWidthBuf. */
 uint32_t PushNumberWidth(uint16_t n, uint16_t width)
 {
-    rp buf = RAM(PushWidthBuf), p = rp_add(buf, 2);
+    uint8_t *buf = ram_bytes(RAM(PushWidthBuf), (uint16_t)(width + 3)), *p = buf + 2;
     uint32_t div = 1;
     for (uint16_t i = (uint16_t)(width - 1); i; i--) div = (uint16_t)div * 10u;
     uint8_t fill = ' ';
@@ -1000,34 +1000,35 @@ uint32_t PushNumberWidth(uint16_t n, uint16_t width)
         d0 = m68k_divu((uint32_t)(int32_t)(int16_t)d0, (uint16_t)div);
         if ((uint16_t)d0 == 0 && (uint16_t)div != 1) d0 = (d0 & 0xFFFF0000) | fill;
         else { fill = '0'; d0 = (d0 & 0xFFFF0000) | (uint16_t)(d0 + '0'); }
-        w8_next(&p, (uint8_t)d0);
+        *p++ = (uint8_t)d0;
         d0 = d0 >> 16 | d0 << 16;                    /* swap: the remainder goes on */
         div = m68k_divu(div, 10);                    /* divu.w #10 of the whole long */
     } while ((uint16_t)div);
-    uint16_t len = (uint16_t)(rp_diff(p, buf));
-    if (len & 1) { w8_next(&p, 0); len++; }
-    w16(buf, 0, len);
-    return rp_addr(buf);
+    uint16_t len = (uint16_t)(p - buf);
+    if (len & 1) { *p++ = 0; len++; }
+    wr16(buf, len);
+    return ram_addr(buf);
 }
 
 /* video94.asm:appstring. a1 = String, a3 = String in RAM: append the first to the second (the
  * text of a3 ends at its first zero byte after the first character). */
 static void appstring_p(struct Text src, uint32_t buf)
 {
-    rp dst = ram_at(buf), a0 = rp_add(dst, 2);
-    int16_t n = (int16_t)(r16(dst, 0) - 3);
+    uint16_t have = m16(buf), more = text_word(&src);
+    uint8_t *dst = ram_bytes(ram_at(buf), (uint16_t)((have > 2 ? have : 2) + more)), *a0 = dst + 2;
+    int16_t n = (int16_t)(have - 3);
     if (n >= 0) {
-        do a0 = rp_add(a0, 1); while (r8(a0, 0) != 0 && n-- != 0);
+        do a0++; while (*a0 != 0 && n-- != 0);
     }
-    n = (int16_t)(text_word(&src) - 3);
+    n = (int16_t)(more - 3);
     if (n < 0) return;
     do {
         uint8_t b = text_next(&src);
-        w8_next(&a0, b);
-        if (b == 0) a0 = rp_add(a0, -1);
+        *a0++ = b;
+        if (b == 0) a0--;
     } while (n-- != 0);
-    if ((rp_addr(a0)) & 1) w8_next(&a0, 0);
-    w16(dst, 0, (uint16_t)(rp_diff(a0, dst)));
+    if (ram_addr(a0) & 1) *a0++ = 0;
+    wr16(dst, (uint16_t)(a0 - dst));
 }
 
 void appstring(uint32_t src, uint32_t buf) { appstring_p((struct Text){ NULL, src }, buf); }

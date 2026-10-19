@@ -411,10 +411,10 @@ void Begin(void)
 {
     cpu_set_sr(0x2700);
     ram_fill(RAM(VSCRLPM), 0, 0xDEF4 - RAM_OFF_VSCRLPM);
-    rp palflag = RAM(PALflag);
-    w16(palflag, 0, 0);
+    uint8_t *palflag = g.PALflag;
+    wr16(palflag, 0);
     g.PalMode = vdp_status() & 1;                         /* status bit 0: PAL (50 Hz) */
-    if (g.PalMode) w8(palflag, 0, (uint8_t)(r8(palflag, 0) | 1));
+    if (g.PalMode) palflag[0] = (uint8_t)(palflag[0] | 1);
     p_initialZ80();
     p_turnoff();
     p_music_vblank();

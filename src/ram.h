@@ -392,6 +392,33 @@ _Static_assert(offsetof(struct Voice, unused2) == 0x002, "Voice unused2");
 _Static_assert(offsetof(struct Voice, patch) == 0x003, "Voice patch");
 _Static_assert(offsetof(struct Voice, volume) == 0x004, "Voice volume");
 
+/* a menu's state */
+struct RAM_PACKED MenuPos {
+    uint16_t item;  /* the item chosen */
+    uint16_t top;  /* the first shown (SelectGoalieMenu: the last, its goalies) */
+};
+_Static_assert(sizeof(struct MenuPos) == 0x4, "MenuPos size");
+_Static_assert(offsetof(struct MenuPos, item) == 0x000, "MenuPos item");
+_Static_assert(offsetof(struct MenuPos, top) == 0x002, "MenuPos top");
+
+/* a faceoff man's frame and attribute (fofdata2) */
+struct RAM_PACKED FoMan {
+    uint16_t frame;
+    uint16_t attribute;
+};
+_Static_assert(sizeof(struct FoMan) == 0x4, "FoMan size");
+_Static_assert(offsetof(struct FoMan, frame) == 0x000, "FoMan frame");
+_Static_assert(offsetof(struct FoMan, attribute) == 0x002, "FoMan attribute");
+
+/* where and when the puck crosses a goal line (findpc) */
+struct RAM_PACKED PuckCross {
+    int16_t x;  /* where the puck crosses the goal line */
+    uint16_t frames;  /* frames until it does ($FFFF: never; st puckcross2 sets the high byte) */
+};
+_Static_assert(sizeof(struct PuckCross) == 0x4, "PuckCross size");
+_Static_assert(offsetof(struct PuckCross, x) == 0x000, "PuckCross x");
+_Static_assert(offsetof(struct PuckCross, frames) == 0x002, "PuckCross frames");
+
 struct RAM_PACKED Ram {
     struct ReplayFrame replay[458];  /* $FFFF0000: the instant replay's frames, a ring to replayend; between games the save RAM's copy, and the game's RAM kept during a highlight: those by address (M68K_RAM) */
     uint8_t replayend[0xAC];  /* $FFFFAF54: end of the replay frames ($62 bytes each from M68K_RAM); suba4, adda43 and the record step wrap here */
@@ -468,9 +495,7 @@ struct RAM_PACKED Ram {
     uint16_t wcradiusy;  /* $FFFFBD24 */
     uint16_t palcount;  /* $FFFFBD26 */
     uint16_t palfadenew[0x40];  /* $FFFFBD28 */
-    uint32_t fofdata2[0x2];  /* $FFFFBDA8 */
-    uint16_t fofdata;  /* $FFFFBDB0 */
-    uint8_t _padBDB2[0x2];
+    struct FoMan fomen[3];  /* $FFFFBDA8: the faceoff men: the two players, then the ref (fofdata) (fofdata2) */
     struct RinkObj pads[7];  /* $FFFFBDB4: the pads' markers (Joy1Struct the second; the fourth the replay camera, ReplayStarStruct), then the gloves (glovestruct) (pads) */
     uint16_t PadControlBits;  /* $FFFFBE78 */
     uint16_t padcont[0x6];  /* $FFFFBE7A */
@@ -483,12 +508,7 @@ struct RAM_PACKED Ram {
     uint16_t passplayer;  /* $FFFFBEE0 */
     uint16_t glovecords;  /* $FFFFBEE2 */
     uint16_t threat;  /* $FFFFBEE4 */
-    uint16_t puckcross;  /* $FFFFBEE6 */
-    uint8_t puckcross2;  /* $FFFFBEE8 */
-    uint8_t _padBEE9[0x1];
-    uint16_t puckcross4;  /* $FFFFBEEA */
-    uint8_t puckcross6;  /* $FFFFBEEC */
-    uint8_t _padBEED[0x1];
+    struct PuckCross puckcross[2];  /* $FFFFBEE6: the puck's crossings of the top goal line, then the bottom's (puckcross) */
     uint16_t lj1;  /* $FFFFBEEE */
     uint16_t lj2;  /* $FFFFBEF0 */
     uint16_t lj3;  /* $FFFFBEF2 */
@@ -555,10 +575,10 @@ struct RAM_PACKED Ram {
     uint16_t deltay;  /* $FFFFBF9E */
     uint16_t collflag;  /* $FFFFBFA0 */
     uint16_t evalue;  /* $FFFFBFA2 */
-    uint16_t mesarea;  /* $FFFFBFA4 */
-    uint16_t TextBuffer[0x31];  /* $FFFFBFA6 */
+    uint8_t mesarea[0x64];  /* $FFFFBFA4: the message area, a String as the cartridge's (a big-endian length word counting itself, the text: TextBuffer) (mesarea) */
     uint8_t PushWidthBuf[0x8];  /* $FFFFC008 */
-    uint16_t PushNumberBuf;  /* $FFFFC010 */
+    uint8_t PushNumberBuf;  /* $FFFFC010 */
+    uint8_t _padC011[0x1];
     uint8_t redrawicons;  /* $FFFFC012 */
     uint8_t _padC013[0x1];
     uint16_t ltack;  /* $FFFFC014 */
@@ -639,7 +659,7 @@ struct RAM_PACKED Ram {
     uint16_t WinBits;  /* $FFFFCEF2 */
     uint8_t potree[0x20];  /* $FFFFCEF4 */
     uint8_t PlList[0xC];  /* $FFFFCF14 */
-    uint32_t menuitem;  /* $FFFFCF20: menu state: selected item, then (+2) first item shown */
+    struct MenuPos menu;  /* $FFFFCF20: the menu's state (menuitem) */
     uint32_t menulist;  /* $FFFFCF24 */
     uint32_t menudraw;  /* $FFFFCF28 */
     uint16_t TickerNum;  /* $FFFFCF2C */
@@ -905,8 +925,8 @@ _Static_assert(offsetof(struct Ram, wcradiusx) == 0xBD22, "wcradiusx");
 _Static_assert(offsetof(struct Ram, wcradiusy) == 0xBD24, "wcradiusy");
 _Static_assert(offsetof(struct Ram, palcount) == 0xBD26, "palcount");
 _Static_assert(offsetof(struct Ram, palfadenew) == 0xBD28, "palfadenew");
-_Static_assert(offsetof(struct Ram, fofdata2) == 0xBDA8, "fofdata2");
-_Static_assert(offsetof(struct Ram, fofdata) == 0xBDB0, "fofdata");
+_Static_assert(offsetof(struct Ram, fomen) == 0xBDA8, "fomen");
+/* fofdata at 0xBDB0 overlaps the previous field; use RAM_OFF_fofdata */
 _Static_assert(offsetof(struct Ram, pads) == 0xBDB4, "pads");
 /* Joy1Struct at 0xBDD0 overlaps the previous field; use RAM_OFF_Joy1Struct */
 /* ReplayStarStruct at 0xBE08 overlaps the previous field; use RAM_OFF_ReplayStarStruct */
@@ -926,9 +946,9 @@ _Static_assert(offsetof(struct Ram, passplayer) == 0xBEE0, "passplayer");
 _Static_assert(offsetof(struct Ram, glovecords) == 0xBEE2, "glovecords");
 _Static_assert(offsetof(struct Ram, threat) == 0xBEE4, "threat");
 _Static_assert(offsetof(struct Ram, puckcross) == 0xBEE6, "puckcross");
-_Static_assert(offsetof(struct Ram, puckcross2) == 0xBEE8, "puckcross2");
-_Static_assert(offsetof(struct Ram, puckcross4) == 0xBEEA, "puckcross4");
-_Static_assert(offsetof(struct Ram, puckcross6) == 0xBEEC, "puckcross6");
+/* puckcross2 at 0xBEE8 overlaps the previous field; use RAM_OFF_puckcross2 */
+/* puckcross4 at 0xBEEA overlaps the previous field; use RAM_OFF_puckcross4 */
+/* puckcross6 at 0xBEEC overlaps the previous field; use RAM_OFF_puckcross6 */
 _Static_assert(offsetof(struct Ram, lj1) == 0xBEEE, "lj1");
 _Static_assert(offsetof(struct Ram, lj2) == 0xBEF0, "lj2");
 _Static_assert(offsetof(struct Ram, lj3) == 0xBEF2, "lj3");
@@ -994,7 +1014,7 @@ _Static_assert(offsetof(struct Ram, deltay) == 0xBF9E, "deltay");
 _Static_assert(offsetof(struct Ram, collflag) == 0xBFA0, "collflag");
 _Static_assert(offsetof(struct Ram, evalue) == 0xBFA2, "evalue");
 _Static_assert(offsetof(struct Ram, mesarea) == 0xBFA4, "mesarea");
-_Static_assert(offsetof(struct Ram, TextBuffer) == 0xBFA6, "TextBuffer");
+/* TextBuffer at 0xBFA6 overlaps the previous field; use RAM_OFF_TextBuffer */
 _Static_assert(offsetof(struct Ram, PushWidthBuf) == 0xC008, "PushWidthBuf");
 _Static_assert(offsetof(struct Ram, PushNumberBuf) == 0xC010, "PushNumberBuf");
 _Static_assert(offsetof(struct Ram, redrawicons) == 0xC012, "redrawicons");
@@ -1073,7 +1093,7 @@ _Static_assert(offsetof(struct Ram, pojoy) == 0xCEF0, "pojoy");
 _Static_assert(offsetof(struct Ram, WinBits) == 0xCEF2, "WinBits");
 _Static_assert(offsetof(struct Ram, potree) == 0xCEF4, "potree");
 _Static_assert(offsetof(struct Ram, PlList) == 0xCF14, "PlList");
-_Static_assert(offsetof(struct Ram, menuitem) == 0xCF20, "menuitem");
+_Static_assert(offsetof(struct Ram, menu) == 0xCF20, "menu");
 _Static_assert(offsetof(struct Ram, menulist) == 0xCF24, "menulist");
 _Static_assert(offsetof(struct Ram, menudraw) == 0xCF28, "menudraw");
 _Static_assert(offsetof(struct Ram, TickerNum) == 0xCF2C, "TickerNum");

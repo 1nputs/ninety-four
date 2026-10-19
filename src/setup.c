@@ -92,7 +92,7 @@ uint16_t setupEASNmap(void)
 void setupIceRinkPal(void)
 {
     uint32_t pal = ART(Rinktilelist) + rd32(rom_ptr(ART(Rinktilelist)));
-    for (int i = 0; i < 0x40; i++) w8(RAM(palfadenew), i, rom_ptr(pal)[i]);
+    pal_load(0, rom_ptr(pal), 0x20);
 }
 
 /* setup94.asm:ReloadEnergyBarTiles. -> d4 = the char after them */
@@ -108,8 +108,7 @@ void setplayercolors(void)
     for (int away = 0; away < 2; away++) {
         uint32_t data = team_struct(away)->data;
         const uint8_t *src = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 2)) + 0x20 * away);
-        rp dst = rp_add(RAM(palfadenew), 0x40 + 0x20 * away);
-        for (int i = 0; i < 0x20; i++) w8(dst, i, src[i]);
+        pal_load(0x20 + 0x10 * away, src, 0x10);
     }
 }
 
@@ -200,13 +199,13 @@ uint16_t defaultsprites2(uint16_t chars)
 /* setup94.asm:CopyTeamBlockMapData. a0 = the TeamBlocks map, d0 = team, d1 = VRAM address,
  * a1 = map word buffer: copy the team's 22 block chars from the loaded tiles to d1 on (VRAM to
  * VRAM DMA) and store their map words (priority, palette of the map word, the char) -> a1. */
-rp CopyTeamBlockMapData(uint32_t map, uint16_t team, uint16_t vram, rp dst)
+uint8_t *CopyTeamBlockMapData(uint32_t map, uint16_t team, uint16_t vram, uint8_t *dst)
 {
     const uint8_t *src = rom_ptr(map + 4 + (uint16_t)(team * 0x2C));
-    for (int i = 0; i < 0x16; i++, src += 2, dst = rp_add(dst, 2)) {
-        w8(dst, 0, src[0]);
-        w8(dst, 1, 0);
-        w16(dst, 0, (uint16_t)((r16(dst, 0) & 0xF800) | (vram >> 5) | 0x8000));
+    for (int i = 0; i < 0x16; i++, src += 2, dst += 2) {
+        dst[0] = src[0];
+        dst[1] = 0;
+        wr16(dst, (uint16_t)((rd16(dst) & 0xF800) | (vram >> 5) | 0x8000));
         uint16_t from = (uint16_t)((((rd16(src) & 0x7FF) + g.basetileoffset + 0x2C)) << 5);
         DoDMA_nd2(0x20, vram, from);
         vram += 0x20;
@@ -216,12 +215,12 @@ rp CopyTeamBlockMapData(uint32_t map, uint16_t team, uint16_t vram, rp dst)
 
 /* a team's block for setupTeamBlocksMap: its row of the cartridge's (CopyTeamBlockMapData), or a
  * banner of the league's own, its 22 tiles straight from the league to vram (native/banner.c) */
-static rp CopyTeamBlock(uint32_t map, uint16_t team, uint16_t vram, rp dst)
+static uint8_t *CopyTeamBlock(uint32_t map, uint16_t team, uint16_t vram, uint8_t *dst)
 {
     if (team >= LEAGUE_MAX || !league.block_tiles[team]) return CopyTeamBlockMapData(map, league_block(team), vram, dst);
     uint32_t own = LG(Teamblocksmap) + rd32(rom_ptr(LG(Teamblocksmap) + 4)) + 4 + (uint32_t)league_block(team) * 0x2C;
     DoDMApro(league.block_tiles[team], 0x16 * 16, vram);
-    for (int i = 0; i < 0x16; i++, dst = rp_add(dst, 2)) w16(dst, 0, (uint16_t)((rd16(rom_ptr(own + 2u * (uint32_t)i)) & 0xF800) | ((vram >> 5) + i) | 0x8000));
+    for (int i = 0; i < 0x16; i++, dst += 2) wr16(dst, (uint16_t)((rd16(rom_ptr(own + 2u * (uint32_t)i)) & 0xF800) | ((vram >> 5) + i) | 0x8000));
     return dst;
 }
 
@@ -231,7 +230,7 @@ static rp CopyTeamBlock(uint32_t map, uint16_t team, uint16_t vram, rp dst)
 uint16_t setupTeamBlocksMap(uint16_t chars)
 {
     g.basetileoffset = chars;
-    rp buf = RAM(TeamBlockMap);
+    uint8_t *buf = g.TeamBlockMap;
     DecompressGraphicsPlain(SYM_Teamblocksmap + 8, (uint16_t)(chars + 0x2C));
     uint32_t map = SYM_Teamblocksmap + rd32(rom_ptr(SYM_Teamblocksmap + 4));
     buf = CopyTeamBlock(map, g.HomeTeam, (uint16_t)(g.basetileoffset << 5), buf);   /* (the league's: its art's, or its own) */
@@ -504,24 +503,23 @@ void PlayoffScreen(void)
     uint32_t img = ART(ScoutMap), map = img + rd32(rom_ptr(img + 4));
     c = dobitmap(img + rd32(rom_ptr(img)), map, img + 8, 0, 0, rd16(rom_ptr(map)), rd16(rom_ptr(map) + 2), c, 3);
     const uint8_t *sp = rom_ptr(ART(PlayoffSprite) + rd32(rom_ptr(ART(PlayoffSprite))));   /* its palette */
-    rp pal = rp_add(RAM(palfadenew), 0x40);
-    for (int i = 0; i < 8; i++, pal = rp_add(pal, 4), sp += 4) {   /* palette 0 to 3, the sprite's to 0, 1 to 2 */
-        ram_copy(rp_add(pal, 0x20), rp_add(pal, -0x40), 4);
-        ram_write(rp_add(pal, -0x40), sp, 4);
-        ram_copy(pal, rp_add(pal, -0x20), 4);
+    for (unsigned k = 0x20; k < 0x30; k++, sp += 2) {              /* palette 0 to 3, the sprite's to 0, 1 to 2 */
+        g.palfadenew[k + 0x10] = g.palfadenew[k - 0x20];
+        g.palfadenew[k - 0x20] = rd16(sp);
+        g.palfadenew[k] = g.palfadenew[k - 0x10];
     }
     g.energybarchars = c;
     DecompressGraphicsPlain(ART(PlayoffSprite) + 8, c);
     g.clampcounter = 0x104;
     g.playoffspritey = 0xA0;
     vdp_ctrl16(SYM_VDPR_WINY + 2);
-    rp tree = RAM(potree);
+    uint8_t *tree = g.potree;
     const uint8_t *a0 = rom_ptr(SYM_PlayoffTreeSetup + (int16_t)rd16(rom_ptr(SYM_PlayoffTreeSetup + (uint16_t)(g.gamelevel << 1))));
     for (int16_t n = *a0++; n >= 0; n--) {                /* the team blocks */
         printz(str_PlayoffScreen_4, sizeof str_PlayoffScreen_4);
         g.printx = (uint16_t)((g.printx & 0xFF00) | *a0++);
         g.printy = (uint16_t)((g.printy & 0xFF00) | *a0++);
-        DrawTeamBlocks((uint16_t)(r8_next(&tree) << 1));
+        DrawTeamBlocks((uint16_t)(*tree++ << 1));
     }
     for (int16_t n = *a0++; n >= 0; n--) {                /* the arrows */
         printz(str_PlayoffScreen_5, sizeof str_PlayoffScreen_5);
@@ -605,13 +603,13 @@ void PlayoffScreen_waitvsync(void)
 /* setup94.asm:PrintSeriesScore. The best-of-7 wins "t-b" of game struct a2 at printx / printy. */
 void PrintSeriesScore(const struct Matchup *gs)
 {
-    rp m = RAM(mesarea);
-    w16(m, 0, 6);
-    w8(m, 2, (uint8_t)(gs->topwins + '0'));
-    w8(m, 3, '-');
-    w8(m, 4, (uint8_t)(gs->botwins + '0'));
-    w8(m, 5, 0);
-    print(RAM_BASE + RAM_OFF_mesarea);
+    uint8_t *m = g.mesarea;
+    wr16(m, 6);
+    m[2] = (uint8_t)(gs->topwins + '0');
+    m[3] = '-';
+    m[4] = (uint8_t)(gs->botwins + '0');
+    m[5] = 0;
+    print(ram_addr(g.mesarea));
 }
 
 /* setup94.asm:DrawTreeArrow. Column d0 of the arrows map (Arrowsmap, 2 x $17) at printx /
@@ -640,7 +638,7 @@ void VBlank_Playoff(void)
         if (g.Sattsize) {
             uint16_t n = g.Sattsize;
             g.Sattsize = 0;
-            DoDMA(RAM_BASE + RAM_OFF_Satt, n, g.VSPRITES);
+            DoDMA(ram_addr(g.Satt), n, g.VSPRITES);
             Vmaddr(g.VSCRLPM);
             vdp_data((uint16_t)(0xFEA0 + g.DispAttribCtr));
         }
@@ -718,13 +716,13 @@ void UpdateScoutingDisplay(void)
     }
     {                                                     /* a word, and the spaces after it */
         ST_W(g.PlayerScrollCtr);
-        rp a0 = RAM(TextBuffer);
+        uint8_t *a0 = text_buffer();
         d1 = 0;
         while (*a2 != 0xD) {
             d0++;
             int more;
             do {
-                w8_next(&a0, *a2);
+                *a0++ = *a2;
                 d1++;
                 if (*a2 == ',' || *a2 == '.') g.typedelay += 0x28;
                 more = *a2++ == ' ' && *a2 == ' ';
@@ -735,9 +733,9 @@ void UpdateScoutingDisplay(void)
                 break;
             }
         }
-        g.mesarea = (uint16_t)(d1 + 2);
-        if (d1 & 1) { w8(a0, 0, 0); g.mesarea++; }
-        str = RAM_BASE + RAM_OFF_mesarea;
+        wr16(g.mesarea, (uint16_t)(d1 + 2));
+        if (d1 & 1) { *a0 = 0; wr16(g.mesarea, (uint16_t)(rd16(g.mesarea) + 1)); }
+        str = ram_addr(g.mesarea);
         goto put;
     }
 string4:                                                  /* the String at word 4 of a team data block */

@@ -64,6 +64,19 @@ static inline uint8_t m8(uint32_t a) { return is_ram(a) ? r8(ram_at(a), 0) : rom
 static inline uint16_t m16(uint32_t a) { return (uint16_t)(m8(a) << 8 | m8(a + 1)); }
 static inline uint32_t m32(uint32_t a) { return (uint32_t)m16(a) << 16 | m16(a + 2); }
 
+/* a byte buffer of RAM's at a place, n bytes of it, as a host pointer: where RAM holds bytes as
+ * the machine has them (no word or long of the game's lies there: Strings, the sprite table, the
+ * DMA list, records, the save RAM's copy), which it checks; and the 68000 address of a host
+ * pointer into RAM (what the game passes or keeps of one) */
+void ram_bytes_fail_(rp p, size_t n);
+static inline uint8_t *ram_bytes(rp p, size_t n)
+{
+    for (size_t i = 0; i < n; i++)
+        if (p.o + i >= RAM_SIZE || ram_host_[p.o + i] != p.o + i) ram_bytes_fail_(p, n);
+    return (uint8_t *)&g + p.o;
+}
+static inline uint32_t ram_addr(const void *x) { return RAM_BASE + (uint32_t)((const uint8_t *)x - (const uint8_t *)&g); }
+
 /* one of the game's structs at a place, and the place of one (or of one of its fields): for what
  * holds the 68000 address of one (the tests' registers, an address the game keeps) */
 static inline void *ram_struct_(rp p) { return (uint8_t *)&g + p.o; }   /* (a struct starts where the machine's does) */

@@ -51,6 +51,7 @@ static void run_setInjuryType(const Record *r) { setInjuryType(OBJ(R_A2), OBJ(R_
 #define TEAM(reg) team_at(ram_at(r->regs_in[reg]))
 #define PLACE(reg) ram_at(r->regs_in[reg])                  /* (a place a register holds) */
 #define MATCHUP(reg) RAM_AT(struct Matchup, ram_at(r->regs_in[reg]))
+#define AT(type, reg) RAM_AT(struct type, ram_at(r->regs_in[reg]))   /* (one of the game's structs a register points to) */
 #define RINK(reg) RAM_AT(struct RinkObj, ram_at(r->regs_in[reg]))   /* (a sort object, a pad or the replay camera) */
 #define BYTES_AT(reg) ((uint8_t *)&g + (uint16_t)r->regs_in[reg])   /* (a byte table inside a team struct: penbox, the goals) */
 static void run_checkwallcoll(const Record *r) { checkwallcoll((int16_t)r->regs_in[R_D2], (int16_t)r->regs_in[R_D3], OBJ(R_A3)); }
@@ -110,7 +111,7 @@ static void run_ClampYPosition(const Record *r)
     expect_reg16(r, R_D0, (uint16_t)d0, "d0"); expect_reg16(r, R_D1, (uint16_t)d1, "d1");
 }
 static void run_AdjustFacingDirection(const Record *r) { AdjustFacingDirection(D16(R_D0), OBJ(R_A3)); }
-static void run_goaliesave(const Record *r) { goaliesave(ram_at(r->regs_in[R_A0]), D16(R_D3), OBJ(R_A3)); }
+static void run_goaliesave(const Record *r) { goaliesave(AT(PuckCross, R_A0), D16(R_D3), OBJ(R_A3)); }
 static void run_chk4lc(const Record *r) { chk4lc(TEAM(R_A2), OBJ(R_A3)); }
 static void run_EvadePC(const Record *r) { expect_reg16(r, R_D0, EvadePC((uint16_t)r->regs_in[R_D0], OBJ(R_A3)), "d0"); }
 static void run_SelectPenaltyShotSkater(const Record *r) { SelectPenaltyShotSkater(); }
@@ -425,9 +426,9 @@ static void run_PrintPlayerAssists(const Record *r) { PrintPlayerAssists(R16(R_D
 static void run_CalcStarScores(const Record *r) { CalcStarScores(R16(R_D2)); }
 static void run_CalcTeamStarScores(const Record *r)
 {
-    rp out = PLACE(R_A4);
+    uint8_t *out = ram_bytes(PLACE(R_A4), 26 * 4);
     expect_reg16(r, R_D3, (uint16_t)CalcTeamStarScores(TEAM(R_A2), TEAM(R_A3), &out, R16(R_D5)), "d3");
-    expect_reg16(r, R_A4, (uint16_t)rp_addr(out), "a4");
+    expect_reg16(r, R_A4, (uint16_t)ram_addr(out), "a4");
 }
 static void run_TakeTopStarScore(const Record *r)
 {
@@ -436,8 +437,8 @@ static void run_TakeTopStarScore(const Record *r)
     expect_reg16(r, R_A2, (uint16_t)rp_addr(team_place(tm)), "a2");
 }
 static void run_GetPlayerNamePointer(const Record *r) { expect_reg16(r, R_A0, (uint16_t)GetPlayerNamePointer(R16(R_D0), TEAM(R_A2)), "a0"); }
-static void run_ConvertByteToDigits(const Record *r) { expect_reg16(r, R_A1, (uint16_t)rp_addr(ConvertByteToDigits(R16(R_D0), PLACE(R_A1))), "a1"); }
-static void run_FinalizeTextBuffer(const Record *r) { expect_reg16(r, R_A1, (uint16_t)FinalizeTextBuffer(PLACE(R_A1)), "a1"); }
+static void run_ConvertByteToDigits(const Record *r) { expect_reg16(r, R_A1, (uint16_t)ram_addr(ConvertByteToDigits(R16(R_D0), ram_bytes(PLACE(R_A1), 2))), "a1"); }
+static void run_FinalizeTextBuffer(const Record *r) { expect_reg16(r, R_A1, (uint16_t)FinalizeTextBuffer(ram_bytes(PLACE(R_A1), 1)), "a1"); }
 static void run_FormatPlayerName(const Record *r) { expect_reg16(r, R_A1, (uint16_t)FormatPlayerName(R16(R_D0), TEAM(R_A2)), "a1"); }
 static void run_FormatPlayerNumInitial(const Record *r) { expect_reg16(r, R_A1, (uint16_t)FormatPlayerNumInitial(R16(R_D0), TEAM(R_A2)), "a1"); }
 static void run_getname(const Record *r) { expect_reg16(r, R_A1, (uint16_t)getname(R16(R_D0), TEAM(R_A2)), "a1"); }
@@ -466,7 +467,6 @@ V(setupEASNmap) V(setupIceRinkPal) V(setplayercolors) V(ShootoutModeBox) V(Count
 
 
 /* ---- sound94 ---- */
-#define AT(type, reg) RAM_AT(struct type, ram_at(r->regs_in[reg]))
 static void run_play_sfx_or_music_track(const Record *r) { play_sfx_or_music_track(R16(R_D0)); }
 static void run_ReadPad4Way1(const Record *r) { expect_reg16(r, R_D0, ReadPad4Way1(), "d0"); }
 static void run_ReadPad4Way2(const Record *r) { expect_reg16(r, R_D0, ReadPad4Way2(), "d0"); }
@@ -494,7 +494,7 @@ static void run_defaultsprites2(const Record *r) { expect_reg16(r, R_D4, default
 static void run_setupTeamBlocksMap(const Record *r) { expect_reg16(r, R_D4, setupTeamBlocksMap(R16(R_D4)), "d4"); }
 static void run_CopyTeamBlockMapData(const Record *r)
 {
-    expect_reg16(r, R_A1, (uint16_t)rp_addr(CopyTeamBlockMapData(r->regs_in[R_A0], R16(R_D0), R16(R_D1), PLACE(R_A1))), "a1");
+    expect_reg16(r, R_A1, (uint16_t)ram_addr(CopyTeamBlockMapData(r->regs_in[R_A0], R16(R_D0), R16(R_D1), ram_bytes(PLACE(R_A1), 0x2C))), "a1");
 }
 static void run_ReloadRefHorTiles(const Record *r) { expect_reg16(r, R_D4, ReloadRefHorTiles(), "d4"); }
 static void run_InitMenuState(const Record *r) { expect_reg16(r, R_D1, InitMenuState(r->regs_in[R_A0], r->regs_in[R_A1]), "d1"); }
@@ -794,7 +794,7 @@ static void run_DrawPictureBox(const Record *r) { DrawPictureBox(); }
 static void run_GetCardTeam(const Record *r) { expect_reg32(r, R_A0, rp_addr(team_place(GetCardTeam())), "a0"); }
 static void run_GetCardPlayer(const Record *r) { expect_reg16(r, R_D0, GetCardPlayer(), "d0"); }
 static void run_BuildCardPlayerLists(const Record *r) { BuildCardPlayerLists(); }
-static void run_BuildCardPlayerList(const Record *r) { BuildCardPlayerList(TEAM(R_A0), ram_at(A(R_A1))); }
+static void run_BuildCardPlayerList(const Record *r) { BuildCardPlayerList(TEAM(R_A0), ram_bytes(ram_at(A(R_A1)), SYM_RosterSlots)); }
 static void run_RecordHoldersScreen(const Record *r) { RecordHoldersScreen(); }
 static void run_PrintRecordPage(const Record *r) { PrintRecordPage(); }
 static void run_PrintRecordTitles(const Record *r) { PrintRecordTitles(); }

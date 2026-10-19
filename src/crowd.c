@@ -12,7 +12,7 @@
  * when none. */
 void LoadCrowdRec(void)
 {
-    ReadCrowdRecord((uint32_t)(int32_t)(int16_t)g.HomeTeam, RAM_BASE + RAM_OFF_ThreeStars);
+    ReadCrowdRecord((uint32_t)(int32_t)(int16_t)g.HomeTeam, ram_addr(g.ThreeStars));
     uint16_t d0 = g.ThreeStars[8];
     if (d0 == 0) d0 = 0x50;
     g.CrowdRecord = d0;
@@ -153,7 +153,7 @@ uint8_t AttributeCalc(uint8_t v, struct SortObj *o)
 
 /* crowd94.asm:NextHomeHotPlayer etc. The next hot / cold player of a team for the matchups
  * text (the one entry lists at homehotplayer ...), with its team struct. */
-static uint16_t listed(uint16_t list, uint16_t idx) { return r16(ram_at(RAM_BASE + list + idx * 2), 0); }
+static uint16_t listed(uint16_t list, uint16_t idx) { return m16(RAM_BASE + list + idx * 2); }
 uint16_t NextHomeHotPlayer(struct Team **team)
 {
     *team = team_struct(0);
@@ -203,29 +203,29 @@ void SortHotColdStarters(struct Team *tm)
     const uint8_t *hc = tm->hotcold[0];                   /* (the table, row after row) */
     const uint8_t *a0 = rom_ptr(tm->data);
     a0 += rd16(a0 + 6);                                   /* the starters */
-    rp a1 = RAM(TempBuffer);
+    uint8_t *a1 = g.TempBuffer;
     for (int i = 0; i < 6; i++) {
         uint8_t d1 = (uint8_t)(*a0++ - 1);
-        w8_next(&a1, d1);
+        *a1++ = d1;
         int16_t idx = (int16_t)((int8_t)d1 << 4);
-        w8(a1, 0, 0);
+        a1[0] = 0;
         idx = (int16_t)(idx + 3);
         for (int d7 = 3; d7 != 0x10; d7++, idx++) {
             if (d7 == 9 || d7 == 0xD) continue;
-            w8(a1, 0, (uint8_t)(r8(a1, 0) + hc[idx]));
+            a1[0] = (uint8_t)(a1[0] + hc[idx]);
         }
-        a1 = rp_add(a1, 1);
+        a1 += 1;
     }
     int swapped;
     do {
         swapped = 0;
-        a1 = RAM(TempBuffer);
-        for (int i = 0; i < 5; i++, a1 = rp_add(a1, 2)) {
-            if ((int8_t)r8(a1, 3) <= (int8_t)r8(a1, 1)) continue;
+        a1 = g.TempBuffer;
+        for (int i = 0; i < 5; i++, a1 += 2) {
+            if ((int8_t)a1[3] <= (int8_t)a1[1]) continue;
             swapped = 1;
-            uint8_t t0 = r8(a1, 0), t1 = r8(a1, 1);
-            w8(a1, 0, r8(a1, 2)); w8(a1, 1, r8(a1, 3));
-            w8(a1, 2, t0); w8(a1, 3, t1);
+            uint8_t t0 = a1[0], t1 = a1[1];
+            a1[0] = a1[2]; a1[1] = a1[3];
+            a1[2] = t0; a1[3] = t1;
         }
     } while (swapped);
 }

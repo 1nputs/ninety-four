@@ -21,7 +21,7 @@ void EASportsScreen(void)
     g.VmMap3 = 0xF000;
     g.VSPRITES = 0xF800;
     g.VSCRLPM = 0xFC00;
-    ram_fill(RAM(palfadenew), 0, 0x80);                  /* all 64 colours black */
+    memset(g.palfadenew, 0, sizeof g.palfadenew);        /* all 64 colours black */
     CopyPaletteToCRAM();
     setVram_0();
     printz(str_EASportsScreen_1, sizeof str_EASportsScreen_1);
@@ -61,11 +61,11 @@ void DrawMatchupBitmaps(void)
     }
     printz(str_DrawMatchupBitmaps_1, sizeof str_DrawMatchupBitmaps_1);
     uint16_t t = g.VisTeam;
-    ram_write(rp_add(RAM(palfadenew), 0x26), rom_ptr(LG(TeamPalettes) + (uint32_t)(int16_t)(uint16_t)(t << 6) + 0x26), 4);
+    pal_load(0x13, rom_ptr(LG(TeamPalettes) + (uint32_t)(int16_t)(uint16_t)(t << 6) + 0x26), 2);
     DrawTeamBitmap(t, g.teambitmapchars);
     printz(str_DrawMatchupBitmaps_2, sizeof str_DrawMatchupBitmaps_2);
     t = g.HomeTeam;
-    ram_write(rp_add(RAM(palfadenew), 0x22), rom_ptr(LG(TeamPalettes) + (uint32_t)(int16_t)(uint16_t)(t << 6) + 2), 4);
+    pal_load(0x11, rom_ptr(LG(TeamPalettes) + (uint32_t)(int16_t)(uint16_t)(t << 6) + 2), 2);
     g.palfadenew[0x15] = 0xEEE;
     DrawTeamBitmap(t, 2);
     setteams();

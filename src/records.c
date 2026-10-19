@@ -8,7 +8,7 @@
 #include "records_strings_gen.h"
 
 #define PRINTZ(s) printz(s, sizeof s)
-#define BUF (RAM_BASE + RAM_OFF_nameentrybuf)
+#define BUF (ram_addr(g.nameentrybuf))
 
 /* records94.asm:UserNameEntry. With user records on (OptUserRec 0): the name entry for pad 1's
  * team, then pad 2's when it has the other. */
@@ -216,11 +216,11 @@ void NameLetterGrid(void)
     if (!was) {
         PRINTZ(str_NameLetterGrid_2);
         const uint8_t *grid = rom_ptr(SYM_LetterGrid);
-        rp mes = RAM(mesarea);
+        uint8_t *mes = g.mesarea;
         for (int row = 0; row < 5; row++) {               /* 6 letters a row, a space after each */
-            w16(mes, 0, 0xE);
-            for (int i = 0; i < 6; i++) { w8(mes, 2 + 2 * i, *grid++); w8(mes, 3 + 2 * i, ' '); }
-            print(RAM_BASE + RAM_OFF_mesarea);
+            wr16(mes, 0xE);
+            for (int i = 0; i < 6; i++) { mes[2 + 2 * i] = *grid++; mes[3 + 2 * i] = ' '; }
+            print(ram_addr(g.mesarea));
             g.printy += 2;
             g.printx -= 0xC;
         }
@@ -312,11 +312,11 @@ void rtsNameCursor(void) {}
 void PrintCurLetter(uint16_t d5)
 {
     if (!g.cursoron) return;
-    rp s = RAM(ThreeStars);
-    w16(s, 0, 4);
-    w8(s, 3, 0);
-    w8(s, 2, rom_ptr(SYM_LetterGrid)[d5]);
-    print(RAM_BASE + RAM_OFF_ThreeStars);
+    uint8_t *s = g.ThreeStars;
+    wr16(s, 4);
+    s[3] = 0;
+    s[2] = rom_ptr(SYM_LetterGrid)[d5];
+    print(ram_addr(g.ThreeStars));
 }
 
 /* records94.asm:LetterGridPos. printx / printy of grid letter d5 (6 a row, 2 cells apart) -> d0 /
@@ -338,9 +338,9 @@ void PrintNameLog(void)
     PRINTZ(str_PrintNameLog_1);
     g.namelogsel = 1;
     for (int i = 0; i < 7; i++) {
-        GetLogName(RAM_BASE + RAM_OFF_TempBuffer);
+        GetLogName(ram_addr(g.TempBuffer));
         uint16_t x = g.printx;
-        PrintNameField(RAM_BASE + RAM_OFF_TempBuffer);
+        PrintNameField(ram_addr(g.TempBuffer));
         g.printx = x;
         g.printy++;
         g.namelogsel++;
@@ -389,10 +389,10 @@ void GetNameLength(void)
 void PrintNameField(uint32_t name)
 {
     uint32_t src = name;
-    rp s = RAM(ThreeStars);
-    w16(s, 0, 0xE);
-    for (int16_t i = 0; i < 0xC; i++) w8(s, 2 + i, i < (int16_t)g.namelength ? m8(src + i) : '-');
-    print(RAM_BASE + RAM_OFF_ThreeStars);
+    uint8_t *s = g.ThreeStars;
+    wr16(s, 0xE);
+    for (int16_t i = 0; i < 0xC; i++) s[2 + i] = i < (int16_t)g.namelength ? m8(src + i) : '-';
+    print(ram_addr(g.ThreeStars));
 }
 
 /* records94.asm:NameEntryFramer. Framer with the name entry frame tiles (nameframechars). */
@@ -424,15 +424,15 @@ void GetLogName(uint32_t dst)
  * forgotten (WriteNameRecord); then this pad's user is the entry (0 for no name). */
 void StoreUserName(void)
 {
-    rp buf = RAM(nameentrybuf);
-    rp log = rp_add(RAM(namelog), (int16_t)(uint16_t)(g.namelogsel * 0xC));
+    uint8_t *buf = g.nameentrybuf;
+    uint8_t *log = g.namelog + ((int16_t)(uint16_t)(g.namelogsel * 0xC));
     int i;
     for (i = 0; i < 12; i++) {
-        if (r8(buf, i) == '-') w8(buf, i, 0);
-        if (r8(buf, i) != r8(log, i)) break;
+        if (buf[i] == '-') buf[i] = 0;
+        if (buf[i] != log[i]) break;
     }
     if (i < 12) {
-        for (i = 0; i < 12; i++) w8(log, i, r8(buf, i) == '-' ? 0 : r8(buf, i));
+        for (i = 0; i < 12; i++) log[i] = buf[i] == '-' ? 0 : buf[i];
         WriteNameLog();
         WriteNameRecord();
         MakeSRAMChecksum();
@@ -447,30 +447,30 @@ void StoreUserName(void)
  * record cleared). */
 void WriteNameRecord(void)
 {
-    rp r = RAM(ThreeStars);
+    uint8_t *r = g.ThreeStars;
     uint8_t user = (uint8_t)g.namelogsel;
     uint32_t at;
     for (int t = 0; t < (int)league.teams; t++) {         /* the player records (the cartridge's: $2D8 from 0) */
         at = (uint32_t)rd16(rom_ptr(LG(PlayerRecordOffsets)) + 2 * t) << 2;
         for (int n = 0; n < 0x1A; n++, at += 4) {
             int changed = 0;
-            ReadSRAM(at, 4, RAM_BASE + RAM_OFF_ThreeStars);
-            if (r8(r, 1) == user) { w8(r, 1, 0); changed = 1; }
-            if (r8(r, 3) == user) { w8(r, 3, 0); changed = 1; }
-            if (changed) WriteSRAM(at, 4, RAM_BASE + RAM_OFF_ThreeStars);
+            ReadSRAM(at, 4, ram_addr(g.ThreeStars));
+            if (r[1] == user) { r[1] = 0; changed = 1; }
+            if (r[3] == user) { r[3] = 0; changed = 1; }
+            if (changed) WriteSRAM(at, 4, ram_addr(g.ThreeStars));
         }
     }
     for (int n = 0; n < (int)league.teams; n++) {         /* the crowd records */
         at = league_crowd_record((uint16_t)n);
         int changed = 0;
-        ReadSRAM(at, 0x10, RAM_BASE + RAM_OFF_ThreeStars);
-        for (int b = 1; b <= 0xB; b += 2) if (r8(r, b) == user) { w8(r, b, 0); changed = 1; }
-        if (changed) WriteSRAM(at, 0x10, RAM_BASE + RAM_OFF_ThreeStars);
+        ReadSRAM(at, 0x10, ram_addr(g.ThreeStars));
+        for (int b = 1; b <= 0xB; b += 2) if (r[b] == user) { r[b] = 0; changed = 1; }
+        if (changed) WriteSRAM(at, 0x10, ram_addr(g.ThreeStars));
     }
     at = SYM_TeamRecBase + (uint32_t)(int32_t)(int16_t)(uint16_t)(g.namelogsel << 4);   /* its team record */
-    ReadSRAM(at, 0x10, RAM_BASE + RAM_OFF_ThreeStars);
-    for (int b = 0; b < 0x10; b++) w8(r, b, 0);
-    WriteSRAM(at, 0x10, RAM_BASE + RAM_OFF_ThreeStars);
+    ReadSRAM(at, 0x10, ram_addr(g.ThreeStars));
+    for (int b = 0; b < 0x10; b++) r[b] = 0;
+    WriteSRAM(at, 0x10, ram_addr(g.ThreeStars));
     MakeSRAMChecksum();
 }
 
@@ -486,7 +486,7 @@ int SkipOtherUserName(int16_t dir)
 
 /* ---- the Record Holders menu item ---------------------------------------------------------------- */
 
-#define MESAREA (RAM_BASE + RAM_OFF_mesarea)
+#define MESAREA (ram_addr(g.mesarea))
 
 /* records94.asm:RecordHoldersScreen. The Record Holders (a menu item): the corner logo and the
  * arena, the user records from save RAM sorted three ways (ReadTeamRecords, CalcWinPercents);
@@ -563,19 +563,19 @@ void PrintRecordTitles(void)
 void PrintWinRecords(void)
 {
     printsmallz(str_PrintWinRecords_1, sizeof str_PrintWinRecords_1);
-    rp sort = RAM(winsort);
+    uint8_t *sort = g.winsort;
     for (int16_t row = 6; row >= 0; row--) {
         g.printx = 2;
-        int16_t u = (int8_t)r8_next(&sort);
+        int16_t u = (int8_t)*sort++;
         uint8_t pct = g.winpcts[u];
-        rp r = rp_add(RAM(ThreeStars), (int16_t)(uint16_t)(u << 4));
-        uint16_t games = r16(r, 0xA);
-        g.recties = r16(r, 0xC);
-        g.recwins = r16(r, 8);
+        uint8_t *r = g.ThreeStars + ((int16_t)(uint16_t)(u << 4));
+        uint16_t games = rd16(r + 0xA);
+        g.recties = rd16(r + 0xC);
+        g.recwins = rd16(r + 8);
         g.reclosses = (uint16_t)-(int16_t)(uint16_t)(g.recwins + g.recties - games);
         uint32_t a1 = SYM_RecParenTxt;
         if (games != 0) {
-            PrintRecordName((uint16_t)row, r8(sort, -1));
+            PrintRecordName((uint16_t)row, sort[-1]);
             g.printx = 0x13;
             printsmall(PushNumberWidth(pct, 3));
             g.printx = 0x1A;
@@ -612,17 +612,17 @@ void PrintPlayerRecords(void)
     rp sort = goals ? RAM(recsort1) : RAM(recsort2);
     for (int16_t row = 6; row >= 0; row--) {
         g.printx = 2;
-        rp r = rp_add(RAM(ThreeStars), (int16_t)(uint16_t)((int16_t)(int8_t)r8_next(&sort) << 4) + (goals ? 0 : 4));
+        uint8_t *r = g.ThreeStars + ((int16_t)(uint16_t)((int16_t)(int8_t)r8_next(&sort) << 4) + (goals ? 0 : 4));
         uint32_t a1 = SYM_RecParenTxt;
-        if (r8(r, 0) != 0) {
+        if (r[0] != 0) {
             PrintRecordName((uint16_t)row, r8(sort, -1));
             g.printx = 0x12;
-            printsmall(PushNumberWidth(r8(r, 0), 3));
+            printsmall(PushNumberWidth(r[0], 3));
             g.printx = 0x19;
             CopyString(SYM_RecHolderByTxt, MESAREA);
-            AppendTeamName(r8(r, 1), MESAREA);
+            AppendTeamName(r[1], MESAREA);
             appstring(SYM_RecHolderVsTxt, MESAREA);
-            AppendTeamName(r8(r, 2), MESAREA);
+            AppendTeamName(r[2], MESAREA);
             a1 = MESAREA;
         }
         printsmall(a1);
@@ -634,12 +634,12 @@ void PrintPlayerRecords(void)
  * (AppendUserName, untrimmed). */
 void PrintRecordName(uint16_t row, uint8_t user)
 {
-    rp m = RAM(mesarea);
-    w16(m, 0, 6);
-    w8(m, 2, (uint8_t)(7 - row + '0'));
-    w8(m, 3, '.');
-    w8(m, 4, ' ');
-    w8(m, 5, 0);
+    uint8_t *m = g.mesarea;
+    wr16(m, 6);
+    m[2] = (uint8_t)(7 - row + '0');
+    m[3] = '.';
+    m[4] = ' ';
+    m[5] = 0;
     printsmall(MESAREA);
     g.sflags6 &= (uint16_t)~HI(7);
     AppendUserName(MESAREA, (uint16_t)(int16_t)(int8_t)user);
@@ -653,13 +653,13 @@ void PrintRecordName(uint16_t row, uint8_t user)
 void CalcWinPercents(void)
 {
     for (int i = 0; i < 8; i++) {
-        rp r = rp_add(RAM(ThreeStars), i * 0x10);
-        uint16_t wins = r16(r, 8), games = r16(r, 0xA);
+        uint8_t *r = g.ThreeStars + (i * 0x10);
+        uint16_t wins = rd16(r + 8), games = rd16(r + 0xA);
         w16(RAM(wingames), i * 2, games);
         uint32_t pct = games == 0 ? 0 : m68k_divu((uint32_t)wins * 100u, games);
         g.winpcts[i] = (uint8_t)pct;
-        g.winties[i * 2] = r8(r, 0xC);
-        g.winties[i * 2 + 1] = r8(r, 0xD);
+        g.winties[i * 2] = r[0xC];
+        g.winties[i * 2 + 1] = r[0xD];
     }
     for (int i = 0; i < 7; i++) g.winsort[i] = (uint8_t)(i + 1);
     int swapped;
@@ -689,7 +689,7 @@ void CalcWinPercents(void)
  * descending as signed bytes. */
 void ReadTeamRecords(void)
 {
-    ReadSRAM(SYM_TeamRecBase, 0x80, RAM_BASE + RAM_OFF_ThreeStars);
+    ReadSRAM(SYM_TeamRecBase, 0x80, ram_addr(g.ThreeStars));
     int saves = (g.sflags6 & HI(6)) != 0;
     rp sort = saves ? RAM(recsort2) : RAM(recsort1);
     for (int i = 0; i < 7; i++) w8(sort, i, (uint8_t)(i + 1));

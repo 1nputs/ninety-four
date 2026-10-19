@@ -10,13 +10,13 @@
 #include "scout_strings_gen.h"
 
 #define PRINTZ(s) printz(s, sizeof s)
-#define TEMPBUF (RAM_BASE + RAM_OFF_TempBuffer)
+#define TEMPBUF (ram_addr(g.TempBuffer))
 
 /* scout94.asm:ScoutCrowdRecord. The text player's '@' -> a1 = the home team's crowd record in dB
  * (save RAM team record byte 8; 80 when none) as a String at TempBuffer. */
 uint32_t ScoutCrowdRecord(void)
 {
-    ReadCrowdRecord((uint32_t)(int32_t)(int16_t)g.HomeTeam, RAM_BASE + RAM_OFF_teamrecbuf);
+    ReadCrowdRecord((uint32_t)(int32_t)(int16_t)g.HomeTeam, ram_addr(g.teamrecbuf));
     uint16_t db = g.teamrecbuf[8];
     if (db == 0) db = 0x50;
     AppendNumber(db, TEMPBUF);
@@ -213,7 +213,7 @@ void DrawMatchupPicture(uint32_t pic, uint16_t chars, uint16_t palbits)
     if (rd32(rom_ptr(pic + 4)) == 0) map = ART(PicturePalette) + rd32(rom_ptr(ART(PicturePalette) + 4));
     else map = pic + rd32(rom_ptr(pic + 4));
     UnpackPicture(pic + 8);
-    DrawMatchupBitmap(pal, map, RAM_BASE + RAM_OFF_picturebuf, chars, palbits);
+    DrawMatchupBitmap(pal, map, ram_addr(g.picturebuf), chars, palbits);
 }
 
 /* scout94.asm:DrawMatchupLogo. Team logo a0 at printx / printy, its palette from

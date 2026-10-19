@@ -749,7 +749,7 @@ void ReplayMode(void)
             if (!up) continue;
         }
         if (d1 & 0x80) {                                  /* start: resume the game */
-            w16(RAM(menuitem), 0, 0);
+            g.menu.item = 0;
             g.sflags5 |= 2;
             break;
         }
