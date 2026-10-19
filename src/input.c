@@ -20,7 +20,7 @@ static inline int16_t puckx(void) { return (int16_t)g.puckx[0]; }
 static inline int16_t pucky(void) { return (int16_t)g.pucky; }
 static inline int16_t puckvx(void) { return (int16_t)g.puckvx; }
 static inline int16_t puckvy(void) { return (int16_t)g.puckvy; }
-static inline int16_t puckc(void) { return (int16_t)g.puckc; }
+static inline int16_t puckc(void) { return (int16_t)puck_carrier(); }
 static inline struct SortObj *opponents(const struct SortObj *o) { return sortobj(o->SCnum >= 6 ? 0 : 6); }
 static inline struct SortObj *teammates(const struct SortObj *o) { return sortobj(o->SCnum >= 6 ? 6 : 0); }
 static inline int32_t sq(int16_t v) { return (int32_t)v * v; }
@@ -490,7 +490,7 @@ void passmode(uint16_t d0, uint16_t d2, struct SortObj *o)
 void dopass(struct SortObj *o)
 {
     g.sflags &= (uint16_t)~HI(sfspdir);
-    ST_W(g.puckc);
+    w8(RAM(puckc), 0, 0xFF);
     o->nopuck[0] = 0x10;
     g.lastplayer = (uint16_t)o->SCnum;
     if (g.sflags5 & 8) {
@@ -784,7 +784,7 @@ void doshot(struct SortObj *o)
     int16_t sadd = (int16_t)(3 - (int16_t)d0);
     if (sadd < 0) sadd = 0;
     snd = (int16_t)(snd + sadd);
-    ST_W(g.puckc);
+    w8(RAM(puckc), 0, 0xFF);
     o->nopuck[0] = 0x10;
     g.lastplayer = (uint16_t)o->SCnum;
     int16_t dy = PFLAG(o, pfgoal) ? 0x108 : -0x108;

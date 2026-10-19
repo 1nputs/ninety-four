@@ -215,7 +215,9 @@ static int oracle_out_of_game_logic(const record *r)
 static const char *masked_diff(const record *r)
 {
     static char what[160];
-    const uint8_t *p = r->state, *m = r->mask, *ram = ram_ptr(RAM_BASE);
+    const uint8_t *p = r->state, *m = r->mask;
+    static uint8_t ram[RAM_SIZE];
+    ram_pack(ram);                                        /* (RAM as the 68000 has it) */
     #define MASKED(mask, i) ((mask)[(i) >> 3] & (1 << ((i) & 7)))
     /* the game's copy of vcount (its waits keep it: oldvcount = vcount) differs with it */
     int vc = MASKED(m, RAM_OFF_vcount) || MASKED(m, RAM_OFF_vcount + 1);
@@ -246,7 +248,7 @@ static const char *masked_diff(const record *r)
 static void take_state(const record *r, int game_loop)
 {
     const uint8_t *p = r->state;
-    memcpy(ram_ptr(RAM_BASE), p, 0x10000); p += 0x10000;
+    ram_unpack(p); p += 0x10000;
     mdrt_vdp_state s;
     memcpy(s.reg, p, 24); p += 24;
     memcpy(s.vram, p, 0x10000); p += 0x10000;
@@ -271,7 +273,9 @@ static void differs(const char *what, long frame, const record *r)
     printf("lockstep: %s differs at the game's vblank wait %ld (the oracle's frame %u, the 68k at %06x); "
            "%ld waits checked, %ld lag frames before\n", what, frame, r->frame, r->at, checked, lagged);
     FILE *f = fopen("out/lockstep-native.ram", "wb");
-    if (f) { fwrite(ram_ptr(RAM_BASE), 1, 0x10000, f); fclose(f); }
+    static uint8_t ram[RAM_SIZE];
+    ram_pack(ram);
+    if (f) { fwrite(ram, 1, 0x10000, f); fclose(f); }
     if ((f = fopen("out/lockstep-native.ram.vdp", "wb"))) {   /* as lockstep.py --dump writes the oracle's */
         mdrt_vdp_state s;
         mdrt_vdp_get_state(mdrt_get_vdp(native_m), &s);
@@ -545,7 +549,9 @@ void lockstep_check(long frame)
         insync = 0;
         return;
     }
-    uint64_t rh = fnv64(0xCBF29CE484222325ull, ram_ptr(RAM_BASE), RAM_VARS_END), vh = vdp_hash();
+    static uint8_t ram[RAM_SIZE];
+    ram_pack(ram);
+    uint64_t rh = fnv64(0xCBF29CE484222325ull, ram, RAM_VARS_END), vh = vdp_hash();
     size_t want = 0, used = hv_used;                      /* the HV reads of the whole span (its lag frames' too) */
     for (size_t i = span_lo; i < span_hi; i++) want += recs[i].nhv;
     for (size_t i = span_lo; i < hv_rec && i < span_hi; i++) used += recs[i].nhv;

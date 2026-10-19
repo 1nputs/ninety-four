@@ -63,8 +63,11 @@ enum { pf3oside, pf3break, pf3gctrl, pf3onetimer, pf3wall, pf3fall };           
 #define tmonetimers 0x35C   /* one-timer attempts */
 #define tmsoattempts 0x360
 static inline rp team_struct(int away) { return rp_add(RAM(tmstruct), away ? tmsize : 0); }
+/* puckc, who has the puck ($FFxx: nobody): the word the 68000 keeps in the puck's own sort object
+ * (its newpos and newpnum bytes), so read and written by address (RAM(puckc)) */
+static inline uint16_t puck_carrier(void) { return r16(RAM(puckc), 0); }
 
-/* big-endian access to untyped RAM (team struct and other tables not yet given a C type) */
+/* big-endian reads and writes of host bytes (the cartridge's data, the game's own buffers) */
 static inline uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
 static inline void wr16(uint8_t *p, uint16_t v) { p[0] = (uint8_t)(v >> 8); p[1] = (uint8_t)v; }
 static inline uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]; }

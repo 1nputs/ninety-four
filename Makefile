@@ -45,7 +45,7 @@ leaguetest: build/leaguetest build/nhl94$(EXE)
 test: build/captest
 	@test -n "$(CAPS)" || { echo "no captures in out/captures: tools/hybrid/capture_all.sh records them"; exit 1; }
 	@# (RAM's bytes only through src/mem.h's places: no host pointer into g in the game's code)
-	@grep -nE '\bram_ptr\(|&g\b' $(filter-out src/ram.h src/mem.h,$(wildcard src/*.c src/*.h)); \
+	@grep -nE '\bram_ptr\(|&g\b' $(filter-out src/ram.h src/ram.c src/mem.h,$(wildcard src/*.c src/*.h)); \
 	    case $$? in 1) ;; 0) echo "raw RAM access outside src/mem.h (above)"; exit 1;; *) exit 1;; esac
 	./build/captest $(CAPS)
 

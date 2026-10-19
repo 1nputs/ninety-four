@@ -13,7 +13,7 @@
 static inline int16_t puckx(void) { return (int16_t)g.puckx[0]; }
 static inline int16_t pucky(void) { return (int16_t)g.pucky; }
 static inline int16_t puckvy(void) { return (int16_t)g.puckvy; }
-static inline int16_t puckc(void) { return (int16_t)g.puckc; }
+static inline int16_t puckc(void) { return (int16_t)puck_carrier(); }
 static inline rp own_team(const struct SortObj *o) { return team_struct(PFLAG(o, pfteam)); }
 static inline struct SortObj *opponents(const struct SortObj *o) { return sortobj(o->SCnum >= 6 ? 0 : 6); }
 /* the other team has the puck carrier (puckc - 6 and SCnum - 6 differ in sign) */

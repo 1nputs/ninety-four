@@ -31,6 +31,21 @@ static long seen;                       /* the handshake whose requests were tak
 /* the relay: Z80 RAM, then the relay's struct up to its steps, the steps' counters, and the
  * steps of the routine it is in (the rest are never read) */
 #define Z80_HEAD offsetof(struct Z80Relay, ops)
+/* work RAM as the 68000 has it (the state's bytes are the console's, whatever the host) */
+static size_t ram_save(void *user, uint8_t *out)
+{
+    (void)user;
+    if (out) ram_pack(out);
+    return RAM_SIZE;
+}
+static int ram_load(void *user, const uint8_t *in, size_t size)
+{
+    (void)user;
+    if (size != RAM_SIZE) return -1;
+    ram_unpack(in);
+    return 0;
+}
+
 static size_t z80_save(void *user, uint8_t *out)
 {
     (void)user;
@@ -107,7 +122,7 @@ void native_states_init(mdrt *console, const char *path, int rewind)
     file = path;
     rewind_on = rewind;
     ring_first = ring_n = 0;                              /* (a new game: the last one's states are not its own) */
-    mdrt_add_state_memory(m, "RAM ", ram_ptr(RAM_BASE), 0x10000);
+    mdrt_add_state_part(m, "RAM ", ram_save, ram_load, NULL);
     mdrt_add_state_part(m, "Z80 ", z80_save, z80_load, NULL);
     mdrt_add_state_part(m, "NHL ", nhl_save, nhl_load, NULL);
     mdrt_add_state_part(m, "RULE", rules_state_save, rules_state_load, NULL);   /* (the game's rules: a state plays by its own) */

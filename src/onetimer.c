@@ -11,7 +11,7 @@ static inline int16_t puckx(void) { return (int16_t)g.puckx[0]; }
 static inline int16_t pucky(void) { return (int16_t)g.pucky; }
 static inline int16_t puckvx(void) { return (int16_t)g.puckvx; }
 static inline int16_t puckvy(void) { return (int16_t)g.puckvy; }
-static inline int16_t puckc(void) { return (int16_t)g.puckc; }
+static inline int16_t puckc(void) { return (int16_t)puck_carrier(); }
 static inline uint16_t divu16(uint32_t n, uint16_t d) { return (uint16_t)m68k_divu(n, d); }
 
 /* onetimer94.asm:puckvzadj. Set puckvz for a top shelf shot from the distance to the goal line

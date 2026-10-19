@@ -112,7 +112,7 @@ static void record(mdrt *m, int i);
 static void load_snapshot(mdrt *m)
 {
     const uint8_t *p = snapshot + 8;
-    memcpy(ram_ptr(RAM_BASE), p, 0x10000); p += 0x10000;
+    ram_unpack(p); p += 0x10000;
     mdrt_vdp_state s;
     memcpy(s.vram, p, 0x10000); p += 0x10000;
     for (int i = 0; i < 64; i++, p += 2) s.cram[i] = (uint16_t)(p[0] << 8 | p[1]);
@@ -351,7 +351,9 @@ static void golden_wait(void)
 {
     mdrt_vdp_state s;
     mdrt_vdp_get_state(mdrt_get_vdp(native_m), &s);
-    golden_ram = fnv(FNV0, ram_ptr(RAM_BASE), 0x10000);
+    static uint8_t ram[RAM_SIZE];
+    ram_pack(ram);                                        /* (RAM as the 68000 has it) */
+    golden_ram = fnv(FNV0, ram, 0x10000);
     golden_vdp = fnv(fnv(fnv(fnv(FNV0, s.reg, 24), s.vram, 0x10000), s.cram, sizeof s.cram), s.vsram, sizeof s.vsram);
     golden_z80 = fnv(FNV0, z80_ram, 0x2000);
     golden_beam = 0;                                      /* (the beam starts again at the handshake) */
@@ -469,7 +471,7 @@ void native_frame_done(long frame, int wait)
     if (wait) lockstep_check(frame);
     if (golden) golden_wait();
     for (int i = 0; i < nwatch; i++) {
-        uint16_t v = rd16(ram_ptr(watch[i]));
+        uint16_t v = r16(ram_at(watch[i]), 0);
         if (v != watched[i] || frame == 1) printf("nhl94: frame %ld: $%06X = $%04X\n", frame, (unsigned)watch[i], v);
         watched[i] = v;
     }

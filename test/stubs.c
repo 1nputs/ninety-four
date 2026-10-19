@@ -20,7 +20,6 @@
 #define TAKE_RET(name, val) const Call *c = replay_next(SYM_##name); if (!c) { replay_fail("no recorded call of " #name); return val; }
 #define ARG16(reg, v, name) if ((uint16_t)c->regs_in[reg] != (uint16_t)(v)) replay_fail(#name ": " #reg " = %04x, recorded %04x", (uint16_t)(v), (uint16_t)c->regs_in[reg])
 #define ARG32(reg, v, name) if (c->regs_in[reg] != (uint32_t)(v)) replay_fail(#name ": " #reg " = %08x, recorded %08x", (uint32_t)(v), c->regs_in[reg])
-#define ARGPTR(reg, p, name) if ((uint16_t)c->regs_in[reg] != (uint16_t)((uint8_t *)(p) - (uint8_t *)&g)) replay_fail(#name ": " #reg " = %04x, recorded %04x", (uint16_t)((uint8_t *)(p) - (uint8_t *)&g), (uint16_t)c->regs_in[reg])
 
 /* call68k (a jsr (a0) to an address kept in RAM) to a routine dispatch.c does not know: its
  * recorded call */

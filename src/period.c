@@ -245,7 +245,7 @@ uint16_t GetTeamRating(rp tm)
  * puck carrier. */
 void ShortenMsgTimer(struct SortObj *o)
 {
-    if (g.cont2team != 0 && (uint16_t)o->SCnum != g.puckc) return;
+    if (g.cont2team != 0 && (uint16_t)o->SCnum != puck_carrier()) return;
     if ((int16_t)g.msgtimer > 2) g.msgtimer = 2;
 }
 

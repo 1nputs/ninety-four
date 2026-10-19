@@ -129,7 +129,7 @@ void checkcx(unsigned obj2, int16_t x, int16_t dy, struct SortObj *o)
             p->impactp = o->SCnum;
         if (!(o->pflags2 & (1 << pf2fight)))
             o->impactp = p->SCnum;
-        if ((int16_t)imp >= 0x14 && (g.puckc == (uint16_t)o->SCnum || g.puckc == (uint16_t)p->SCnum))
+        if ((int16_t)imp >= 0x14 && (puck_carrier() == (uint16_t)o->SCnum || puck_carrier() == (uint16_t)p->SCnum))
             newcheck();
         checkint(p, o);
         checkcheck(p, o, (int16_t)imp);
@@ -170,7 +170,7 @@ static void ci(struct SortObj *a2, struct SortObj *a3)
         return;
     if (g.gmode & (1 << gmclock))
         return;
-    if (g.puckc != (uint16_t)a3->SCnum && a3->impact <= 0x19)
+    if (puck_carrier() != (uint16_t)a3->SCnum && a3->impact <= 0x19)
         return;
     if (a3->impact <= 2)
         return;
@@ -323,7 +323,7 @@ void holdcheck(struct SortObj *a2, struct SortObj *a3)
     uint16_t d = (uint16_t)((vtoa((int16_t)(a3->Xpos - a2->Xpos), (int16_t)(a3->Ypos - a2->Ypos)) - a2->facedir + 1) & 7);
     if (d > 2)
         return;
-    if (g.puckc == (uint16_t)a3->SCnum)
+    if (puck_carrier() == (uint16_t)a3->SCnum)
         g.sflags &= (uint16_t)~HI(sfssdir);                 /* a3 has the puck */
     int16_t v = (int16_t)((int16_t)(a3->Xvel + a2->Xvel) >> 1);
     a3->Xvel = v; a2->Xvel = v;
@@ -463,11 +463,11 @@ hitter:
         g.crowdlevel += 0x12C;
         g.CwdExciteLvl += 0xF;
     }
-    if ((int16_t)g.puckc < 0 || g.puckc != (uint16_t)a2->SCnum) {
+    if ((int16_t)puck_carrier() < 0 || puck_carrier() != (uint16_t)a2->SCnum) {
         newcheck();
         return;
     }
-    ST_W(g.puckc);                                         /* the puck carrier lost it */
+    w8(RAM(puckc), 0, 0xFF);                                         /* the puck carrier lost it */
     if (!(g.gmode & (1 << gmhl)) && a2->SPA == SPAfallback && (a2->facedir & 3) == 0 && !(a2->pflags2 & (1 << 4))) {
         uint16_t r = randomd0(0xA0);
         if ((int16_t)r <= a2->impact && !(g.gmode & (1 << gmclock))) {
@@ -617,9 +617,9 @@ void checkgoal(struct SortObj *goal, struct SortObj *o, int16_t x, int16_t y)
         return;
     }
     o->pflags &= (uint8_t)~(1 << pfgoal);
-    if ((int16_t)g.puckc >= 0) {                         /* the carrier loses it */
-        struct SortObj *car = sortobj((int16_t)g.puckc);
-        ST_W(g.puckc);
+    if ((int16_t)puck_carrier() >= 0) {                         /* the carrier loses it */
+        struct SortObj *car = sortobj((int16_t)puck_carrier());
+        w8(RAM(puckc), 0, 0xFF);
         car->nopuck[0] = 8;
         int16_t py = sortobj(puckscnum)->Ypos;
         if (!(car->pflags & (1 << pfgoal)))
@@ -964,7 +964,7 @@ static void chkgoalie(struct SortObj *p, struct SortObj *puck)
 exit2:
     if (g.sflags4 & HI(2)) {
         g.sflags4 &= (uint16_t)~HI(2);
-        if (g.puckc != (uint16_t)p->SCnum)
+        if (puck_carrier() != (uint16_t)p->SCnum)
             sfx(5);                                        /* SFXshotwiff */
     }
 }
@@ -973,7 +973,7 @@ exit2:
 static void ccx(unsigned obj2, struct SortObj *puck)
 {
     unsigned n = obj2 >> 1;
-    if ((uint16_t)n == g.puckc)
+    if ((uint16_t)n == puck_carrier())
         return;
     if ((int16_t)n > 0xB)
         return;
@@ -1048,8 +1048,8 @@ void puckstick(struct SortObj *p, struct SortObj *puck, uint32_t dsq)
     if (p->position == 0 && (g.gmode & (1 << gmhl)))
         return;                                            /* the goalie lets the highlight shot in */
     p->pflags &= (uint8_t)~(1 << pfdoff);
-    if ((int16_t)g.puckc >= 0) {
-        struct SortObj *car = sortobj((int16_t)g.puckc);
+    if ((int16_t)puck_carrier() >= 0) {
+        struct SortObj *car = sortobj((int16_t)puck_carrier());
         if (!((car->pflags ^ p->pflags) & (1 << pfteam)))
             return;                                        /* no stealing from a teammate */
         if (dsq > ((g.sflags6 & HI(5)) ? 0x40u : 0x24u))
@@ -1127,7 +1127,7 @@ void puckglue(struct SortObj *p, struct SortObj *puck)
     (void)puck;
     int16_t snd = 7;                                       /* SFXpuckget */
     uint16_t d0 = (uint16_t)p->SCnum;
-    g.puckc = d0;
+    w16(RAM(puckc), 0, d0);
     rp other = team_struct(0), own = team_struct(1);
     if (!(p->pflags & (1 << pfteam))) { rp t = other; other = own; own = t; }
     w8(other, 0x1A, 0xFF);
@@ -1222,9 +1222,9 @@ void puckgoalie(struct SortObj *gk, struct SortObj *puck, int16_t dx, int16_t dy
     if (puck->Yvel > 0x3000 || puck->Yvel <= -0x3000)
         song((gk->pflags & (1 << pfteam)) ? 0xD : 0xB);
     sfx(0x24);                                             /* SFXpuckbody */
-    if ((int16_t)g.puckc >= 0) {
-        struct SortObj *car = sortobj((int16_t)g.puckc);
-        ST_W(g.puckc);
+    if ((int16_t)puck_carrier() >= 0) {
+        struct SortObj *car = sortobj((int16_t)puck_carrier());
+        w8(RAM(puckc), 0, 0xFF);
         car->nopuck[0] = 0x14;
         g.lastplayer = (uint16_t)car->SCnum;
         g.sflags &= (uint16_t)~(HI(sfspdir) | HI(sfssdir));
@@ -1269,7 +1269,7 @@ bounceoff:
 /* collide94.asm:deflect. Random puck direction on a deflection. */
 void deflect(struct SortObj *puck)
 {
-    ST_W(g.puckc);
+    w8(RAM(puckc), 0, 0xFF);
     puck->Yvel = (int16_t)randomd0s(0x1000);
     puck->Xvel = (int16_t)randomd0s(0x1000);
     puck->Zvel = (int16_t)randomd0(0x1000);

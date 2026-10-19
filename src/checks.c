@@ -30,7 +30,7 @@ static inline int16_t puckz(void) { return (int16_t)g.puckz[0]; }
 static inline int16_t puckvx(void) { return (int16_t)g.puckvx; }
 static inline int16_t puckvy(void) { return (int16_t)g.puckvy; }
 static inline int16_t puckvz(void) { return (int16_t)g.puckvz[0]; }
-static inline int16_t puckc(void) { return (int16_t)g.puckc; }
+static inline int16_t puckc(void) { return (int16_t)puck_carrier(); }
 static inline struct SortObj *puck_obj(void) { return sortobj(puckscnum); }
 /* the first sort object of the other team (6 home, 6 away) */
 static inline struct SortObj *opponents(const struct SortObj *o) { return sortobj(o->SCnum >= 6 ? 0 : 6); }
@@ -1291,7 +1291,7 @@ void puckpenshot(rp tm, struct SortObj *o)
     g.puckvx = 0;
     g.puckvy = 0;
     g.puckvz[0] = 0;
-    ST_W(g.puckc);
+    w8(RAM(puckc), 0, 0xFF);
     reset_ice_objects();
     setpersonel(team_struct(0));
     SetupPenaltyShot(team_struct(0));
@@ -1357,7 +1357,7 @@ void puckpenshot(rp tm, struct SortObj *o)
  * puck is loose or the timer runs out. */
 void UpdatePenaltyShotEnd(struct SortObj *o)
 {
-    if (g.puckc == g.BA_Goalie_SCnum) goto ended;
+    if (puck_carrier() == g.BA_Goalie_SCnum) goto ended;
     if (!(g.BA_PS_flags & HI(5))) goto timer;
     if (!(g.gmode2 & HI(5))) {
         if (puckc() >= 0) goto countdown;
@@ -1687,7 +1687,7 @@ void puckfaceoff2(rp tm, struct SortObj *o)
     g.puckvx = 0;
     g.puckvy = 0;
     g.puckvz[0] = 0;
-    ST_W(g.puckc);
+    w8(RAM(puckc), 0, 0xFF);
     reset_ice_objects();
     setpersonel(team_struct(0));
     forcepldata(team_struct(0));

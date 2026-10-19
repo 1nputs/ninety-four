@@ -36,14 +36,15 @@ static int is_ported(uint32_t pc)
 
 static int run_record(Record *r, const Port *p)
 {
-    memcpy(&g, r->ram_in, RAM_SIZE);
+    ram_unpack(r->ram_in);
     replay_begin(r);
     replay_failures = 0; reg_fail = 0;
     elapsed = (int16_t)r->regs_in[R_D7];
     assign_d2 = r->regs_in[R_D2];                         /* (assnearest's register leak) */
     p->run(r);
     int bad = 0;
-    const uint8_t *got = (const uint8_t *)&g;
+    static uint8_t got[RAM_SIZE];
+    ram_pack(got);                                        /* (RAM as the 68000 has it) */
     for (uint32_t i = 0; i < RAM_VARS_END; i++) {
         if (got[i] != r->ram_out[i]) {
             if (bad < 12) {
@@ -86,6 +87,28 @@ static void run_capture(Record *recs, size_t n, const char **only, int nonly, lo
     }
 }
 
+/* native RAM's map (src/ram.c) before anything leans on it: each machine byte in exactly one host
+ * byte, an image unpacked and packed again the same, and a field read by name as by address */
+static int map_check(void)
+{
+    static uint8_t seen[RAM_SIZE], in[RAM_SIZE], out[RAM_SIZE];
+    for (uint32_t a = 0; a < RAM_SIZE; a++) {
+        if (seen[ram_host_[a]]++) { printf("captest: RAM map: host byte %04x twice\n", ram_host_[a]); return 0; }
+    }
+    uint32_t x = 0x9E3779B9;
+    for (uint32_t a = 0; a < RAM_SIZE; a++) { x = x * 1103515245 + 12345; in[a] = (uint8_t)(x >> 16); }
+    ram_unpack(in);
+    ram_pack(out);
+    if (memcmp(in, out, RAM_SIZE)) { printf("captest: RAM map: unpack then pack changes the image\n"); return 0; }
+    g.disflags = 0x1234; g.seed = 0x89ABCDEF; sortobj(3)->Ypos = -2;
+    if (r16(RAM(disflags), 0) != 0x1234 || r8(RAM(disflags), 1) != 0x34 || r32(RAM(seed), 0) != 0x89ABCDEF || r8(RAM(seed), 0) != 0x89
+        || r16(ram_at(RAM_BASE + RAM_OFF_SortCords + 3 * SCSTRUCT + SO_Ypos), 0) != 0xFFFE) {
+        printf("captest: RAM map: a field reads otherwise by address\n"); return 0;
+    }
+    printf("captest: RAM map: every byte once, images round trip, fields as their addresses\n");
+    return 1;
+}
+
 int main(int argc, char **argv)
 {
     const char *usage = "usage: captest FILE.cap... [routine ...] [-v]\n";
@@ -100,6 +123,7 @@ int main(int argc, char **argv)
         else if (nonly < 32) only[nonly++] = argv[i];
     }
     if (!ncaps) { fprintf(stderr, "%s", usage); return 2; }
+    if (!map_check()) return 1;
     long tested = 0, failed = 0, skipped = 0;
     for (int c = 0; c < ncaps; c++) {
         Record *recs; size_t n;

@@ -45,8 +45,8 @@ void ReadCrowdRecord(uint32_t team, uint32_t buf)
 void setSlotBit(void)
 {
     g.sflags6 &= (uint16_t)~HI(5);
-    if ((int16_t)g.puckc < 0) return;
-    const struct SortObj *o = sortobj((int16_t)g.puckc);
+    if ((int16_t)puck_carrier() < 0) return;
+    const struct SortObj *o = sortobj((int16_t)puck_carrier());
     int16_t y = o->Ypos;
     if (!(o->pflags & 0x80)) y = (int16_t)-y;
     if (y < 0x58 || o->Xpos > 0x47 || o->Xpos < -0x47) return;

@@ -161,8 +161,8 @@ art's sizes and colours, what is and is not taken from a hack, packages, records
 The hardware side is [pulseman](https://github.com/1nputs/pulseman), our Mega Drive runtime,
 included as a git submodule in `ext/pulseman`: clone with `--recursive`, or after a plain clone
 run `git submodule update --init`. `make nhl94` builds it too. Besides that you need GCC (C and
-C++), `make`, `pkg-config` and SDL2. The game itself must be built with GCC for now: its RAM
-layout uses a GCC-only attribute until the planned WebAssembly work replaces it. Your saves and
+C++), `make`, `pkg-config` and SDL2. The game's own code builds with Clang as well (its capture
+test passes built either way), but the builds made and tested here use GCC. Your saves and
 states go to `out/` in this repository.
 
 **Linux** (built and tested here, Debian 13, GCC 14):
@@ -228,9 +228,13 @@ tell us what it said.
   League and Game rules pages. In pulseman: the console's state as a value, a client-owned clock
   with line-by-line drawing and an H-interrupt hook, a bus map, FM cores and models chosen at run
   time, a trace recorder, PNG and zip, the client's option pages, and vsync.
-- **Deferred by the owner.** WebAssembly (it first needs `src/ram.h`'s GCC-only big-endian
-  struct replaced: the choice is part of that job) and the cartridge's slowdown (it needs a 68k
-  cost model).
+- **Native state** (the owner's direction): the game's RAM is a native struct (the 68000's offsets,
+  the host's byte order, any compiler); the console's big-endian view of it is made on demand
+  (`src/mem.h` reads and writes by 68000 address through `src/ram.c`'s generated map,
+  `ram_pack`/`ram_unpack` for the checks and states). Next: RAM's regions as typed native structs,
+  then leagues as native tables.
+- **Deferred by the owner.** WebAssembly (the game's code compiles for it now; a browser platform
+  for pulseman is the job) and the cartridge's slowdown (it needs a 68k cost model).
 - **Read first.** `ext/pulseman/README.md` and `docs/API.md` there; the comments at the top
   of `tools/oracle/vectors.py`, `tools/golden.py` and `tools/hybrid/oracle_shim.c`. The working
   notes (the handoff guide, the plan, the playbook for another game) are kept outside the

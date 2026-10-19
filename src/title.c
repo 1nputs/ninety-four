@@ -63,7 +63,7 @@ uint8_t ReadGoaliePulled(struct SortObj *o)
 int ShootoutShootCheck(struct SortObj *o)
 {
     if (!(g.gmode2 & HI(1))) return 0;
-    if (o->SCnum != (int16_t)g.puckc) return 0;
+    if (o->SCnum != (int16_t)puck_carrier()) return 0;
     if ((int16_t)g.shootoutclock <= 3) return 1;
     if ((g.sopathx >> 8) == 0x80) return 1;
     if (!(g.sflags7 & 8)) {

@@ -16,7 +16,7 @@
 #define PFLAG(o, b) ((o)->pflags & (1 << (b)))
 static inline int16_t puckx(void) { return (int16_t)g.puckx[0]; }
 static inline int16_t pucky(void) { return (int16_t)g.pucky; }
-static inline int16_t puckc(void) { return (int16_t)g.puckc; }
+static inline int16_t puckc(void) { return (int16_t)puck_carrier(); }
 /* the Penaltylist entry of penalty number d0 (a word offset into the table): byte 0 = delay before
  * the stop, byte 1 = minutes, +2 a String (the message), then the referee animation */
 static inline const uint8_t *penalty_entry(uint16_t pen) { const uint8_t *t = rom_ptr(SYM_Penaltylist); return t + rd16(t + pen); }
@@ -128,7 +128,7 @@ cont:
     rp gs = { 0 };
     int16_t d3 = NewTicker(&gs);
     NewTicker3(d3, gs);
-    ST_W(g.puckc);
+    w8(RAM(puckc), 0, 0xFF);
     struct SortObj *puck = sortobj(puckscnum);
     assinsert(0x1A, puck);                                /* puckunflip */
     puck->temp1 = 0x1C20;

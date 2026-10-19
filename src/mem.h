@@ -1,8 +1,9 @@
 /* Work RAM by its 68000 address, as the original's code holds places in its registers: the way to
  * RAM's bytes besides its named fields (g.x, o->x). A place (rp) is opaque, so the compiler finds
  * every raw access, and there is no host pointer into RAM's bytes outside this header. Behind it is
- * today's struct g, laid out as the console's RAM; the native structs to come read and write the
- * same places through the generated map of addresses to fields (the playbook's NATIVE-STATE.md). */
+ * struct g, native (src/ram.h: the 68000's offsets, the host's byte order): a machine byte is read
+ * and written where ram_host_ says the host keeps it, so the 68000's big-endian view holds over
+ * fields of any width (the playbook's NATIVE-STATE.md). */
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
@@ -21,8 +22,8 @@ static inline uint32_t rp_addr(rp p) { return RAM_BASE + p.o; }
 static inline int rp_same(rp a, rp b) { return a.o == b.o; }
 static inline int32_t rp_diff(rp a, rp b) { return (int32_t)a.o - b.o; }   /* (a - b in bytes, as the 68000 subtracts addresses) */
 
-/* (today's storage: g's bytes, big-endian as the 68000 has them) */
-static inline uint8_t *ram_byte_(rp p, int32_t off) { return (uint8_t *)&g + (uint16_t)(p.o + off); }
+/* (the storage: the host byte of the machine byte off bytes from p) */
+static inline uint8_t *ram_byte_(rp p, int32_t off) { return (uint8_t *)&g + ram_host_[(uint16_t)(p.o + off)]; }
 
 /* bytes, words and longs at off bytes from p, big-endian as the 68000 reads and writes them */
 static inline uint8_t r8(rp p, int32_t off) { return *ram_byte_(p, off); }
@@ -42,11 +43,14 @@ static inline uint8_t r8_inc(rp p, int32_t off) { uint8_t v = (uint8_t)(r8(p, of
 static inline uint8_t r8_postinc(rp p) { uint8_t v = r8(p, 0); w8(p, 0, (uint8_t)(v + 1)); return v; }
 static inline uint8_t r8_postdec(rp p) { uint8_t v = r8(p, 0); w8(p, 0, (uint8_t)(v - 1)); return v; }
 
-/* n bytes from src to dst (they may overlap, as memmove), or n bytes of v at dst */
+/* n bytes from src to dst (they may overlap, as memmove; byte by byte, as the two may hold
+ * scalars differently), or n bytes of v at dst */
 static inline void ram_copy(rp dst, rp src, size_t n)
 {
-    if (dst.o + n <= 0x10000u && src.o + n <= 0x10000u) { memmove(ram_byte_(dst, 0), ram_byte_(src, 0), n); return; }
-    for (size_t i = 0; i < n; i++) w8(dst, (int32_t)i, r8(src, (int32_t)i));   /* (past the top: byte by byte, as move.b (a0)+,(a1)+) */
+    if ((uint16_t)(dst.o - src.o) < n)                    /* (dst inside src's bytes: from the end) */
+        for (size_t i = n; i-- > 0;) w8(dst, (int32_t)i, r8(src, (int32_t)i));
+    else
+        for (size_t i = 0; i < n; i++) w8(dst, (int32_t)i, r8(src, (int32_t)i));
 }
 static inline void ram_fill(rp dst, uint8_t v, size_t n) { for (size_t i = 0; i < n; i++) w8(dst, (int32_t)i, v); }
 
@@ -62,5 +66,5 @@ static inline uint32_t m32(uint32_t a) { return (uint32_t)m16(a) << 16 | m16(a +
 
 /* a sort object (struct SortObj, read by its named fields) at a place: the sorted objects, and the
  * regions the original reads as one (the pads, sso's arrows, the camera); and an object's place */
-static inline struct SortObj *obj_at(rp p) { return (struct SortObj *)ram_byte_(p, 0); }
+static inline struct SortObj *obj_at(rp p) { return (struct SortObj *)((uint8_t *)&g + p.o); }   /* (a struct starts where the machine's does) */
 static inline rp obj_place(const struct SortObj *o) { return (rp){ (uint16_t)((const uint8_t *)o - (const uint8_t *)&g) }; }

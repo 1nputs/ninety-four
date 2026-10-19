@@ -165,10 +165,9 @@ void replay_io_write(uint32_t addr, int width, uint32_t value)
 
 void replay_apply(const Call *c)
 {
-    uint8_t *ram = (uint8_t *)&g;
     for (uint32_t i = 0; i < c->n_diff; i++) {
         const uint8_t *e = c->diff + 4 * i;
-        ram[e[0] | e[1] << 8] = e[3];
+        ((uint8_t *)&g)[ram_host_[e[0] | e[1] << 8]] = e[3];   /* (the machine byte where the host keeps it) */
     }
 }
 

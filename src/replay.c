@@ -377,10 +377,10 @@ void updateplayers(void)
     g.sflags7 &= (uint8_t)~0x40;                                  /* the crowd meter record bit */
     if (!((int16_t)g.CurCrowdMeter < (int16_t)g.CrowdRecord)) g.sflags7 |= 0x40;
     SetSflags8Bit1();
-    if ((int16_t)g.puckc >= 0) {
+    if ((int16_t)puck_carrier() >= 0) {
         g.sflags8 &= (uint8_t)~0x80;
         g.sflags6 &= (uint16_t)~HI(1);
-        if (sortobj(g.puckc)->pflags3 & (1 << pf3break)) g.gmode2 &= (uint16_t)~HI(4);
+        if (sortobj(puck_carrier())->pflags3 & (1 << pf3break)) g.gmode2 &= (uint16_t)~HI(4);
     }
     for (int i = 0; i < 16; i++) {
         struct SortObj *o = sortobj(i);
@@ -394,7 +394,7 @@ void updateplayers(void)
             else hold_at_boards(o);
         }
         if (o->position >= 0) {                                   /* on the ice */
-            if (o->SCnum != (int16_t)g.puckc) o->pflags3 &= (uint8_t)~((1 << pf3break) | (1 << pf3oside));
+            if (o->SCnum != (int16_t)puck_carrier()) o->pflags3 &= (uint8_t)~((1 << pf3break) | (1 << pf3oside));
             updateanim(o);
             o->nopuck[0] = tick_byte(o->nopuck[0]);
             o->nopuck[1] = tick_byte(o->nopuck[1]);
@@ -447,7 +447,7 @@ void updateplayers(void)
                 }
             }
             int16_t d6 = o->SCnum;
-            if (d6 == (int16_t)g.puckc && !(o->pflags2 & (1 << pf2fight)) && !(g.sflags & HI(sfhor)))
+            if (d6 == (int16_t)puck_carrier() && !(o->pflags2 & (1 << pf2fight)) && !(g.sflags & HI(sfhor)))
                 setpads(-2, o);
             if (!(g.sflags2 & HI(sf2faceoff)) && g.holdreset != 0) {
                 g.holdreset--;
@@ -562,8 +562,8 @@ void checkwindow(void)
     int16_t d2 = (int16_t)g.yc1, d3 = (int16_t)g.xc1;
     if (!(g.sflags & HI(sfslock))) {
         const struct SortObj *o = sortobj(0xE);                   /* the puck */
-        if ((int16_t)g.puckc >= 0) {
-            o = sortobj(g.puckc);
+        if ((int16_t)puck_carrier() >= 0) {
+            o = sortobj(puck_carrier());
             int16_t d0 = (int16_t)(elapsed * 2);
             if (o->pflags & (1 << pfgoal)) {
                 g.yleader = (uint16_t)(g.yleader + d0);
