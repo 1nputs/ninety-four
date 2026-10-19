@@ -109,7 +109,7 @@ void OneTimerTarget(struct SortObj *o)
 
 /* onetimer94.asm:assonetimer. Assignment $23, player a3 shooting a one-timer: take control of
  * him, start the animation, then shoot when the puck arrives (EndOneTimer). */
-void assonetimer(uint8_t *tm, struct SortObj *o)
+void assonetimer(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfna)) {
         o->pflags &= (uint8_t)~(1 << pfna);
@@ -240,16 +240,16 @@ void onetimershot(struct SortObj *a2, struct SortObj *o)
 {
     g.passdir = 4;
     doshot(o);
-    uint8_t *tm = team_struct(PFLAG(o, pfteam));
+    rp tm = team_struct(PFLAG(o, pfteam));
     uint16_t d0 = o->pnum;
-    if (!rules[RULE_ASSIST_FIX] || d0 != rd16(tm + tmassist1))   /* (rules: a give-and-go keeps the second assist) */
-        wr16(tm + tmassist2, rd16(tm + tmassist1));
-    wr16(tm + tmassist1, rd16(tm + tmlasttouch));
-    wr16(tm + tmlasttouch, d0);
+    if (!rules[RULE_ASSIST_FIX] || d0 != r16(tm, tmassist1))     /* (rules: a give-and-go keeps the second assist) */
+        w16(tm, tmassist2, r16(tm, tmassist1));
+    w16(tm, tmassist1, r16(tm, tmlasttouch));
+    w16(tm, tmlasttouch, d0);
     g.sflags8 |= 0x80;
     g.crowdlevel += 0x96;
     g.CwdExciteLvl += 0xA;
-    wr16(tm + tmonetimers, (uint16_t)(rd16(tm + tmonetimers) + 1));   /* one-timer attempts */
+    w16(tm, tmonetimers, (uint16_t)(r16(tm, tmonetimers) + 1));       /* one-timer attempts */
     g.onetimerflags |= HI(0);
     o->pflags2 |= 2;
     g.sflags6 |= HI(1);

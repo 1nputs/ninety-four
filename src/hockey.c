@@ -23,9 +23,9 @@ void ClearShotData(void)
 void restoreteams(void)
 {
     for (int t = 0; t < 2; t++) {
-        uint8_t *tm = team_struct(t);
-        wr16(tm + tmap, 6);
-        for (int16_t d0 = 0x32; d0 >= 0; d0 -= 2) wr16(tm + tmpdst + d0, 0xFFFE);
+        rp tm = team_struct(t);
+        w16(tm, tmap, 6);
+        for (int16_t d0 = 0x32; d0 >= 0; d0 -= 2) w16(tm, tmpdst + d0, 0xFFFE);
     }
 }
 
@@ -90,14 +90,14 @@ void RestoreBenchEnergy(void)
 {
     if (g.OptLine != 0) return;
     for (int t = 0; t < 2; t++) {
-        uint8_t *tm = team_struct(t);
+        rp tm = team_struct(t);
         for (int16_t d0 = 0x32; d0 >= 0; d0 -= 2) {
-            uint16_t at = rd16(tm + tmpdst + d0);         /* (rules: the box rests too: penalty time, not injured) */
+            uint16_t at = r16(tm, tmpdst + d0);           /* (rules: the box rests too: penalty time, not injured) */
             int box = rules[RULE_BOX_REST] && (int16_t)at >= 0 && !(at & 0x1000);
             if (at != 0xFFFE && !box) continue;
-            uint16_t e = (uint16_t)(rd16(tm + tmpde + d0) + rule_scale(RULE_BENCH_REST, 9));   /* (rules: bench rest) */
+            uint16_t e = (uint16_t)(r16(tm, tmpde + d0) + rule_scale(RULE_BENCH_REST, 9));     /* (rules: bench rest) */
             if ((int16_t)e >= 0x1000) e = 0x1000;
-            wr16(tm + tmpde + d0, e);
+            w16(tm, tmpde + d0, e);
         }
     }
 }
@@ -274,7 +274,7 @@ void SetupPauseScreen(void)
 }
 
 /* hockey94.asm:seta2. The team struct of the pause joystick. */
-uint8_t *seta2(void)
+rp seta2(void)
 {
     uint16_t t = (g.sflags & HI(sfpj)) ? g.cont2team : g.cont1team;
     return team_struct(t != 1);
@@ -371,10 +371,10 @@ void Pausemode(void)
     while (g.vcount == v) hal_wait_vblank();
     p_turnoff();
     uint16_t saved = g.sflags;
-    uint8_t *tm = seta2();
+    rp tm = seta2();
     uint32_t items = SYM_PauseText;
     if (g.gmode2 & HI(0)) items = SYM_PauseMenuItems;
-    else if (tm[tmflags] & 4) items = SYM_PauseText2;
+    else if (r8(tm, tmflags) & 4) items = SYM_PauseText2;
     InitMenuState(items, SYM_SetupPauseScreen);
     for (;;) {
         vcountwait();

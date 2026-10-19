@@ -54,7 +54,7 @@ int chkFgtBit1(struct SortObj *a2, struct SortObj *a3) { return !(a2->fighting &
  * goalie is pulled). */
 uint8_t ReadGoaliePulled(struct SortObj *o)
 {
-    uint16_t v = rd16(team_struct(o->pflags & (1 << pfteam)) + tmgoalie);
+    uint16_t v = r16(team_struct(o->pflags & (1 << pfteam)), tmgoalie);
     return (uint8_t)((v == 0 ? CCR_Z : 0) | (v & 0x8000 ? CCR_N : 0));
 }
 
@@ -154,8 +154,8 @@ void LeadSong(void)
 {
     uint16_t saved = g.sflags2;
     if (g.gmode2 & HI(1)) { LeadSongExit(saved); return; }
-    uint8_t *leader = team_struct(1);
-    int16_t diff = (int16_t)(rd16(team_struct(0) + 0x24) - rd16(team_struct(1) + 0x24));
+    rp leader = team_struct(1);
+    int16_t diff = (int16_t)(r16(team_struct(0), 0x24) - r16(team_struct(1), 0x24));
     if (diff == 0) { LeadSongExit(saved); return; }
     if (diff < 0) {
         if (!(g.sflags2 & HI(6))) { ClearLeadSong(); g.sflags2 |= HI(6); }
@@ -167,7 +167,7 @@ void LeadSong(void)
     g.sflags2 |= HI(5);
     if (was) { LeadSongExit(saved); return; }
     g.HmTeam = g.HomeTeam;
-    g.SongIndex = leader == team_struct(0) ? 1 : 4;
+    g.SongIndex = rp_same(leader, team_struct(0)) ? 1 : 4;
     ChooseSong();
     g.sflags8 |= 0x40;
     LeadSongExit(saved);
@@ -250,9 +250,9 @@ uint16_t LoadHomeTeamGfx(uint16_t start)
 /* title94.asm:HotColdIcon. Team a2: the icon by the name of iconplayer (x 2 away, $20 home,
  * y $19): the hot icon for the team's hot player, the cold one for its cold player, else clear
  * it. */
-void HotColdIcon(uint8_t *tm)
+void HotColdIcon(rp tm)
 {
-    int home = tm == team_struct(0);
+    int home = rp_same(tm, team_struct(0));
     g.iconx = home ? 0x20 : 2;
     uint32_t icon;
     uint16_t chars;
@@ -275,11 +275,11 @@ void HotColdIcon(uint8_t *tm)
 }
 
 /* title94.asm:clrTmPdst. Team a0: all 26 roster slots on the bench (-2), then the end word -1. */
-void clrTmPdst(uint8_t *tm)
+void clrTmPdst(rp tm)
 {
-    uint8_t *p = tm + tmpdst;
-    for (int i = 0; i < 26; i++, p += 2) wr16(p, 0xFFFE);
-    wr16(p, 0xFFFF);
+    rp p = rp_add(tm, tmpdst);
+    for (int i = 0; i < 26; i++, p = rp_add(p, 2)) w16(p, 0, 0xFFFE);
+    w16(p, 0, 0xFFFF);
 }
 
 /* title94.asm:ClearPenalties. No penalties: the counters, PenBuf and both teams' slots. */
@@ -327,9 +327,9 @@ void SetSflags8Bit1(void) { g.sflags8 |= 2; }
 
 /* PrintPlayerGoals / PrintPlayerAssists: " (n)" with byte d0 of the team table, then the next
  * row at x $E */
-void PrintParenNumber(const uint8_t *table, uint16_t player)
+void PrintParenNumber(rp table, uint16_t player)
 {
-    int16_t n = (int8_t)table[(int16_t)player];
+    int16_t n = (int8_t)r8(table, (int16_t)player);
     uint16_t width = n > 0x63 ? 3 : n > 9 ? 2 : 1;
     print(PushNumberWidth((uint16_t)n, width));
     printz(str_PrintParenNumber_1, sizeof str_PrintParenNumber_1);
@@ -338,17 +338,17 @@ void PrintParenNumber(const uint8_t *table, uint16_t player)
 }
 
 /* title94.asm:PrintPlayerGoals. d0 = player, a2 = team: " (goals)", next row. */
-void PrintPlayerGoals(uint16_t player, uint8_t *tm)
+void PrintPlayerGoals(uint16_t player, rp tm)
 {
     printz(str_PrintPlayerGoals_1, sizeof str_PrintPlayerGoals_1);
-    PrintParenNumber(tm + tmpgoals, player);
+    PrintParenNumber(rp_add(tm, tmpgoals), player);
 }
 
 /* title94.asm:PrintPlayerAssists. d0 = player, a2 = team: " (assists)", next row. */
-void PrintPlayerAssists(uint16_t player, uint8_t *tm)
+void PrintPlayerAssists(uint16_t player, rp tm)
 {
     printz(str_PrintPlayerAssists_1, sizeof str_PrintPlayerAssists_1);
-    PrintParenNumber(tm + tmpassists, player);
+    PrintParenNumber(rp_add(tm, tmpassists), player);
 }
 
 /* title94.asm:ReadLineData. Read the $100 bytes at save RAM LineDataBase to databuffer;
@@ -687,8 +687,8 @@ void ClearWinRecords(void)
 
 /* title94.asm:GetTeamStruct. a2 = the home team struct, or the visitors' when team d2 is not its
  * team ($28 of the struct). */
-uint8_t *GetTeamStruct(uint16_t team)
+rp GetTeamStruct(uint16_t team)
 {
-    uint8_t *tm = team_struct(0);
-    return rd16(tm + SO_Xvel) == team ? tm : team_struct(1);
+    rp tm = team_struct(0);
+    return r16(tm, SO_Xvel) == team ? tm : team_struct(1);
 }

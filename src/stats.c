@@ -11,9 +11,9 @@
 #define RAM_W(off) ram_ptr(RAM_BASE + (off))
 
 /* stats94.asm:GetPlayerCount. a2 = team -> d0 = its players (records until a length word 2). */
-uint16_t GetPlayerCount(uint8_t *tm)
+uint16_t GetPlayerCount(rp tm)
 {
-    uint32_t a = rd32(tm + tmdata);
+    uint32_t a = r32(tm, tmdata);
     a += (int16_t)rd16(rom_ptr(a));
     uint16_t n = 0;
     do {
@@ -25,9 +25,9 @@ uint16_t GetPlayerCount(uint8_t *tm)
 }
 
 /* stats94.asm:GetGoalieCount. a2 = team -> d0 = its goalies (the nibbles of a team data word). */
-uint16_t GetGoalieCount(const uint8_t *tm)
+uint16_t GetGoalieCount(rp tm)
 {
-    uint32_t a = rd32(tm + tmdata);
+    uint32_t a = r32(tm, tmdata);
     a += (int16_t)rd16(rom_ptr(a + 0xA));
     uint16_t w = rd16(rom_ptr(a)), n = 0;
     do { n++; w = (uint16_t)(w << 4); } while (w != 0);
@@ -36,16 +36,16 @@ uint16_t GetGoalieCount(const uint8_t *tm)
 
 /* stats94.asm:GetDefenseStart. d0 = the roster index of team a2's first defenseman: its goalies
  * (GetGoalieCount) and forwards (GetForwardCount). */
-uint16_t GetDefenseStart(const uint8_t *tm)
+uint16_t GetDefenseStart(rp tm)
 {
     return (uint16_t)(GetGoalieCount(tm) + GetForwardCount(tm));
 }
 
 /* stats94.asm:GetForwardCount. d0 = team a2's forwards: the high nibble of byte 3 of its team
  * data block at +8. */
-uint16_t GetForwardCount(const uint8_t *tm)
+uint16_t GetForwardCount(rp tm)
 {
-    uint32_t a = rd32(tm + tmdata);
+    uint32_t a = r32(tm, tmdata);
     a += (uint32_t)(int16_t)rd16(rom_ptr(a + 8));
     return (uint16_t)(rom_ptr(a)[3] >> 4);
 }
@@ -147,13 +147,13 @@ void PlayoffStatsScreen(void)
 {
     ReadTeamStats();
     uint16_t team = (uint16_t)((g.potreeteam & 0xFF00) | g.potree[g.potreeteam]);
-    uint8_t *tm = team_struct(0);
-    if (team != rd16(tm + tmteam)) tm = team_struct(1);
+    rp tm = team_struct(0);
+    if (team != r16(tm, tmteam)) tm = team_struct(1);
     PlayerStatsList(tm, 1);
 }
 
 /* stats94.asm:PlayerStatsScreen. Player Stats (a menu item): PlayerStatsList with d7 = 0. */
-void PlayerStatsScreen(uint8_t *tm)
+void PlayerStatsScreen(rp tm)
 {
     PlayerStatsList(tm, 0);
 }
@@ -171,7 +171,7 @@ static const uint8_t more_titles[3][22] = {                /* for columns 4 to 6
 /* stats94.asm:PlayerStatsList. The stats of team a2's players, this game's (d7 = 0) or the
  * playoffs' (1): sorted by the column chosen with left / right, scrolled with up / down; A shows
  * the other team (game stats only), Start leaves (ExitStatsScreen). */
-void PlayerStatsList(uint8_t *tm, int playoff)
+void PlayerStatsList(rp tm, int playoff)
 {
     SetupScreen(0xD, 0x16);
     g.DispAttribCtr = 0;
@@ -186,7 +186,7 @@ void PlayerStatsList(uint8_t *tm, int playoff)
             printsmallz(str_PlayerStatsList_3, sizeof str_PlayerStatsList_3);
             printbigz(str_PlayerStatsList_4, sizeof str_PlayerStatsList_4);
         }
-        PutTeamBlock(tm == team_struct(0) ? 0 : 0x2C);
+        PutTeamBlock(rp_same(tm, team_struct(0)) ? 0 : 0x2C);
         DrawStatsList(tm, playoff);
         DrawStatsListArrows();
         for (;;) {
@@ -196,7 +196,7 @@ void PlayerStatsList(uint8_t *tm, int playoff)
             if (d3 & 0x80) { ExitStatsScreen(); return; }
             if (d1 & 0x40) {                              /* A: the other team */
                 if (playoff) { UpdateStatsListScroll(tm, playoff); continue; }
-                tm = tm == team_struct(0) ? team_struct(1) : team_struct(0);
+                tm = rp_same(tm, team_struct(0)) ? team_struct(1) : team_struct(0);
                 break;
             }
             nodiag(&d1, d3);
@@ -223,7 +223,7 @@ void PlayerStatsList(uint8_t *tm, int playoff)
 /* stats94.asm:UpdateStatsListScroll. Each frame: the list scrolls by PlayerScrollCtr within 0 ...
  * SelectedPlayerIdx, stopping on a 16 line boundary (the arrows then); off a boundary the row
  * coming into view is drawn. */
-void UpdateStatsListScroll(uint8_t *tm, int playoff)
+void UpdateStatsListScroll(rp tm, int playoff)
 {
     if (g.PlayerScrollCtr == 0) return;
     int16_t d0 = (int16_t)(g.PlayerScrollCtr + g.VertLineScrolling);
@@ -254,16 +254,16 @@ void SetStatsListScrollReg(void)
 }
 
 /* stats94.asm:DrawStatsRowUp. The row at the top of the window. */
-void DrawStatsRowUp(uint8_t *tm, int playoff) { DrawStatsRow((uint16_t)(g.VertLineScrolling >> 4), tm, playoff); }
+void DrawStatsRowUp(rp tm, int playoff) { DrawStatsRow((uint16_t)(g.VertLineScrolling >> 4), tm, playoff); }
 
 /* stats94.asm:DrawStatsRowDown. The row below the window. */
-void DrawStatsRowDown(uint8_t *tm, int playoff) { DrawStatsRow((uint16_t)((g.VertLineScrolling >> 4) + 6), tm, playoff); }
+void DrawStatsRowDown(rp tm, int playoff) { DrawStatsRow((uint16_t)((g.VertLineScrolling >> 4) + 6), tm, playoff); }
 
 /* stats94.asm:DrawStatsList. The column headers (the sort column highlighted; the goalie columns
  * for DispAttribCtr -1), the sort column's title, then the players by that column (ties by
  * lower number; goalies only for the goalie column) into Satt, ended by $FF, and the window's six
  * rows. */
-void DrawStatsList(uint8_t *tm, int playoff)
+void DrawStatsList(rp tm, int playoff)
 {
     printsmallz(str_DrawStatsList_1, sizeof str_DrawStatsList_1);
     uint32_t a1 = SYM_StatColumnHeaders;
@@ -297,7 +297,7 @@ void DrawStatsList(uint8_t *tm, int playoff)
     do {
         int32_t top = -1;
         best = 0xFF;
-        uint32_t data = rd32(tm + tmdata);
+        uint32_t data = r32(tm, tmdata);
         for (int16_t p = (int16_t)GetPlayerCount(tm) - 1; p >= 0; p--) {
             if (done & (1u << (p & 31))) continue;
             uint16_t v = 0;
@@ -323,7 +323,7 @@ void DrawStatsList(uint8_t *tm, int playoff)
 /* stats94.asm:DrawStatsRow. Row d3 of the sorted list (Satt): its rank, the player's name, then his
  * five columns (the sort column highlighted) or, in the goalie column, his saves, shots and save
  * %; nothing past the list's end. */
-void DrawStatsRow(uint16_t row, uint8_t *tm, int playoff)
+void DrawStatsRow(uint16_t row, rp tm, int playoff)
 {
     const uint8_t *a4 = SATT + row;
     printz(str_DrawStatsRow_1, sizeof str_DrawStatsRow_1);
@@ -376,7 +376,7 @@ void DrawStatsRow(uint16_t row, uint8_t *tm, int playoff)
 
 /* stats94.asm:GetStatColumn. -> d2 = stat column d1 of player d0 (ReadStatColumn); a goalie has
  * only columns 1 and 2, both his assists. */
-uint16_t GetStatColumn(uint16_t player, uint16_t col, uint8_t *tm, int playoff)
+uint16_t GetStatColumn(uint16_t player, uint16_t col, rp tm, int playoff)
 {
     if ((int16_t)player >= (int16_t)GetGoalieCount(tm)) return ReadStatColumn(player, col, tm, playoff);
     if (!(6 & (1u << (col & 7)))) return 0;               /* (btst d1,#6) */
@@ -386,16 +386,16 @@ uint16_t GetStatColumn(uint16_t player, uint16_t col, uint8_t *tm, int playoff)
 /* stats94.asm:ReadStatColumn. -> d2 = stat column d1 of player d0: this game's from the team
  * struct's byte arrays (StatColumnOffsets: one or two of them), the playoffs' (d7) from their RAM
  * tables (GetStatsValue). */
-uint16_t ReadStatColumn(uint16_t player, uint16_t col, uint8_t *tm, int playoff)
+uint16_t ReadStatColumn(uint16_t player, uint16_t col, rp tm, int playoff)
 {
-    if (!playoff && col == 5) return (uint16_t)(int16_t)rule_plusminus[tm == team_struct(1)][player & 31];   /* (rules) */
-    if (!playoff && col == 6) return tm[tmpchecks + player];                                                 /* (rules) */
+    if (!playoff && col == 5) return (uint16_t)(int16_t)rule_plusminus[rp_same(tm, team_struct(1))][player & 31];   /* (rules) */
+    if (!playoff && col == 6) return r8(tm, tmpchecks + player);                                             /* (rules) */
     if (!playoff) {
         const uint8_t *a1 = rom_ptr(SYM_StatColumnOffsets) + (uint16_t)(col << 2);
-        uint16_t v = tm[(int16_t)(uint16_t)(rd16(a1) + player)];
+        uint16_t v = r8(tm, (int16_t)(uint16_t)(rd16(a1) + player));
         int16_t second = (int16_t)rd16(a1 + 2);
         if (second < 0) return v;
-        return (uint16_t)(v + tm[(int16_t)(uint16_t)(second + player)]);
+        return (uint16_t)(v + r8(tm, (int16_t)(uint16_t)(second + player)));
     }
     uint16_t at = (uint16_t)(col << 2), off = (uint16_t)(player << 1), v = 0;
     v = GetStatsValue(at, off, v);
@@ -529,9 +529,9 @@ enum { LE_REDRAW, LE_MENU, LE_SELECT, LE_EXIT, LE_DONE };
 /* stats94.asm:LineEditor. The Line Editor for team a2 (a menu item): the slot cursor, C picks a
  * player for the slot (SelectLinePlayer), Start the exit menu (LineEditorExit). The 68k branches
  * between its four routines; here each returns the next. */
-void LineEditor(uint8_t *tm)
+void LineEditor(rp tm)
 {
-    tm[tmflags] |= 1;
+    w8(tm, tmflags, (uint8_t)(r8(tm, tmflags) | 1));
     SetupScreen(0, 0x1C);
     g.DispAttribCtr = 0;
     g.PlayerScrollCtr = 0;
@@ -549,7 +549,7 @@ void LineEditor(uint8_t *tm)
 
 /* stats94.asm:LineEditorRedraw. Clear the screen, the line icons to be drawn again; on to
  * LineEditorMenu. */
-int LineEditorRedraw(uint8_t *tm)
+int LineEditorRedraw(rp tm)
 {
     printsmallz(str_LineEditorRedraw_1, sizeof str_LineEditorRedraw_1);
     eraser(0x28, 0x1C, 0x7FF);
@@ -561,7 +561,7 @@ int LineEditorRedraw(uint8_t *tm)
 /* stats94.asm:LineEditorMenu. The screen and the icons, then the slot cursor: Start -> the exit
  * menu, C -> a player for the slot, the pad moves the cursor (LineCursorTable; only the first
  * line's five slots with OptLine). */
-int LineEditorMenu(uint8_t *tm)
+int LineEditorMenu(rp tm)
 {
     DrawTeamScreen(tm);
     DrawLineIcons(tm);
@@ -588,7 +588,7 @@ int LineEditorMenu(uint8_t *tm)
 /* stats94.asm:SelectLinePlayer. The players who can take the slot (forwards, or the defensemen
  * for slots 1-2) in Satt, the list at the slot's player; up / down choose, left / right page the
  * attribute columns, C puts the choice in the slot (SetLineSlot), Start goes back. */
-int SelectLinePlayer(uint8_t *tm)
+int SelectLinePlayer(rp tm)
 {
     uint16_t first = GetGoalieCount(tm), n = GetForwardCount(tm);
     if ((LE_SLOT() & 7) <= 2) {                           /* the defense */
@@ -660,7 +660,7 @@ static uint32_t attrib_column(uint32_t list)
 
 /* stats94.asm:PrintAttribHeader. The player list of the line editor: the header of attribute
  * column DispAttribCtr, then six rows of names and that attribute, the chosen one highlighted. */
-void PrintAttribHeader(uint8_t *tm)
+void PrintAttribHeader(rp tm)
 {
     printz(str_PrintAttribHeader_1, sizeof str_PrintAttribHeader_1);
     uint32_t a1 = print(attrib_column(SYM_PAttribColumns));
@@ -678,7 +678,7 @@ void PrintAttribHeader(uint8_t *tm)
 
 /* stats94.asm:DrawLineIcons. The lines drawn with the cursor's (LineIconGroups' masks; the area
  * cleared when they change), then the cursor slot's player in a box. */
-void DrawLineIcons(uint8_t *tm)
+void DrawLineIcons(rp tm)
 {
     uint32_t a0 = SYM_LineIconGroups + (LE_SLOT() >> 3);
     if (g.OptLine != 0) a0--;
@@ -702,7 +702,7 @@ void DrawLineIcons(uint8_t *tm)
 /* stats94.asm:DrawLineIcon. Line d5: its name (linelist) and " Line", then its players' last
  * names, at LineIconPosTable (the entry before with OptLine); the cursor's slot in the bold font,
  * its player and attribute kept (d6, d7). */
-void DrawLineIcon(uint16_t line, uint8_t *tm)
+void DrawLineIcon(uint16_t line, rp tm)
 {
     uint32_t a0 = SYM_LineIconPosTable + (uint16_t)(6 * line);
     if (g.OptLine != 0) a0 -= 6;
@@ -715,11 +715,11 @@ void DrawLineIcon(uint16_t line, uint8_t *tm)
     g.printx = rd16(pos);
     uint16_t slot = (uint16_t)((line << 3) + 1);
     g.printy = rd16(pos + 2);
-    const uint8_t *slots = tm + tmlines;
+    rp slots = rp_add(tm, tmlines);
     for (int16_t n = (int16_t)rd16(pos + 4); n >= 0; n--, slot++) {
         g.printx = rd16(pos);
         printsmallz(str_DrawLineIcon_2, sizeof str_DrawLineIcon_2);
-        uint16_t player = (uint16_t)(slots[slot] - 1);
+        uint16_t player = (uint16_t)(r8(slots, slot) - 1);
         uint32_t name = FormatPlayerNameShort(player, tm);
         if (slot == LE_SLOT()) {
             le_player = player;
@@ -744,7 +744,7 @@ void ClearLineArea(void)
 
 /* stats94.asm:DrawTeamScreen. The line editor's background (ScoutMap), frame and title, and the
  * team's logo map (PutTeamBlock). */
-void DrawTeamScreen(uint8_t *tm)
+void DrawTeamScreen(rp tm)
 {
     ClearLineEditorTop();
     printz(str_DrawTeamScreen_1, sizeof str_DrawTeamScreen_1);
@@ -753,7 +753,7 @@ void DrawTeamScreen(uint8_t *tm)
     printz(str_DrawTeamScreen_2, sizeof str_DrawTeamScreen_2);
     Framer(0x1A, 6);
     printbigz(str_DrawTeamScreen_3, sizeof str_DrawTeamScreen_3);
-    PutTeamBlock(tm == team_struct(0) ? 0 : 0x2C);
+    PutTeamBlock(rp_same(tm, team_struct(0)) ? 0 : 0x2C);
 }
 
 /* stats94.asm:ClearLineEditorTop. Erase 40 x 10 at the top of map 2. */
@@ -773,13 +773,13 @@ void ClearMenuFlags(void)
 /* stats94.asm:LineEditorExit. Start in the line editor: its menu (LineEditorMenuText, or
  * LineEditorMenuNoLoad when databuffer holds another team's lines), the pause menu's state kept;
  * its first item leaves (ExitStatsScreen), the others redraw the editor. */
-int LineEditorExit(uint8_t *tm)
+int LineEditorExit(rp tm)
 {
     ClearMenuFlags();
     g.palcount = 0x18;
     uint32_t item = g.menuitem, list = g.menulist, draw = g.menudraw;
     uint32_t items = SYM_LineEditorMenuText;
-    if ((uint8_t)(rd16(tm + tmteam) + 1) != g.databuffer[0]) items = SYM_LineEditorMenuNoLoad;
+    if ((uint8_t)(r16(tm, tmteam) + 1) != g.databuffer[0]) items = SYM_LineEditorMenuNoLoad;
     printsmallz(str_LineEditorExit_1, sizeof str_LineEditorExit_1);
     InitMenuState(items, SYM_rtss2);
     for (;;) {
@@ -801,18 +801,18 @@ int LineEditorExit(uint8_t *tm)
 
 /* stats94.asm:SetLineSlot. Player d0 (1 based) to line slot d2 of team a2; when he is already in
  * another slot of that line, the slot's old player goes there (a swap). */
-void SetLineSlot(uint8_t player, uint16_t slot, uint8_t *tm)
+void SetLineSlot(uint8_t player, uint16_t slot, rp tm)
 {
-    uint8_t *lines = tm + tmlines, *line = lines + (int16_t)(slot & 0xFFF8);
+    rp lines = rp_add(tm, tmlines), line = rp_add(lines, (int16_t)(slot & 0xFFF8));
     for (int16_t i = 5; i >= 0; i--)
-        if (line[1 + i] == player) { line[1 + i] = lines[(int16_t)slot]; break; }
-    lines[(int16_t)slot] = player;
+        if (r8(line, 1 + i) == player) { w8(line, 1 + i, r8(lines, (int16_t)slot)); break; }
+    w8(lines, (int16_t)slot, player);
 }
 
 /* stats94.asm:DecodeTeamLines. Team a2's lines from databuffer (byte 0 the team + 1, then a nibble
  * a slot in AttributeOffsetTbl order, relative to the first forward, or defenseman for slots
  * 1-2). A menu item. */
-void DecodeTeamLines(uint8_t *tm)
+void DecodeTeamLines(rp tm)
 {
     const uint8_t *a0 = g.databuffer + 1, *slots = rom_ptr(SYM_AttributeOffsetTbl);
     uint16_t goalies = GetGoalieCount(tm), forwards = GetForwardCount(tm);
@@ -830,15 +830,16 @@ void DecodeTeamLines(uint8_t *tm)
 
 /* stats94.asm:EncodeTeamLines. The reverse: team a2's lines packed into databuffer, saved
  * (WriteLineData). A menu item. */
-void EncodeTeamLines(uint8_t *tm)
+void EncodeTeamLines(rp tm)
 {
     uint8_t *a0 = g.databuffer;
-    *a0++ = (uint8_t)(rd16(tm + tmteam) + 1);
-    const uint8_t *lines = tm + tmlines, *slots = rom_ptr(SYM_AttributeOffsetTbl);
+    *a0++ = (uint8_t)(r16(tm, tmteam) + 1);
+    rp lines = rp_add(tm, tmlines);
+    const uint8_t *slots = rom_ptr(SYM_AttributeOffsetTbl);
     uint16_t goalies = GetGoalieCount(tm), forwards = GetForwardCount(tm);
     int odd = 0;
     for (; !(*slots & 0x80); slots++) {
-        uint8_t v = (uint8_t)(lines[*slots] - 1 - goalies);
+        uint8_t v = (uint8_t)(r8(lines, *slots) - 1 - goalies);
         if ((*slots & 7) <= 2) v = (uint8_t)(v - forwards);
         odd ^= 1;
         if (odd) *a0 = v;
@@ -852,16 +853,16 @@ void EncodeTeamLines(uint8_t *tm)
 /* stats94.asm:TeamRosterScreen. Team a2's roster (a menu item): pages of players (the goalies,
  * then each line: DisplayPlayerList), left / right the attribute column, up / down the page, A
  * the other team, Start leaves. */
-void TeamRosterScreen(uint8_t *tm)
+void TeamRosterScreen(rp tm)
 {
     SetupScreen(0xD, 0x17);
-    g.SelectedPlayerIdx = (uint16_t)(1 + rd16(tm + tmline));
+    g.SelectedPlayerIdx = (uint16_t)(1 + r16(tm, tmline));
     g.DispAttribCtr = 0;
     for (;;) {                                            /* .redraw */
         printz(str_TeamRosterScreen_1, sizeof str_TeamRosterScreen_1);
         Framer(0x1A, 6);
         printbigz(str_TeamRosterScreen_2, sizeof str_TeamRosterScreen_2);
-        PutTeamBlock(tm == team_struct(0) ? 0 : 0x2C);
+        PutTeamBlock(rp_same(tm, team_struct(0)) ? 0 : 0x2C);
         printsmallz(str_TeamRosterScreen_3, sizeof str_TeamRosterScreen_3);
         printz(str_TeamRosterScreen_4, sizeof str_TeamRosterScreen_4);
         Framer(0x12, 3);
@@ -894,13 +895,13 @@ void TeamRosterScreen(uint8_t *tm)
             }
             CheckPlayerListScroll(tm);
         }
-        tm = tm == team_struct(0) ? team_struct(1) : team_struct(0);
+        tm = rp_same(tm, team_struct(0)) ? team_struct(1) : team_struct(0);
     }
 }
 
 /* stats94.asm:CheckPlayerListScroll. Each frame: VertLineScrolling + PlayerScrollCtr within 0 ...
  * $380 (UpdatePlayerListScroll), else the scroll stops. */
-void CheckPlayerListScroll(uint8_t *tm)
+void CheckPlayerListScroll(rp tm)
 {
     if (g.PlayerScrollCtr == 0) return;
     int16_t d0 = (int16_t)(g.PlayerScrollCtr + g.VertLineScrolling);
@@ -910,7 +911,7 @@ void CheckPlayerListScroll(uint8_t *tm)
 
 /* stats94.asm:UpdatePlayerListScroll. VertLineScrolling = d0; on a page boundary ($80) the scroll
  * stops; leaving one, the page coming into view is drawn; VSRAM word 1 = VertLineScrolling - $70. */
-void UpdatePlayerListScroll(uint16_t v, uint8_t *tm)
+void UpdatePlayerListScroll(uint16_t v, rp tm)
 {
     uint16_t old = g.VertLineScrolling;
     g.VertLineScrolling = v;
@@ -935,14 +936,14 @@ void StopPlayerListScroll(void)
 }
 
 /* stats94.asm:DisplayPlayerListUp. Roster page d0 (the quotient in d0's high word). */
-void DisplayPlayerListUp(uint16_t page, uint8_t *tm)
+void DisplayPlayerListUp(uint16_t page, rp tm)
 {
     g.SelectedPlayerIdx = page;
     DisplayPlayerList(tm);
 }
 
 /* stats94.asm:DisplayPlayerListDown. The page after it. */
-void DisplayPlayerListDown(uint16_t page, uint8_t *tm)
+void DisplayPlayerListDown(uint16_t page, rp tm)
 {
     g.SelectedPlayerIdx = (uint16_t)(page + 1);
     DisplayPlayerList(tm);
@@ -951,7 +952,7 @@ void DisplayPlayerListDown(uint16_t page, uint8_t *tm)
 /* stats94.asm:DisplayPlayerList. Roster page SelectedPlayerIdx (0 the goalies, 1-7 the lines): its
  * title (PlayerStatMenuTxt), the attribute column's header, then its rows: the position
  * (GoalieRowText / PlayerPositionText), the name and the attribute (GetNameandAttrib). */
-void DisplayPlayerList(uint8_t *tm)
+void DisplayPlayerList(rp tm)
 {
     printsmallz(str_DisplayPlayerList_1, sizeof str_DisplayPlayerList_1);
     printsmall(AdvanceStringPtr(SYM_PlayerStatMenuTxt, g.SelectedPlayerIdx));
@@ -965,10 +966,10 @@ void DisplayPlayerList(uint8_t *tm)
     g.printy = y;
     int16_t rows = (int16_t)(GetGoalieCount(tm) - 1);
     uint32_t text = SYM_GoalieRowText;
-    uint8_t *who = SATT;
-    wr32(who, 0x01020304);                                /* the goalies */
+    rp who = RAM(Satt);
+    w32(who, 0, 0x01020304);                              /* the goalies */
     if ((int16_t)(g.SelectedPlayerIdx - 1) >= 0) {
-        who = tm + tmlines + (int16_t)(uint16_t)((g.SelectedPlayerIdx - 1) << 3) + 1;
+        who = rp_add(tm, tmlines + (int16_t)(uint16_t)((g.SelectedPlayerIdx - 1) << 3) + 1);
         text = SYM_PlayerPositionText;
         rows = (int16_t)g.SelectedPlayerIdx > 5 ? 3 : 4;
     }
@@ -976,7 +977,7 @@ void DisplayPlayerList(uint8_t *tm)
         g.printx = 2;
         text = print(text);
         g.printx = 7;
-        GetNameandAttrib((uint16_t)(*who++ - 1), sel, tm);
+        GetNameandAttrib((uint16_t)(r8_next(&who) - 1), sel, tm);
         g.printy += 2;
     }
 }
@@ -984,7 +985,7 @@ void DisplayPlayerList(uint8_t *tm)
 /* stats94.asm:GetNameandAttrib. Player d0's name, then at x $1E the column d4's low word picks
  * (attribjmp: status, energy, handedness, weight, fighting, rating); for those past energy his
  * rating of the attributes in d4's high word (CalcAttrib) goes to it. */
-void GetNameandAttrib(uint16_t player, uint32_t sel, uint8_t *tm)
+void GetNameandAttrib(uint16_t player, uint32_t sel, rp tm)
 {
     print(getname(player, tm));
     g.printx = 0x1E;
@@ -1001,9 +1002,9 @@ void GetNameandAttrib(uint16_t player, uint32_t sel, uint8_t *tm)
 
 /* stats94.asm:AttribStatus. Player d0's status word ($66 of the team struct): Ice, Bench, an injury,
  * or his penalty time. */
-void AttribStatus(uint16_t player, uint8_t *tm)
+void AttribStatus(uint16_t player, rp tm)
 {
-    uint16_t st = rd16(tm + tmpdst + (int16_t)(uint16_t)(player * 2)), n;
+    uint16_t st = r16(tm, tmpdst + (int16_t)(uint16_t)(player * 2)), n;
     if ((int16_t)st < 0) {
         n = (uint16_t)~st;
         if (n > 3) n = 1;
@@ -1018,9 +1019,9 @@ void AttribStatus(uint16_t player, uint8_t *tm)
 }
 
 /* stats94.asm:AttribEnergy. Energy: his word at $32 of the team struct / 40, at most 100. */
-void AttribEnergy(uint16_t player, uint8_t *tm)
+void AttribEnergy(uint16_t player, rp tm)
 {
-    uint16_t e = (uint16_t)m68k_divu((uint32_t)(int32_t)(int16_t)rd16(tm + tmpde + (int16_t)(uint16_t)(player * 2)), 0x28);
+    uint16_t e = (uint16_t)m68k_divu((uint32_t)(int32_t)(int16_t)r16(tm, tmpde + (int16_t)(uint16_t)(player * 2)), 0x28);
     if ((int16_t)e > 0x64) e = 0x64;
     AttribPrintPct(e);
 }
@@ -1155,8 +1156,8 @@ void DrawScoringRowDown(uint16_t entry)
 /* the abbreviation of the team of a summary entry (bit 7 of its byte 2: the visitors) at x $C */
 static void summary_team(uint8_t flags)
 {
-    const uint8_t *tm = team_struct(flags & 0x80);
-    uint32_t a1 = rd32(tm + tmdata);
+    rp tm = team_struct(flags & 0x80);
+    uint32_t a1 = r32(tm, tmdata);
     a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1 + 4));
     a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1));
     g.printx = 0xC;
@@ -1176,7 +1177,7 @@ void DrawScoringRow(uint16_t at)
     summary_team(e[2]);
     g.printx = 0x23;
     PrintStringFromList(SYM_GoalTypeTbl, e[2] & 0x7F);
-    uint8_t *tm = team_struct(e[2] & 0x80);
+    rp tm = team_struct(e[2] & 0x80);
     g.printx = 0x10;
     PrintScorerName(e[3], tm);
     g.printa = 0xE000;
@@ -1187,7 +1188,7 @@ void DrawScoringRow(uint16_t at)
 }
 
 /* stats94.asm:PrintScorerName. Player d0 (a byte; negative: none) and down a row. */
-void PrintScorerName(uint8_t player, uint8_t *tm)
+void PrintScorerName(uint8_t player, rp tm)
 {
     if (!(player & 0x80)) print(FormatPlayerNumInitial(player, tm));
     g.printy++;
@@ -1282,7 +1283,7 @@ void DisplayPenaltyEntry(uint16_t at)
     g.printx = 1;
     FormatAndPrintTime(rd16(e));
     summary_team(e[2]);
-    uint8_t *tm = team_struct(e[2] & 0x80);
+    rp tm = team_struct(e[2] & 0x80);
     uint16_t kind = e[2] & 0x7F;
     uint32_t pen = SYM_Penaltylist + (uint32_t)(int16_t)rd16(rom_ptr(SYM_Penaltylist + kind));
     uint32_t mins = PushNumber(rom_ptr(pen)[1]);
@@ -1360,17 +1361,17 @@ void PrintCrowdDB(uint16_t level)
 
 /* stats94.asm:TimeoutMenu. Timeout for team a2 (a pause menu item): the menu now PauseText2 (no
  * second timeout), the team's name, both teams rested (RestoreTeamEnergy), then $78 frames. */
-void TimeoutMenu(uint8_t *tm)
+void TimeoutMenu(rp tm)
 {
     uint8_t *mi = RAM_W(RAM_OFF_menuitem);
     wr16(mi, (uint16_t)(rd16(mi) - 1));
     wr16(mi + 2, (uint16_t)(rd16(mi + 2) - 1));
     g.menulist = SYM_PauseText2;
-    tm[tmflags] |= 4;
+    w8(tm, tmflags, (uint8_t)(r8(tm, tmflags) | 4));
     printz(str_TimeoutMenu_1, sizeof str_TimeoutMenu_1);
     Framer(0x16, 6);
     printz(str_TimeoutMenu_2, sizeof str_TimeoutMenu_2);
-    uint32_t city = rd32(tm + tmdata);
+    uint32_t city = r32(tm, tmdata);
     city += (uint32_t)(int16_t)rd16(rom_ptr(city + 4));
     g.printx -= (uint16_t)(rd16(rom_ptr(city)) >> 1);
     print(city);
@@ -1383,14 +1384,14 @@ void TimeoutMenu(uint8_t *tm)
 /* stats94.asm:SelectGoalieMenu. Change Goalie for team a2 (a menu item): its goalies (or none)
  * listed (DrawGoalieSelectList); up / down, then C or Start: the goalie ($26 of the team struct,
  * SetPersonel). The menu's state kept. */
-void SelectGoalieMenu(uint8_t *tm)
+void SelectGoalieMenu(rp tm)
 {
     uint8_t *mi = RAM_W(RAM_OFF_menuitem);
     uint16_t item = rd16(mi), top = rd16(mi + 2);
     wr16(mi + 2, GetGoalieCount(tm));
     printz(str_SelectGoalieMenu_1, sizeof str_SelectGoalieMenu_1);
     Framer(0x18, (uint16_t)(3 + rd16(mi + 2)));
-    int16_t cur = (int16_t)rd16(tm + tmgoalie);
+    int16_t cur = (int16_t)r16(tm, tmgoalie);
     if (cur < 0) cur = -1;
     wr16(mi, (uint16_t)(cur + 1));
     for (;;) {
@@ -1409,8 +1410,8 @@ void SelectGoalieMenu(uint8_t *tm)
         }
     }
     int16_t g0 = (int16_t)(rd16(mi) - 1);
-    if (g0 >= 0 || (int16_t)rd16(tm + tmgoalie) >= -1) {
-        wr16(tm + tmgoalie, (uint16_t)g0);
+    if (g0 >= 0 || (int16_t)r16(tm, tmgoalie) >= -1) {
+        w16(tm, tmgoalie, (uint16_t)g0);
         setpersonel(tm);
     }
     wr16(mi + 2, top);
@@ -1419,7 +1420,7 @@ void SelectGoalieMenu(uint8_t *tm)
 
 /* stats94.asm:DrawGoalieSelectList. The goalie list from row $D: "no goalie", then each goalie's
  * number and name, row menuitem highlighted. */
-void DrawGoalieSelectList(uint8_t *tm)
+void DrawGoalieSelectList(rp tm)
 {
     const uint8_t *mi = RAM_W(RAM_OFF_menuitem);
     g.printy = 0xD;
@@ -1432,7 +1433,7 @@ void DrawGoalieSelectList(uint8_t *tm)
             g.printx = 0xB;
             printz(str_DrawGoalieSelectList_2, sizeof str_DrawGoalieSelectList_2);
         } else {
-            uint32_t a1 = rd32(tm + tmdata);
+            uint32_t a1 = r32(tm, tmdata);
             a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1));
             for (uint16_t i = (uint16_t)(n - 1); i-- != 0;) a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1)) + 8;
             g.printx = 8;

@@ -30,17 +30,17 @@ void PeriodOver(void)
             g.gsp = 3;
             if (g.OptPlayMode == 0) g.gsp = 4;
         }
-        if (rd16(team_struct(0) + tmscore) != rd16(team_struct(1) + tmscore)) g.gsp = 4;
+        if (r16(team_struct(0), tmscore) != r16(team_struct(1), tmscore)) g.gsp = 4;
     }
     forceblack();
     IntermissionStart();
 }
 
 /* resetplstuff's .top: team a2's skaters lose their flags and glide again */
-static void reset_team(uint8_t *tm)
+static void reset_team(rp tm)
 {
-    tm[tmflags] &= (uint8_t)~0x10;                      /* team offside bit */
-    struct SortObj *o = sortobj_at(rd16(tm + tmsort));
+    w8(tm, tmflags, (uint8_t)(r8(tm, tmflags) & (uint8_t)~0x10));   /* team offside bit */
+    struct SortObj *o = sortobj_at(r16(tm, tmsort));
     for (int i = 0; i < 6; i++, o++) {
         o->pflags2 = 0;
         if (o->position < 0) continue;
@@ -108,7 +108,7 @@ uint16_t ReloadCrowdTiles(void) { return DecompressGraphicsPlain(ART(CrowdFrameL
 void setplayercolors(void)
 {
     for (int away = 0; away < 2; away++) {
-        uint32_t data = rd32(team_struct(away) + tmdata);
+        uint32_t data = r32(team_struct(away), tmdata);
         const uint8_t *src = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 2)) + 0x20 * away);
         uint8_t *dst = RAM_W(RAM_OFF_palfadenew + 0x40 + 0x20 * away);
         for (int i = 0; i < 0x20; i++) dst[i] = src[i];
@@ -335,34 +335,34 @@ void setupice(void)
 
 /* setup94.asm:InitTeamStructure. Team struct a2 for team d0: the team number ($28), its data
  * (tmdata, from TeamList) and its line sets at $16A (the layout by OptLine). */
-void InitTeamStructure(uint16_t team, uint8_t *tm)
+void InitTeamStructure(uint16_t team, rp tm)
 {
-    wr16(tm + tmteam, team);
-    wr32(tm + tmdata, rd32(rom_ptr(LG(TeamList) + (uint16_t)(team << 2))));
+    w16(tm, tmteam, team);
+    w32(tm, tmdata, rd32(rom_ptr(LG(TeamList) + (uint16_t)(team << 2))));
     InitTeamLines(tm);
 }
 
 /* setup94.asm:InitTeamStructure+$10. Team struct a2's line sets at $16A from its data's (the
  * layout by OptLine); the line editor's "Set Original lines". */
-void InitTeamLines(uint8_t *tm)
+void InitTeamLines(rp tm)
 {
-    uint32_t data = rd32(tm + tmdata);
+    uint32_t data = r32(tm, tmdata);
     const uint8_t *src = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 6)));
-    uint8_t *dst = tm + tmlines;
+    rp dst = rp_add(tm, tmlines);
     if (g.OptLine != 0) {
-        memcpy(dst, src, 8);
-        memcpy(dst + 8, src + 16, 12 * 4);
+        ram_write(dst, src, 8);
+        ram_write(rp_add(dst, 8), src + 16, 12 * 4);
     } else {
-        memcpy(dst, src + 8, 14 * 4);
+        ram_write(dst, src + 8, 14 * 4);
     }
 }
 
 /* setup94.asm:setteams. Both team structs from HomeTeam / VisTeam, with their sort objects. */
 void setteams(void)
 {
-    wr16(team_struct(0) + tmsort, RAM_OFF_SortCords);
+    w16(team_struct(0), tmsort, RAM_OFF_SortCords);
     InitTeamStructure(g.HomeTeam, team_struct(0));
-    wr16(team_struct(1) + tmsort, RAM_OFF_SortCords + 6 * 0x80);
+    w16(team_struct(1), tmsort, RAM_OFF_SortCords + 6 * 0x80);
     InitTeamStructure(g.VisTeam, team_struct(1));
 }
 
@@ -371,19 +371,19 @@ void setteams(void)
  * last roster slot's place is -1. Falls into setteams. */
 void clearTeamStats(void)
 {
-    uint8_t *home = team_struct(0), *away = team_struct(1);
-    uint16_t hg = rd16(home + tmgoalie), ag = rd16(away + tmgoalie);
-    memcpy(RAM_W(RAM_OFF_homehotcoldsave), home + 0x1A2, 0x1A0);
-    memcpy(RAM_W(RAM_OFF_awayhotcoldsave), away + 0x1A2, 0x1A0);
-    memset(home, 0, tmsize);
-    memset(away, 0, tmsize);
+    rp home = team_struct(0), away = team_struct(1);
+    uint16_t hg = r16(home, tmgoalie), ag = r16(away, tmgoalie);
+    ram_copy(ram_at(RAM_BASE + (RAM_OFF_homehotcoldsave)), rp_add(home, 0x1A2), 0x1A0);
+    ram_copy(ram_at(RAM_BASE + (RAM_OFF_awayhotcoldsave)), rp_add(away, 0x1A2), 0x1A0);
+    ram_fill(home, 0, tmsize);
+    ram_fill(away, 0, tmsize);
     rules_clear_stats();                                  /* (the rules' own, beside the RAM) */
-    memcpy(home + 0x1A2, RAM_W(RAM_OFF_homehotcoldsave), 0x1A0);
-    memcpy(away + 0x1A2, RAM_W(RAM_OFF_awayhotcoldsave), 0x1A0);
-    wr16(away + tmgoalie, ag);
-    wr16(home + tmgoalie, hg);
-    home[tmpdst + 0x34] = 0xFF;
-    away[tmpdst + 0x34] = 0xFF;
+    ram_copy(rp_add(home, 0x1A2), ram_at(RAM_BASE + (RAM_OFF_homehotcoldsave)), 0x1A0);
+    ram_copy(rp_add(away, 0x1A2), ram_at(RAM_BASE + (RAM_OFF_awayhotcoldsave)), 0x1A0);
+    w16(away, tmgoalie, ag);
+    w16(home, tmgoalie, hg);
+    w8(home, tmpdst + 0x34, 0xFF);
+    w8(away, tmpdst + 0x34, 0xFF);
     setteams();
 }
 
@@ -701,14 +701,14 @@ void UpdateScoutingDisplay(void)
     g.typedelay = 0xA;
     d0 = (int16_t)g.DispAttribCtr;
     uint32_t str;                                         /* a String the special character puts in */
-    uint8_t *tm;
+    rp tm;
     uint16_t d1;
     switch (*a2) {
     case '_': case '{': str = rd32(ram_ptr(RAM_BASE + RAM_OFF_HomeTeamRosterPtr)); goto string4;
     case '+': case '}': str = rd32(ram_ptr(RAM_BASE + RAM_OFF_AwayTeamRosterPtr)); goto string4;
     case '$': str = rd32((g.awayhotter ? g.AwShots : g.tmstruct) + 0x1E); goto string4;
-    case '[': tm = g.tmstruct; d1 = rd16(tm + tmgoalie); goto roster;
-    case ']': tm = g.AwShots; d1 = rd16(tm + tmgoalie); goto roster;
+    case '[': tm = RAM(tmstruct); d1 = r16(tm, tmgoalie); goto roster;
+    case ']': tm = RAM(AwShots); d1 = r16(tm, tmgoalie); goto roster;
     case '<': d1 = NextHomeHotPlayer(&tm); goto roster;
     case '>': d1 = NextAwayHotPlayer(&tm); goto roster;
     case '|': d1 = NextHomeColdPlayer(&tm); goto roster;
@@ -750,7 +750,7 @@ string4:                                                  /* the String at word 
     str += (uint32_t)(int16_t)rd16(rom_ptr(str + 4));
     goto append;
 roster:                                                   /* player d1's name in team a1's roster */
-    str = rd32(tm + tmdata);
+    str = r32(tm, tmdata);
     str += (uint32_t)(int16_t)rd16(rom_ptr(str));
     for (; d1-- != 0;) str += (uint32_t)(int16_t)rd16(rom_ptr(str)) + 8;
 append:

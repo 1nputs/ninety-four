@@ -97,16 +97,16 @@ void WriteCrowdRecord(uint32_t team, uint32_t buf) { g.sflags6 |= HI(6); CrowdRe
 /* cards94.asm:UpdatePlayerRecords. After a game, team a2 (number d1, d5 goalies, opponent d6):
  * each roster slot's record keeps the best game (goals, or saves for the goalies) with the user
  * names and the opponent. a0 = a 4-byte buffer. */
-void UpdatePlayerRecords(uint32_t team, uint32_t buf, const uint8_t *tm, uint16_t goalies, uint16_t opponent)
+void UpdatePlayerRecords(uint32_t team, uint32_t buf, rp tm, uint16_t goalies, uint16_t opponent)
 {
     uint8_t *rec = mem_ptr(buf);
     for (uint16_t slot = 0; slot < 0x1A; slot++) {
         ReadPlayerRecord(slot, (uint16_t)team, buf);
-        uint8_t best = (int16_t)slot >= (int16_t)goalies ? tm[tmpgoals + slot]
-                                                         : (uint8_t)(tm[tmpshots + slot] - tm[tmpgoals + slot]);   /* goalie: saves */
+        uint8_t best = (int16_t)slot >= (int16_t)goalies ? r8(tm, tmpgoals + slot)
+                                                         : (uint8_t)(r8(tm, tmpshots + slot) - r8(tm, tmpgoals + slot));   /* goalie: saves */
         if ((int8_t)best <= (int8_t)rec[0]) continue;
         rec[0] = best;
-        int home = tm == team_struct(0);
+        int home = rp_same(tm, team_struct(0));
         rec[1] = (uint8_t)(home ? g.homeuser : g.awayuser);
         rec[3] = (uint8_t)(home ? g.awayuser : g.homeuser);
         rec[2] = (uint8_t)opponent;
@@ -121,11 +121,11 @@ static void bump(uint8_t *p) { wr16(p, (uint16_t)(rd16(p) + 1)); }
  * numbers d3 / d4, the other user d2): count the game (up to 9000), the win or the tie, and on
  * a win keep the most goals and the biggest margin (as the 68k computes it: word 0 of a2 minus
  * a2's goals) with who and against whom. a0 = a 16-byte buffer. */
-void UpdateTeamRecord(uint32_t buf, uint32_t rec_no, uint16_t other, uint16_t team, uint16_t vs, const uint8_t *a1, const uint8_t *a2)
+void UpdateTeamRecord(uint32_t buf, uint32_t rec_no, uint16_t other, uint16_t team, uint16_t vs, rp a1, rp a2)
 {
     uint8_t *rec = mem_ptr(buf);
     ReadTeamRecord(rec_no, buf);
-    int16_t s1 = (int16_t)rd16(a1 + tmscore), s2 = (int16_t)rd16(a2 + tmscore);
+    int16_t s1 = (int16_t)r16(a1, tmscore), s2 = (int16_t)r16(a2, tmscore);
     if ((int16_t)rd16(rec + 0xA) < 0x2328) {
         bump(rec + 0xA);
         if (s1 > s2) bump(rec + 8);
@@ -133,7 +133,7 @@ void UpdateTeamRecord(uint32_t buf, uint32_t rec_no, uint16_t other, uint16_t te
     }
     if (s1 > s2) {
         if ((int8_t)s1 > (int8_t)rec[0]) { rec[0] = (uint8_t)s1; rec[1] = (uint8_t)team; rec[2] = (uint8_t)vs; rec[3] = (uint8_t)other; }
-        int16_t margin = (int16_t)(rd16(a2) - s2);
+        int16_t margin = (int16_t)(r16(a2, 0) - s2);
         if ((int8_t)margin > (int8_t)rec[4]) { rec[4] = (uint8_t)margin; rec[5] = (uint8_t)team; rec[6] = (uint8_t)vs; rec[7] = (uint8_t)other; }
     }
     WriteTeamRecord(rec_no, buf);
@@ -143,12 +143,12 @@ void UpdateTeamRecord(uint32_t buf, uint32_t rec_no, uint16_t other, uint16_t te
  * the crowd record keeps the most goals, the most saves by one goalie (worked out in the high
  * byte of TempWord1) and, for the home team, the loudest crowd (CrowdPeak); written when
  * anything changed. a0 = a 16-byte buffer. */
-void UpdateCrowdRecord(uint32_t buf, uint32_t team, uint16_t opp, uint16_t user, uint16_t opp_user, uint16_t goalies, const uint8_t *tm)
+void UpdateCrowdRecord(uint32_t buf, uint32_t team, uint16_t opp, uint16_t user, uint16_t opp_user, uint16_t goalies, rp tm)
 {
     uint8_t *rec = mem_ptr(buf);
     int changed = 0;
     ReadCrowdRecord(team, buf);
-    uint8_t goals = (uint8_t)rd16(tm + tmscore);
+    uint8_t goals = (uint8_t)r16(tm, tmscore);
     if ((int8_t)goals > (int8_t)rec[0]) {
         rec[0] = goals; rec[1] = (uint8_t)user; rec[3] = (uint8_t)opp_user; rec[2] = (uint8_t)opp;
         changed = 1;
@@ -156,7 +156,7 @@ void UpdateCrowdRecord(uint32_t buf, uint32_t team, uint16_t opp, uint16_t user,
     uint8_t saves = 0;
     uint16_t n = (uint16_t)(goalies - 1);
     do {
-        uint8_t s = (uint8_t)(tm[tmpshots + n] - tm[tmpgoals + n]);
+        uint8_t s = (uint8_t)(r8(tm, tmpshots + n) - r8(tm, tmpgoals + n));
         g.TempWord1 = (uint16_t)((s << 8) | (g.TempWord1 & 0xFF));
         if ((int8_t)saves < (int8_t)s) saves = s;
     } while (n-- != 0);
@@ -507,15 +507,15 @@ uint32_t DrawPlayerPicture(uint16_t player, uint16_t team)
  * his hot / cold bytes ($1A2 of the team struct: OvrDivisor / OvrDividend); the others scale each
  * nibble by 18 and add its hot / cold byte (a negative low byte cleared) -> d0 = the sum, d1 =
  * 100 a nibble counted (100 for the overall ones); d0 at or past d1 becomes d1 - 1. */
-uint16_t CalcAttrib(uint16_t player, uint8_t *tm, uint32_t mask, uint16_t *div)
+uint16_t CalcAttrib(uint16_t player, rp tm, uint32_t mask, uint16_t *div)
 {
     g.OvrDivisor = 0;
     g.OvrDividend = 0;
     uint32_t weights = SYM_AttribWgtList;
     if (mask == rd32(rom_ptr(SYM_PAttribOverallMask))) weights = SYM_OvrPlayerWgtList;
     if (mask == rd32(rom_ptr(SYM_GAttribOverallMask))) weights = SYM_OvrGoalWgtList;
-    uint32_t a0 = rd32(tm + tmdata);
-    const uint8_t *hotcold = tm + tmhotcold + (uint16_t)(player << 4) + 0x10;   /* the end of his hot / cold bytes */
+    uint32_t a0 = r32(tm, tmdata);
+    rp hotcold = rp_add(tm, tmhotcold + (uint16_t)(player << 4) + 0x10);        /* the end of his hot / cold bytes */
     a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0));
     for (uint16_t n = player;; n--) {                     /* past his name and attributes */
         a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0)) + 8;
@@ -532,11 +532,11 @@ uint16_t CalcAttrib(uint16_t player, uint8_t *tm, uint32_t mask, uint16_t *div)
             int16_t w = (int8_t)rom_ptr(weights)[d2];
             if (w != 2) d3 = (uint16_t)((int16_t)(uint16_t)(d3 * (uint16_t)w) >> 1);   /* (the 68k adds it w - 1 more times, mod 2^16) */
             if (weights != SYM_AttribWgtList) {
-                g.OvrDivisor += (uint16_t)(int8_t)hotcold[-d2 - 1];
+                g.OvrDivisor += (uint16_t)(int8_t)r8(hotcold, -d2 - 1);
                 g.OvrDividend++;
             } else {
                 d3 = (uint16_t)(d3 * 18);
-                uint8_t lo = (uint8_t)(d3 + hotcold[-d2 - 1]);
+                uint8_t lo = (uint8_t)(d3 + r8(hotcold, -d2 - 1));
                 if (lo & 0x80) lo = 0;
                 d3 = (uint16_t)((d3 & 0xFF00) | lo);
             }
@@ -562,7 +562,7 @@ uint16_t CalcAttrib(uint16_t player, uint8_t *tm, uint32_t mask, uint16_t *div)
 static uint16_t card_team(void) { return g.cardvis ? g.VisTeam : g.HomeTeam; }
 
 /* cards94.asm:GetCardTeam. a0 = the card's team struct. */
-uint8_t *GetCardTeam(void) { return team_struct(g.cardvis != 0); }
+rp GetCardTeam(void) { return team_struct(g.cardvis != 0); }
 
 /* cards94.asm:PlayerCards. The Player Cards (a menu item, with save RAM only): 40 columns, the
  * card screen picture, the corner logo and the arena, the card orders (BuildCardPlayerLists),
@@ -843,7 +843,7 @@ void PrintOverallRating(uint16_t player, uint16_t x, uint16_t y)
 void PrintStartingLine(uint16_t x, uint16_t y)
 {
     uint16_t team = g.HomeTeam;
-    uint8_t *tm = GetTeamStruct(team);
+    rp tm = GetTeamStruct(team);
     if (g.cardvis) {
         team = g.VisTeam;
         tm = GetTeamStruct(team);
@@ -872,7 +872,7 @@ void PrintCardPosition(uint16_t player, uint16_t x, uint16_t y)
     g.printx = x;
     g.printy = y;
     printsmall(MESAREA);
-    uint8_t *tm = GetCardTeam();
+    rp tm = GetCardTeam();
     if ((int16_t)GetDefenseStart(tm) <= (int16_t)player)
         printsmallz(str_PrintCardPosition_3, sizeof str_PrintCardPosition_3);
     else if ((int16_t)GetGoalieCount(tm) <= (int16_t)player)
@@ -897,7 +897,7 @@ void PrintTeamRating(uint16_t x, uint16_t y)
 void PrintCardTeam(uint16_t y)
 {
     g.printy = y;
-    uint32_t a0 = rd32(GetCardTeam() + tmdata);
+    uint32_t a0 = r32(GetCardTeam(), tmdata);
     a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0 + 4));
     PrintCentered(a0);
     a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0));
@@ -917,7 +917,7 @@ void PrintCentered(uint32_t s)
  * (a space for a leading 0). */
 void GetJerseyString(uint16_t player, uint32_t buf)
 {
-    uint32_t a0 = rd32(GetCardTeam() + tmdata);
+    uint32_t a0 = r32(GetCardTeam(), tmdata);
     a0 += (uint32_t)(int32_t)(int16_t)rd16(rom_ptr(a0));
     uint16_t n = player;
     do a0 += (uint32_t)(int32_t)(int16_t)rd16(rom_ptr(a0)) + 8; while (n-- != 0);
@@ -932,9 +932,9 @@ void GetJerseyString(uint16_t player, uint32_t buf)
  * and $CE of the team struct). */
 void PrintGoalsAssists(uint16_t player, uint16_t x, uint16_t y)
 {
-    const uint8_t *tm = GetCardTeam();
-    uint16_t goals = (uint16_t)(int16_t)(int8_t)tm[tmpgoals + (int16_t)player];
-    uint16_t assists = (uint16_t)(int16_t)(int8_t)tm[tmpassists + (int16_t)player];
+    rp tm = GetCardTeam();
+    uint16_t goals = (uint16_t)(int16_t)(int8_t)r8(tm, tmpgoals + (int16_t)player);
+    uint16_t assists = (uint16_t)(int16_t)(int8_t)r8(tm, tmpassists + (int16_t)player);
     g.printx = x;
     g.printy = y;
     printsmallz(str_PrintGoalsAssists_1, sizeof str_PrintGoalsAssists_1);
@@ -951,9 +951,9 @@ void PrintGoalsAssists(uint16_t player, uint16_t x, uint16_t y)
  * struct) less his goals against ($B4), and that x 100 / the shots (0 with none). */
 void PrintSaves(uint16_t player, uint16_t x, uint16_t y)
 {
-    const uint8_t *tm = GetCardTeam();
-    int16_t against = (int8_t)tm[tmpgoals + (int16_t)player];
-    int16_t shots = (int8_t)tm[tmpshots + (int16_t)player];
+    rp tm = GetCardTeam();
+    int16_t against = (int8_t)r8(tm, tmpgoals + (int16_t)player);
+    int16_t shots = (int8_t)r8(tm, tmpshots + (int16_t)player);
     uint16_t saves = (uint16_t)(shots - against);
     g.printx = x;
     g.printy = y;
@@ -1002,9 +1002,9 @@ void BuildCardPlayerLists(void)
 
 /* cards94.asm:BuildCardPlayerList. The card order of team a0 at a1: its 6 starters (its TeamList
  * line at +6) in roster order, then the others from a1 + 6. */
-void BuildCardPlayerList(const uint8_t *tm, uint8_t *list)
+void BuildCardPlayerList(rp tm, uint8_t *list)
 {
-    uint32_t a0 = rd32(tm + tmdata);
+    uint32_t a0 = r32(tm, tmdata);
     const uint8_t *line = rom_ptr(a0 + (uint32_t)(int16_t)rd16(rom_ptr(a0 + 6)));
     uint8_t *rest = list + 6;
     for (uint16_t p = 0; p < SYM_RosterSlots; p++) {

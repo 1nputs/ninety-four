@@ -103,15 +103,15 @@ static void assists(void)
     for (int fix = 0; fix < 2; fix++) {
         rules[RULE_ASSIST_FIX] = (uint8_t)fix;
         memset(&g, 0, sizeof g);
-        uint8_t *tm = team_struct(0);
-        wr16(tm + tmlasttouch, 0xFF00);
-        wr16(tm + tmassist1, 0xFF00);
-        wr16(tm + tmassist2, 0xFF00);
+        rp tm = team_struct(0);
+        w16(tm, tmlasttouch, 0xFF00);
+        w16(tm, tmassist1, 0xFF00);
+        w16(tm, tmassist2, 0xFF00);
         touch(pl, 5, puck);                               /* Z */
         touch(pl, 6, puck);                               /* B */
         touch(pl, 7, puck);                               /* A */
         touch(pl, 6, puck);                               /* B again */
-        uint16_t last = rd16(tm + tmlasttouch), a1 = rd16(tm + tmassist1), a2 = rd16(tm + tmassist2);
+        uint16_t last = r16(tm, tmlasttouch), a1 = r16(tm, tmassist1), a2 = r16(tm, tmassist2);
         printf("  assists %s: last %04X, assists %04X %04X\n", fix ? "with the rule" : "classic", last, a1, a2);
         CHECK(last == 6 && a1 == 7);
         if (fix) CHECK(a2 == 5);                          /* Z keeps his */
@@ -155,12 +155,12 @@ static void stats_list(void)
 {
     memset(&g, 0, sizeof g);
     rules_clear_stats();
-    uint8_t *tm = team_struct(0);
-    wr32(tm + tmdata, rd32(rom_ptr(SYM_TeamList)));       /* Anaheim's players */
+    rp tm = team_struct(0);
+    w32(tm, tmdata, rd32(rom_ptr(SYM_TeamList)));       /* Anaheim's players */
     uint16_t players = GetPlayerCount(tm), goalies = GetGoalieCount(tm);
     rules[RULE_MORE_STATS] = 1;
     for (uint16_t p = goalies; p < players; p++) rule_plusminus[0][p] = (int8_t)((int)p % 7 - 3);   /* -3 ... 3 */
-    tm[tmpchecks + goalies] = 9;
+    w8(tm, tmpchecks + goalies, 9);
     CHECK(ReadStatColumn(goalies, 6, tm, 0) == 9 && (int16_t)ReadStatColumn((uint16_t)(goalies + 1), 5, tm, 0) == (int)(goalies + 1) % 7 - 3);
     CHECK(GetStatColumn(0, 5, tm, 0) == 0 && GetStatColumn(0, 6, tm, 0) == 0);   /* (goalies: none) */
     g.DispAttribCtr = 5;
@@ -189,7 +189,7 @@ static struct SortObj *skater(void)
     o->legspd = 20;
     o->endurance = 6;
     o->facedir = 2;                                       /* (right) */
-    wr16(team_struct(0) + tmpde + 6, 0x1000);             /* full energy */
+    w16(team_struct(0), tmpde + 6, 0x1000);             /* full energy */
     return o;
 }
 
@@ -238,13 +238,13 @@ static void play_rules(void)
         memset(&g, 0, sizeof g);
         rules[RULE_BENCH_REST] = r ? 150 : 100;
         rules[RULE_BOX_REST] = (uint8_t)r;
-        uint8_t *tm = team_struct(0);
-        wr16(tm + tmpdst + 0, 0xFFFE);                    /* on the bench */
-        wr16(tm + tmpdst + 2, 120);                       /* in the box, two minutes */
-        wr16(tm + tmpdst + 4, 0xFFFF);                    /* on the ice */
-        for (int k = 0; k < 3; k++) wr16(tm + tmpde + 2 * k, 0x800);
+        rp tm = team_struct(0);
+        w16(tm, tmpdst + 0, 0xFFFE);                    /* on the bench */
+        w16(tm, tmpdst + 2, 120);                       /* in the box, two minutes */
+        w16(tm, tmpdst + 4, 0xFFFF);                    /* on the ice */
+        for (int k = 0; k < 3; k++) w16(tm, tmpde + 2 * k, 0x800);
         RestoreBenchEnergy();
-        uint16_t bench = rd16(tm + tmpde), box = rd16(tm + tmpde + 2), ice = rd16(tm + tmpde + 4);
+        uint16_t bench = r16(tm, tmpde), box = r16(tm, tmpde + 2), ice = r16(tm, tmpde + 4);
         CHECK(bench == 0x800 + (r ? 13 : 9) && box == (r ? 0x800 + 13 : 0x800) && ice == 0x800);
     }
     classic_rules();
@@ -254,7 +254,7 @@ static void play_rules(void)
     for (int r = 0; r < 3; r++) {
         rules[RULE_STREAKS] = (uint8_t)(100 - 50 * r);
         struct SortObj *o = skater();
-        team_struct(0)[tmhotcold + o->pnum * 16] = 12;
+        w8(team_struct(0), tmhotcold + o->pnum * 16, 12);
         CHECK(AttributeCalc(4, o) == want[r]);
     }
     classic_rules();
@@ -298,11 +298,11 @@ static void overall_ratings(void)
     int players = 0, same = 0;
     for (int t = 0; t < (int)SYM_NumTeams; t++) {
         memset(&g, 0, sizeof g);
-        uint8_t *tm = team_struct(0);
-        memset(tm + tmhotcold, 0, 26 * 16);               /* (no streaks) */
-        wr32(tm + tmdata, rd32(rom_ptr(SYM_TeamList + 4u * (uint32_t)t)));
+        rp tm = team_struct(0);
+        ram_fill(rp_add(tm, tmhotcold), 0, 26 * 16);               /* (no streaks) */
+        w32(tm, tmdata, rd32(rom_ptr(SYM_TeamList + 4u * (uint32_t)t)));
         uint16_t count = GetPlayerCount(tm), goalies = GetGoalieCount(tm);
-        uint32_t a0 = rd32(tm + tmdata);
+        uint32_t a0 = r32(tm, tmdata);
         a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0));       /* (as CalcAttrib walks to a player: past his name and 8 bytes) */
         for (uint16_t p = 0; p < count; p++) {
             a0 += (uint32_t)(int16_t)rd16(rom_ptr(a0)) + 8;

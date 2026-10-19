@@ -158,7 +158,7 @@ void PageMatchup(int16_t by)
 
 /* scout94.asm:PrintMatchupRating. Team a0's rating (GetTeamRating) as 2 digits at printx / printy
  * over two spaces -> d0 = the rating. */
-uint16_t PrintMatchupRating(uint8_t *tm)
+uint16_t PrintMatchupRating(rp tm)
 {
     PrintTwoSpaces();
     uint16_t r = GetTeamRating(tm);
@@ -244,7 +244,7 @@ uint32_t GetTeamLogo(uint16_t *d3)
 
 /* the rating of player d0 of team a2 (CalcAttrib with the overall weights of a skater or, in the
  * goalie matchup, a goalie) as a percentage, adjusted (AttribAdjust) */
-static uint16_t player_rating(uint16_t player, uint8_t *tm)
+static uint16_t player_rating(uint16_t player, rp tm)
 {
     uint32_t mask = rd32(rom_ptr(g.matchupslot ? SYM_PAttribOverallMask : SYM_GAttribOverallMask));
     uint16_t div, v = CalcAttrib(player, tm, mask, &div);
@@ -276,10 +276,10 @@ void PrintMatchupRatings(void)
         g.printfontset = 2;
         PRINTZ(str_PrintMatchupRatings_2);
         PRINTZ(str_PrintMatchupRatings_3);
-        g.homerating = PrintMatchupRating(g.tmstruct);
+        g.homerating = PrintMatchupRating(RAM(tmstruct));
         g.printfontset = 2;
         PRINTZ(str_PrintMatchupRatings_4);
-        g.visrating = PrintMatchupRating(g.AwShots);
+        g.visrating = PrintMatchupRating(RAM(AwShots));
         return;
     }
     uint32_t a1 = SYM_MatchupPosNames;                    /* the position */
@@ -290,16 +290,16 @@ void PrintMatchupRatings(void)
     g.printfontset = 2;
     PRINTZ(str_PrintMatchupRatings_6);                    /* the home player */
     PRINTZ(str_PrintMatchupRatings_7);
-    PrintPlayerNameRight(g.matchuphome, g.tmstruct);
-    uint16_t r = player_rating(g.matchuphome, g.tmstruct);
+    PrintPlayerNameRight(g.matchuphome, RAM(tmstruct));
+    uint16_t r = player_rating(g.matchuphome, RAM(tmstruct));
     g.homerating = r;
     a1 = PushNumberWidth(r, 2);
     PRINTZ(str_PrintMatchupRatings_8);
     PrintTwoSpaces();
     printsmall(a1);
     PRINTZ(str_PrintMatchupRatings_9);                    /* the visitors' */
-    PrintPlayerNameRight(g.matchupvis, g.AwShots);
-    r = player_rating(g.matchupvis, g.AwShots);
+    PrintPlayerNameRight(g.matchupvis, RAM(AwShots));
+    r = player_rating(g.matchupvis, RAM(AwShots));
     g.visrating = r;
     a1 = PushNumberWidth(r, 2);
     PRINTZ(str_PrintMatchupRatings_10);

@@ -35,7 +35,7 @@ static inline struct SortObj *puck_obj(void) { return sortobj(puckscnum); }
 /* the first sort object of the other team (6 home, 6 away) */
 static inline struct SortObj *opponents(const struct SortObj *o) { return sortobj(o->SCnum >= 6 ? 0 : 6); }
 static inline struct SortObj *teammates(const struct SortObj *o) { return sortobj(o->SCnum >= 6 ? 6 : 0); }
-static inline uint8_t *own_team(const struct SortObj *o) { return team_struct(PFLAG(o, pfteam)); }
+static inline rp own_team(const struct SortObj *o) { return team_struct(PFLAG(o, pfteam)); }
 static inline int32_t sq(int16_t v) { return (int32_t)v * v; }
 /* divs.w with the overflow flag */
 static int32_t divs_ovf(int32_t dividend, int16_t divisor, int *ovf)
@@ -70,8 +70,8 @@ static void goalie_timer_reload(struct SortObj *o)
 /* count the breakaway and excite the crowd (asspuckc, assnearest, breakaway) */
 static void breakaway_crowd(struct SortObj *o)
 {
-    uint8_t *tm = own_team(o);
-    wr16(tm + tmbreakaways, (uint16_t)(rd16(tm + tmbreakaways) + 1));
+    rp tm = own_team(o);
+    w16(tm, tmbreakaways, (uint16_t)(r16(tm, tmbreakaways) + 1));
     g.CwdExciteLvl += 0x14;
     g.crowdlevel += 0xC8;
 }
@@ -85,7 +85,7 @@ static void zone_target(const uint16_t *zones, unsigned z, struct SortObj *o)
 
 /* checks94.asm:asswingo. Player a3 is a winger on offense: skate to a random spot in the zone
  * the puck is in (or will be), evading the puck carrier. a2 = his team. */
-void asswingo(uint8_t *tm, struct SortObj *o)
+void asswingo(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfalock)) return;
     if (g.gmode & (1 << gmclock)) { donothing(o); return; }
@@ -109,7 +109,7 @@ void asswingo(uint8_t *tm, struct SortObj *o)
         int16_t zone = 0;                                 /* byte offset into the zone table */
         if (d3 >= -0x58) {
             zone = 8;
-            if (d0 >= 0x58 && !(tm[tmflags] & 0x10)) {
+            if (d0 >= 0x58 && !(r8(tm, tmflags) & 0x10)) {
                 zone = 0x10;
                 if (d3 >= 0x108) zone = 0x18;
             }
@@ -128,7 +128,7 @@ void asswingo(uint8_t *tm, struct SortObj *o)
 
 /* checks94.asm:asscenterd. Player a3 is the center on defense: stay between the puck and his
  * own high slot. */
-void asscenterd(uint8_t *tm, struct SortObj *o)
+void asscenterd(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfalock)) return;
     if (g.gmode & (1 << gmclock)) { donothing(o); return; }
@@ -157,7 +157,7 @@ void asscenterd(uint8_t *tm, struct SortObj *o)
 }
 
 /* checks94.asm:asscentero. Player a3 is the center on offense. */
-void asscentero(uint8_t *tm, struct SortObj *o)
+void asscentero(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfalock)) return;
     if (g.gmode & (1 << gmclock)) { donothing(o); return; }
@@ -180,7 +180,7 @@ void asscentero(uint8_t *tm, struct SortObj *o)
         int16_t zone = 0;
         if (d0 >= -0x58) {
             zone = 8;
-            if (d0 >= 0x58 && !(tm[tmflags] & 0x10)) {
+            if (d0 >= 0x58 && !(r8(tm, tmflags) & 0x10)) {
                 zone = 0x10;
                 if (d0 >= 0x108) zone = 0x18;
             }
@@ -198,7 +198,7 @@ void asscentero(uint8_t *tm, struct SortObj *o)
 /* checks94.asm:assgoaliectrl. Joypad controlled goalie: out of the crease area the pad takes
  * over (pf3gctrl) and checkanim runs; else time his hold on the puck and his timer. (The
  * beq.w *+4 at the end targets the rts: it never falls into assgoaliecpu.) */
-void assgoaliectrl(uint8_t *tm, struct SortObj *o)
+void assgoaliectrl(rp tm, struct SortObj *o)
 {
     if (!PFLAG(o, pfjoycon)) { assexit(o); return; }
     if (!PFLAG(o, pfna)) {
@@ -237,7 +237,7 @@ void assgoaliectrl(uint8_t *tm, struct SortObj *o)
 }
 
 /* checks94.asm:assgoaliecpu. a3 = goalie. */
-void assgoaliecpu(uint8_t *tm, struct SortObj *o)
+void assgoaliecpu(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfjoycon)) { assgoaliectrl(tm, o); return; }
     checkanim(tm, o);
@@ -246,7 +246,7 @@ void assgoaliecpu(uint8_t *tm, struct SortObj *o)
 /* checks94.asm:checkanim. The goalie's own play: the stick slam after a goal, skating back to
  * the crease, passing the puck when he has it, diving on a loose puck, and reading the shot
  * (puckcross) to pick a save or move across the crease. Ends in playeracc or stopna. */
-void checkanim(uint8_t *tm, struct SortObj *o)
+void checkanim(rp tm, struct SortObj *o)
 {
     g.TmpPuckX = (uint16_t)puckx();
     if ((g.sflags4 & HI(0)) && !(o->pflags2 & 2)) {
@@ -404,10 +404,10 @@ de1:
     if ((int16_t)rd16(pc) > 0x18 || (int16_t)rd16(pc) < -0x18) {   /* wide of the net */
         if (puckc() >= 0 || (g.iflags & 4)) goto de5;
         {
-            uint8_t *a1 = team_struct(0), *a2 = team_struct(1);
-            if (PFLAG(o, pfteam)) { uint8_t *t = a1; a1 = a2; a2 = t; }
-            if ((int32_t)rd32(a1 + tmneardist) < 0x1324) goto de5;
-            if ((int32_t)rd32(a2 + tmneardist) < 0x9C4) goto de5;
+            rp a1 = team_struct(0), a2 = team_struct(1);
+            if (PFLAG(o, pfteam)) { rp t = a1; a1 = a2; a2 = t; }
+            if ((int32_t)r32(a1, tmneardist) < 0x1324) goto de5;
+            if ((int32_t)r32(a2, tmneardist) < 0x9C4) goto de5;
         }
         if (pucky() <= 0xE0 && pucky() > -0xE0) goto de5;
         {
@@ -522,7 +522,7 @@ void goaliesave(const uint8_t *pcross, int16_t goalline, struct SortObj *gk)
 
 /* checks94.asm:assgoalietopuck. The goalie skates to a loose puck coming his way when no
  * skater of either team is close to it. */
-void assgoalietopuck(uint8_t *tm, struct SortObj *o)
+void assgoalietopuck(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfjoycon)) { assexit(o); return; }
     if (g.gmode & (1 << gmclock)) { assexit(o); return; }
@@ -537,10 +537,10 @@ void assgoalietopuck(uint8_t *tm, struct SortObj *o)
         int n = puckvy() < 0;
         if (PFLAG(o, pfgoal)) n = !n;
         if (n) { assexit(o); return; }
-        uint8_t *a1 = team_struct(0), *a2 = team_struct(1);
-        if (PFLAG(o, pfteam)) { uint8_t *t = a1; a1 = a2; a2 = t; }
-        if ((int32_t)rd32(a1 + tmneardist) < 0xE10) { assexit(o); return; }
-        if ((int32_t)rd32(a2 + tmneardist) < 0x640) { assexit(o); return; }
+        rp a1 = team_struct(0), a2 = team_struct(1);
+        if (PFLAG(o, pfteam)) { rp t = a1; a1 = a2; a2 = t; }
+        if ((int32_t)r32(a1, tmneardist) < 0xE10) { assexit(o); return; }
+        if ((int32_t)r32(a2, tmneardist) < 0x640) { assexit(o); return; }
     }
     skatetopuck(o);
 }
@@ -593,7 +593,7 @@ int BreakawayOffsidesFlagSet(struct SortObj *o)
 
 /* checks94.asm:chkpuckc. Puck carrier a3: check for a breakaway (not in a shootout or penalty
  * shot), else assign asspuckc. */
-void chkpuckc(uint8_t *tm, struct SortObj *o)
+void chkpuckc(rp tm, struct SortObj *o)
 {
     if (!(g.gmode2 & HI(0)) && !(g.BA_PS_flags & HI(2)) && !breakaway(o)) {
         asspuckc(tm, o);                                  /* still skating at the net in y */
@@ -630,7 +630,7 @@ uint16_t asspuckc_chkdir(uint16_t dir, struct SortObj *o)
 
 /* checks94.asm:asspuckc. Player a3 is the puck handler: carry it up the ice to a spot from
  * .postab2 (the shootout path instead), looking for a shot or a pass now and then. */
-void asspuckc(uint8_t *tm, struct SortObj *o)
+void asspuckc(rp tm, struct SortObj *o)
 {
     if (g.sflags5 & 4) g.sflags5 &= (uint8_t)~4;
     else o->pflags3 &= (uint8_t)~(1 << pf3break);
@@ -691,7 +691,7 @@ nodec:;
 /* checks94.asm:chk4lc. See if the computer should call a line change: with the puck in the
  * neutral zone, now and then, when the line's energy is low. Returns 1 when it did (CompShoot
  * ends the puck carrier's assignment). */
-int chk4lc(uint8_t *tm, struct SortObj *o)
+int chk4lc(rp tm, struct SortObj *o)
 {
     if (g.sflags7 & 0x10) return 0;
     int16_t d0 = pucky();
@@ -700,8 +700,8 @@ int chk4lc(uint8_t *tm, struct SortObj *o)
     if (d0 > 0x58) return 0;
     if (vdp_hv16() & 3) return 0;
     if (o->pflags2 & 8) return 0;
-    uint8_t *a2 = team_struct(0), *a1 = team_struct(1);
-    if (PFLAG(o, pfteam)) { uint8_t *t = a2; a2 = a1; a1 = t; }
+    rp a2 = team_struct(0), a1 = team_struct(1);
+    if (PFLAG(o, pfteam)) { rp t = a2; a2 = a1; a1 = t; }
     if (AvgCline(a2) > 0xC00) return 0;
     CompLine(a2, a1);
     setpersonel(a2);
@@ -891,7 +891,7 @@ void checkob(struct SortObj *o)
 
 /* checks94.asm:assbreakaway. Assignment for a breakaway: the carrier keeps it while he skates
  * at the net, everyone else (and the carrier once he turns) goes to assnearest. */
-void assbreakaway(uint8_t *tm, struct SortObj *o)
+void assbreakaway(rp tm, struct SortObj *o)
 {
     if (o->SCnum == puckc() && !breakaway(o)) {
         assnearest(tm, o);
@@ -905,7 +905,7 @@ void assbreakaway(uint8_t *tm, struct SortObj *o)
 /* checks94.asm:assnearest. A special assignment used for the player who is nearest the puck
  * but doesn't have it: find his team's nearest skater (tmneardist), hand the assignment to him
  * if it is someone else, else chase the puck (or the carrier) and look for a check. */
-void assnearest(uint8_t *tm, struct SortObj *o)
+void assnearest(rp tm, struct SortObj *o)
 {
     if (g.sflags5 & 4) g.sflags5 &= (uint8_t)~4;
     else o->pflags3 &= (uint8_t)~(1 << pf3break);
@@ -939,7 +939,7 @@ void assnearest(uint8_t *tm, struct SortObj *o)
                 if ((uint8_t)d1 == 0) SET_HIB(o->temp1, 1);
             }
         }
-    wr32(tm + tmneardist, 0);
+    w32(tm, tmneardist, 0);
     struct SortObj *a1 = NULL;
     d2 = (int32_t)assign_d2;                              /* (the caller's d2, as the 68k leaves it below) */
     d1 = puckc();
@@ -947,7 +947,7 @@ void assnearest(uint8_t *tm, struct SortObj *o)
         a1 = sortobj(d1);                                 /* our carrier is the nearest */
     else {
         d2 = -1;
-        struct SortObj *a0 = sortobj_at(rd16(tm + tmsort));
+        struct SortObj *a0 = sortobj_at(r16(tm, tmsort));
         for (int i = 0; i < 6; i++, a0++) {
             if (a0->position <= 0) continue;
             if (a0->nopuck[0] != 0) continue;
@@ -965,7 +965,7 @@ void assnearest(uint8_t *tm, struct SortObj *o)
             a1 = a0;
         }
         if (d2 < 0) goto de1;                             /* nobody can take it */
-        wr32(tm + tmneardist, (uint32_t)d2);
+        w32(tm, tmneardist, (uint32_t)d2);
     }
     if (a1 != o && !(g.gmode & (1 << gmclock)) && !(a1->pflags2 & 4) && !(a1->pflags3 & (1 << pf3onetimer))) {
         a1->pflags &= (uint8_t)~(1 << pfdoff);
@@ -997,7 +997,7 @@ de1:
         if (g.gmode & (1 << gmclock)) { donothing(o); return; }
     }
     if (PFLAG(o, pfjoycon)) return;
-    if (!(tm[tmflags] & 4)) {
+    if (!(r8(tm, tmflags) & 4)) {
         if (puckc() < 0) goto topuck;
         o->temp3 = (int16_t)(o->temp3 - elapsed);
         if (o->temp3 >= 0) goto topuck;
@@ -1012,7 +1012,7 @@ de1:
         d0 = (int16_t)((d0 >> 1) + fx);
         d1 = (int16_t)((d1 >> 1) + fy);
     }
-    if (tm[tmflags] & 4) {
+    if (r8(tm, tmflags) & 4) {
         if (PFLAG(o, pfgoal)) { if (d1 >= 0x53) d1 = 0x44; }
         else if (d1 <= -0x53) d1 = -0x44;
     }
@@ -1077,7 +1077,7 @@ void check4check(struct SortObj *o)
 
 /* checks94.asm:asspassrec. Assignment for catching a pass: coast until the puck is loose,
  * then either wait for it or (not a human team, puck on the attack half) go for a one-timer. */
-void asspassrec(uint8_t *tm, struct SortObj *o)
+void asspassrec(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfalock)) return;
     if (g.gmode & (1 << gmclock)) { donothing(o); return; }
@@ -1121,7 +1121,7 @@ void SkateToTempTarget(struct SortObj *o)
 
 /* checks94.asm:assshoot. Assignment for computer shooting: wind up (SetShotMode) and release
  * (ShotMode with the C button) when temp2 runs out. */
-void assshoot(uint8_t *tm, struct SortObj *o)
+void assshoot(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfalock)) return;
     if (PFLAG(o, pfna)) {
@@ -1138,7 +1138,7 @@ void assshoot(uint8_t *tm, struct SortObj *o)
 
 /* checks94.asm:puckshootout. Puck logic for the shootout: on a new assignment clear the pads
  * and select the skater, then run the attempt. */
-void puckshootout(uint8_t *tm, struct SortObj *o)
+void puckshootout(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfna)) {
         o->pflags &= (uint8_t)~(1 << pfna);
@@ -1149,12 +1149,12 @@ void puckshootout(uint8_t *tm, struct SortObj *o)
             NextShooter(o);
         else {
             StartShootoutPath(o);
-            uint8_t *t = team_struct(g.BA_Team != 0);
-            wr16(t + tmsoattempts, (uint16_t)(rd16(t + tmsoattempts) + 1));
+            rp t = team_struct(g.BA_Team != 0);
+            w16(t, tmsoattempts, (uint16_t)(r16(t, tmsoattempts) + 1));
         }
         g.BA_PS_flags &= (uint16_t)~(HI(2) | HI(4) | HI(5) | HI(6));
         g.sflags6 |= HI(1);
-        if (g.gmode & 8) { Stop4Pen(rom_ptr(SYM_puckshootout), o); return; }   /* a0 = this routine */
+        if (g.gmode & 8) { Stop4Pen(SYM_puckshootout, o); return; }            /* a0 = this routine */
         o->pflags &= (uint8_t)~(1 << pfna);
         int play = 1;
         if (g.gmode2 & HI(0)) {
@@ -1207,8 +1207,8 @@ found:
  * shootout). Returns the N flag: set when nobody is eligible. Registers are restored. */
 int SelectPenaltyShotSkater(void)
 {
-    const uint8_t *a0 = team_struct(g.BA_Team != 0);
-    const uint8_t *a2 = rom_ptr(rd32(a0 + tmdata));
+    rp a0 = team_struct(g.BA_Team != 0);
+    const uint8_t *a2 = rom_ptr(r32(a0, tmdata));
     a2 += rd16(a2);
     int16_t d6 = -1, d5 = -1;
     for (uint16_t d1 = 0; rd16(a2) != 2; ) {
@@ -1217,7 +1217,7 @@ int SelectPenaltyShotSkater(void)
         uint8_t d0 = a2[5] & 0xF;
         if ((int8_t)d0 > 1) {
             if (g.gmode2 & HI(0)) goto setskater;
-            uint16_t st = rd16(a0 + tmpdst + d7);
+            uint16_t st = r16(a0, tmpdst + d7);
             if (st == 0xFFFE || st == 0xFFFF) {           /* bench or ice */
                 int16_t d3 = (int16_t)((a2[1] & 0xF) + (a2[2] & 0xF) + (a2[2] >> 4) + (a2[3] & 0xF) + (a2[3] >> 4)
                                        + (a2[5] & 0xF) + (a2[5] >> 4) + (a2[6] >> 4) + (a2[7] >> 4));
@@ -1257,7 +1257,7 @@ static void reset_ice_objects(void)
 
 /* checks94.asm:puckpenshot. Puck start for a penalty shot / shootout attempt: black out, put
  * the skater on the puck at center ice and the goalie in his net, everyone else off the ice. */
-void puckpenshot(uint8_t *tm, struct SortObj *o)
+void puckpenshot(rp tm, struct SortObj *o)
 {
     if (!PFLAG(o, pfna)) {                                /* resume play */
         g.gmode2 |= HI(2);
@@ -1398,7 +1398,7 @@ void EndPenaltyShotPlay(void)
 /* checks94.asm:puckfaceoff. This is where the action starts: on a new assignment settle the
  * period end, delayed penalties, pulled goalies and the song, then start the line changes and
  * wait for them (WaitForFaceoffLineChanges) before puckfaceoff2. */
-void puckfaceoff(uint8_t *tm, struct SortObj *o)
+void puckfaceoff(rp tm, struct SortObj *o)
 {
     g.sflags8 &= (uint8_t)~0x10;
     if (g.gmode2 & HI(0)) {
@@ -1430,7 +1430,7 @@ void puckfaceoff(uint8_t *tm, struct SortObj *o)
     if (g.gameclock == 0) { PeriodOver(); return; }
     if (g.gmode & 0x40) { PeriodOver(); return; }
     if (g.gsp == 3 && g.HmGoals[0] != g.AwGoals[0]) { clockcont_0(); return; }   /* overtime goal */
-    if (g.gmode & (1 << gmpendel)) { Stop4Pen(rom_ptr(SYM_puckfaceoff), o); return; }   /* a0 = this routine */
+    if (g.gmode & (1 << gmpendel)) { Stop4Pen(SYM_puckfaceoff, o); return; }            /* a0 = this routine */
     {
         uint16_t half = (uint16_t)((int16_t)g.PerTimeTotal >> 1);
         if (!(half <= g.gameclock) && !((int16_t)g.gameclock < 0x3C) && (g.sflags3 & 0x80)) {
@@ -1447,8 +1447,8 @@ void puckfaceoff(uint8_t *tm, struct SortObj *o)
     ST_W(o->temp1);
     ST_W(o->temp2);
     if (g.OptLine != 0) { WaitForFaceoffLineChanges(o); return; }
-    team_struct(0)[tmflags] &= (uint8_t)~2;
-    team_struct(1)[tmflags] &= (uint8_t)~2;
+    w8(team_struct(0), tmflags, (uint8_t)(r8(team_struct(0), tmflags) & (uint8_t)~2));
+    w8(team_struct(1), tmflags, (uint8_t)(r8(team_struct(1), tmflags) & (uint8_t)~2));
     for (int i = 0; i < 12; i++) sortobj(i)->pflags2 &= (uint8_t)~8;
     if ((g.cont1team | g.cont2team) != 0 && (g.sflags & HI(sfhor))) {
         forceblack();
@@ -1465,7 +1465,7 @@ void puckfaceoff(uint8_t *tm, struct SortObj *o)
 
 /* checks94.asm:SetFaceoffComputerLine. Faceoff: start a line change for team d0 when the
  * computer controls it (line changes on). */
-void SetFaceoffComputerLine(uint16_t team, uint8_t *a2, uint8_t *a1)
+void SetFaceoffComputerLine(uint16_t team, rp a2, rp a1)
 {
     if (g.OptLine != 0) return;
     if (!(g.sflags7 & 0x10)) {
@@ -1516,7 +1516,7 @@ void UpdateFaceoffLineChangeTimer(uint16_t off, struct SortObj *puck)
     int16_t obj = off == 0x40 ? puck->temp3 : puck->temp4;
     if (timer < 0) return;
     struct SortObj *pl = sortobj(obj);
-    uint8_t *a2 = team_struct(PFLAG(pl, pfteam));
+    rp a2 = team_struct(PFLAG(pl, pfteam));
     if (!(pl->pflags2 & 8)) {
         ST_W(timer);
         if (off == 0x40) puck->temp1 = timer; else puck->temp2 = timer;
@@ -1533,16 +1533,16 @@ void UpdateFaceoffLineChangeTimer(uint16_t off, struct SortObj *puck)
 }
 
 /* the body of ChkGoalies for one team: d0 = team number, a2 = the team, a1 = the other */
-static void chkgoalie(uint16_t d0, uint8_t *a2, uint8_t *a1)
+static void chkgoalie(uint16_t d0, rp a2, rp a1)
 {
-    if ((int16_t)rd16(a2 + tmgoalie) < 0) return;         /* no goalie */
+    if ((int16_t)r16(a2, tmgoalie) < 0) return;           /* no goalie */
     int16_t d1 = puckc();
     if (d1 < 0) return;
     d1 = (int16_t)(d1 - 6);
-    if (a2 != team_struct(0)) d1 = (int16_t)~d1;
+    if (!rp_same(a2, team_struct(0))) d1 = (int16_t)~d1;
     if (d1 >= 0) return;                                  /* the other team has the puck */
     if (g.gmode & (1 << gmpendel)) {
-        a2[tmgoalie] = 0xFF;                              /* pull him on the delayed penalty */
+        w8(a2, tmgoalie, 0xFF);                           /* pull him on the delayed penalty */
         setpersonel(a2);
         return;
     }
@@ -1559,10 +1559,10 @@ void ChkGoalies(void)
     chkgoalie(2, team_struct(1), team_struct(0));
 }
 
-static void returngoalie(uint16_t d0, uint8_t *a2, uint8_t *a1)
+static void returngoalie(uint16_t d0, rp a2, rp a1)
 {
-    if (rd16(a2 + tmgoalie) == 0xFFFF) return;            /* still no goalie */
-    a2[tmgoalie] = 0;                                     /* the goalie returns */
+    if (r16(a2, tmgoalie) == 0xFFFF) return;              /* still no goalie */
+    w8(a2, tmgoalie, 0);                                  /* the goalie returns */
     if (d0 == g.cont1team || d0 == g.cont2team) return;
     CPgoalie((int16_t)g.foy, a1, a2);
 }
@@ -1577,57 +1577,57 @@ void ReturnGoalies(void)
 
 /* checks94.asm:CPgoalie. See if the computer should pull his goalie: third period, two goals
  * behind, under a minute left, play (d1 = y) in the attack half. */
-void CPgoalie(int16_t y, uint8_t *a1, uint8_t *a2)
+void CPgoalie(int16_t y, rp a1, rp a2)
 {
     if (g.gsp != 2) return;
-    int16_t d0 = (int16_t)(rd16(a1 + tmscore) - rd16(a2 + tmscore));
+    int16_t d0 = (int16_t)(r16(a1, tmscore) - r16(a2, tmscore));
     if (d0 < 0) return;
     if (d0 != 2) return;
     if ((int16_t)g.gameclock > 0x3C) return;
-    const struct SortObj *a0 = sortobj_at(rd16(a2 + tmsort));
+    const struct SortObj *a0 = sortobj_at(r16(a2, tmsort));
     if (!PFLAG(a0, pfgoal)) y = (int16_t)-y;
     if (y < 0) return;
-    a2[tmgoalie] = 0xFF;
+    w8(a2, tmgoalie, 0xFF);
     setpersonel(a2);
 }
 
 /* checks94.asm:CompLine. Find a good line for the computer team a2 to switch to (a1 = the
  * other team): the power play / penalty kill line pair, else a rested line matched to the
  * opponent's. */
-void CompLine(uint8_t *a2, uint8_t *a1)
+void CompLine(rp a2, rp a1)
 {
-    int16_t d1 = (int16_t)(rd16(a2 + tmap) - rd16(a1 + tmap));
+    int16_t d1 = (int16_t)(r16(a2, tmap) - r16(a1, tmap));
     if (d1 != 0) {
         uint16_t d0 = 3;
         if (d1 < 0) d0 = 5;
         uint16_t e1 = getlinee(d0, a2);
         uint16_t e2 = getlinee((uint16_t)(d0 + 1), a2);
         if ((int16_t)e1 < (int16_t)e2) d0++;
-        wr16(a2 + tmline, d0);
+        w16(a2, tmline, d0);
         return;
     }
-    if (a2 == team_struct(0)) {
+    if (rp_same(a2, team_struct(0))) {
         const uint16_t *tab = homelines;
         if (g.gsp == 2) {
-            int16_t d2 = (int16_t)rd16(a2 + tmscore);
-            if (d2 != (int16_t)rd16(a1 + tmscore)) {
+            int16_t d2 = (int16_t)r16(a2, tmscore);
+            if (d2 != (int16_t)r16(a1, tmscore)) {
                 tab += 7;
-                if (!(d2 > (int16_t)rd16(a1 + tmscore))) tab += 7;
+                if (!(d2 > (int16_t)r16(a1, tmscore))) tab += 7;
             }
         }
-        uint16_t idx = rd16(a1 + tmline);
+        uint16_t idx = r16(a1, tmline);
         uint16_t d0 = tab[idx];
         if (getlinee(d0, a2) > 0xC00) {
-            wr16(a2 + tmline, tab[idx]);
+            w16(a2, tmline, tab[idx]);
             return;
         }
     }
     const uint16_t *tab = awaylines;
     if (g.gsp == 2) {
-        int16_t d2 = (int16_t)rd16(a2 + tmscore);
-        if (d2 != (int16_t)rd16(a1 + tmscore)) {
+        int16_t d2 = (int16_t)r16(a2, tmscore);
+        if (d2 != (int16_t)r16(a1, tmscore)) {
             tab += 3;
-            if (!(d2 > (int16_t)rd16(a1 + tmscore))) tab += 3;
+            if (!(d2 > (int16_t)r16(a1, tmscore))) tab += 3;
         }
     }
     int16_t d1c = 2;
@@ -1636,14 +1636,14 @@ void CompLine(uint8_t *a2, uint8_t *a1)
         if (getlinee(d0, a2) > 0xC00) break;
         if (--d1c == -1) break;
     }
-    wr16(a2 + tmline, *--tab);
+    w16(a2, tmline, *--tab);
 }
 
 /* checks94.asm:puckfaceoff2. Face off control logic and general setup for action: on a new
  * assignment black out, reset the rink and every object around the faceoff spot, draw the
  * faceoff window and pick the drop time; then count the drop time down (updatefaceoff) and
  * drop the puck (Endfaceoff). */
-void puckfaceoff2(uint8_t *tm, struct SortObj *o)
+void puckfaceoff2(rp tm, struct SortObj *o)
 {
     if (!PFLAG(o, pfna)) {
         o->temp1 = (int16_t)(o->temp1 - 1);
@@ -1704,18 +1704,18 @@ void puckfaceoff2(uint8_t *tm, struct SortObj *o)
         if (d1 != 0) {
             uint16_t d0 = 0x16;                           /* assfaceoff */
             if (d1 == 4) {                                /* the center takes the draw */
-                uint8_t *tc = own_team(pl);
-                wr16(tc + tmlasttouch, 0);
-                tc[tmlasttouch + 1] = pl->pnum;
+                rp tc = own_team(pl);
+                w16(tc, tmlasttouch, 0);
+                w8(tc, tmlasttouch + 1, pl->pnum);
                 g.sflags8 &= (uint8_t)~0x80;
-                tc[tmassist1] = 0xFF;
-                tc[tmassist2] = 0xFF;
-                tc[tmflags] &= (uint8_t)~8;
+                w8(tc, tmassist1, 0xFF);
+                w8(tc, tmassist2, 0xFF);
+                w8(tc, tmflags, (uint8_t)(r8(tc, tmflags) & (uint8_t)~8));
                 d0 = 0x17;                                /* assfaceoffpl */
             }
             assinsert(d0, pl);
         }
-        int16_t d4 = (int16_t)rd16(team_struct(PFLAG(pl, pfteam)) + tmap);   /* skaters on the ice 4-6 */
+        int16_t d4 = (int16_t)r16(team_struct(PFLAG(pl, pfteam)), tmap);     /* skaters on the ice 4-6 */
         d4 = (int16_t)((6 - d4) << 3);
         d4 = (int16_t)(fo_apl[d4 + d1] << 2);
         int16_t d0 = (int16_t)fo_ptab[d4 / 2];
@@ -1765,7 +1765,7 @@ void puckfaceoff2(uint8_t *tm, struct SortObj *o)
     if (g.OptLine == 0) {                                 /* the two lines on the ice */
         printsmallz(str_puckfaceoff2_2, sizeof str_puckfaceoff2_2);
         Framer(0xC, 3);
-        uint16_t l0 = rd16(team_struct(0) + tmline), l1 = rd16(team_struct(1) + tmline);
+        uint16_t l0 = r16(team_struct(0), tmline), l1 = r16(team_struct(1), tmline);
         if (!(g.gmode & (1 << gmdir))) { uint16_t t = l0; l0 = l1; l1 = t; }
         printsmallz(str_puckfaceoff2_3, sizeof str_puckfaceoff2_3);
         PrintStringFromList(SYM_linelist, l0);
@@ -1901,7 +1901,7 @@ void Endfaceoff(struct SortObj *puck)
 /* checks94.asm:pucknorm. Assignment for the puck most of the time: age the crossing table,
  * bungie the puck to its carrier's hot spot, icing and offsides, the delay of game whistle
  * when it sits still, then the collisions. */
-void pucknorm(uint8_t *tm, struct SortObj *puck)
+void pucknorm(rp tm, struct SortObj *puck)
 {
     if (g.BA_PS_flags & HI(2)) UpdatePenaltyShotEnd(puck);
     if (PFLAG(puck, pfna)) {
@@ -1953,9 +1953,9 @@ void ChkOffsides(int16_t d0, struct SortObj *puck)
 {
     if (!(g.gmode & (1 << gmoffs))) return;
     if (g.BA_PS_flags & HI(2)) return;
-    uint8_t *a1 = team_struct(0), *a2 = team_struct(1);
+    rp a1 = team_struct(0), a2 = team_struct(1);
     ClearOffsidesIfAllPlayers(a2, &d0);
-    { uint8_t *t = a1; a1 = a2; a2 = t; }
+    { rp t = a1; a1 = a2; a2 = t; }
     ClearOffsidesIfAllPlayers(a2, &d0);
     d0 = 0x54;
     if (d0 > puck->Ypos) {                                /* the bottom blue line */
@@ -1963,34 +1963,34 @@ void ChkOffsides(int16_t d0, struct SortObj *puck)
         if (d0 < puck->Ypos) return;
         if (d0 >= puck->OldYpos) return;
         d0 = (int16_t)(d0 - 0xA);
-        if (!(g.gmode & (1 << gmdir))) { uint8_t *t = a1; a1 = a2; a2 = t; }
-        const struct SortObj *a0 = sortobj_at(rd16(a2 + tmsort));
+        if (!(g.gmode & (1 << gmdir))) { rp t = a1; a1 = a2; a2 = t; }
+        const struct SortObj *a0 = sortobj_at(r16(a2, tmsort));
         for (int i = 0; i < 6; i++, a0++) {
             if (a0->position < 0) continue;
             if (d0 <= a0->Ypos) continue;
-            a2[tmflags] |= 0x10;
+            w8(a2, tmflags, (uint8_t)(r8(a2, tmflags) | 0x10));
             return;
         }
         return;
     }
     if (d0 <= puck->OldYpos) return;                      /* did not just cross it */
     d0 = (int16_t)(d0 + 0xA);
-    if (g.gmode & (1 << gmdir)) { uint8_t *t = a1; a1 = a2; a2 = t; }
-    const struct SortObj *a0 = sortobj_at(rd16(a2 + tmsort));
+    if (g.gmode & (1 << gmdir)) { rp t = a1; a1 = a2; a2 = t; }
+    const struct SortObj *a0 = sortobj_at(r16(a2, tmsort));
     for (int i = 0; i < 6; i++, a0++) {
         if (a0->position < 0) continue;
         if (d0 >= a0->Ypos) continue;
-        a2[tmflags] |= 0x10;
+        w8(a2, tmflags, (uint8_t)(r8(a2, tmflags) | 0x10));
         return;
     }
 }
 
 /* checks94.asm:ClearOffsidesIfAllPlayers. a2 = team struct: clear the team offsides flag once
  * no skater is past the line. d0 is left over from the caller for objects with no position. */
-void ClearOffsidesIfAllPlayers(uint8_t *tm, int16_t *d0)
+void ClearOffsidesIfAllPlayers(rp tm, int16_t *d0)
 {
-    if (!(tm[tmflags] & 0x10)) return;
-    const struct SortObj *a0 = sortobj_at(rd16(tm + tmsort));
+    if (!(r8(tm, tmflags) & 0x10)) return;
+    const struct SortObj *a0 = sortobj_at(r16(tm, tmsort));
     for (int d1 = 5; ; a0++) {
         if (a0->position >= 0) {
             *d0 = a0->Ypos;
@@ -1999,7 +1999,7 @@ void ClearOffsidesIfAllPlayers(uint8_t *tm, int16_t *d0)
         if (*d0 > 0x58) return;
         if (--d1 == -1) break;
     }
-    tm[tmflags] &= (uint8_t)~0x10;
+    w8(tm, tmflags, (uint8_t)(r8(tm, tmflags) & (uint8_t)~0x10));
 }
 
 /* checks94.asm:a2offsides. Player a2 touched the puck: offsides penalty if his team is flagged
@@ -2010,8 +2010,8 @@ void a2offsides(struct SortObj *pl, struct SortObj *puck)
     int16_t d0 = pucky();
     if (!PFLAG(pl, pfgoal)) d0 = (int16_t)-d0;
     if (d0 < 0x68) return;
-    const uint8_t *a0 = own_team(pl);
-    if (!(a0[tmflags] & 0x10)) return;
+    rp a0 = own_team(pl);
+    if (!(r8(a0, tmflags) & 0x10)) return;
     if (g.gmode & (1 << gmhl)) return;
     AddPenalty(0x10, pl);
 }
@@ -2023,19 +2023,19 @@ void a2touchpuck(struct SortObj *pl, struct SortObj *puck)
     g.ltx = (uint16_t)pl->Xpos;
     g.lty = (uint16_t)pl->Ypos;
     g.ltplayer = (uint16_t)pl->SCnum;
-    uint8_t *a0 = own_team(pl);
+    rp a0 = own_team(pl);
     uint16_t d0 = pl->pnum;
     if (pl->pflags3 & (1 << pf3onetimer)) g.sflags8 |= 0x80;
-    if (d0 != rd16(a0 + tmlasttouch)) {
-        int was = a0[tmflags] & 8;
-        a0[tmflags] &= (uint8_t)~8;
+    if (d0 != r16(a0, tmlasttouch)) {
+        int was = r8(a0, tmflags) & 8;
+        w8(a0, tmflags, (uint8_t)(r8(a0, tmflags) & (uint8_t)~8));
         if (!was) {
-            if (!rules[RULE_ASSIST_FIX] || d0 != rd16(a0 + tmassist1))   /* (rules: a give-and-go keeps the second assist) */
-                wr16(a0 + tmassist2, rd16(a0 + tmassist1));
-            wr16(a0 + tmassist1, rd16(a0 + tmlasttouch));
+            if (!rules[RULE_ASSIST_FIX] || d0 != r16(a0, tmassist1))     /* (rules: a give-and-go keeps the second assist) */
+                w16(a0, tmassist2, r16(a0, tmassist1));
+            w16(a0, tmassist1, r16(a0, tmlasttouch));
         }
-        wr16(a0 + tmlasttouch, d0);
-        if (d0 == rd16(a0 + tmassist2)) a0[tmassist2] = 0xFF;   /* no assist to himself */
+        w16(a0, tmlasttouch, d0);
+        if (d0 == r16(a0, tmassist2)) w8(a0, tmassist2, 0xFF);  /* no assist to himself */
     }
     g.sflags2 &= (uint16_t)~HI(sf2shot);
     a2offsides(pl, puck);
@@ -2054,7 +2054,7 @@ void a2touchpuck(struct SortObj *pl, struct SortObj *puck)
         y = (int16_t)-y;
     }
     if (y < 0) return;                                    /* past center: icing possible */
-    int16_t d = (int16_t)(rd16(team_struct(0) + tmap) - rd16(team_struct(1) + tmap));
+    int16_t d = (int16_t)(r16(team_struct(0), tmap) - r16(team_struct(1), tmap));
     if (PFLAG(pl, pfteam)) d = (int16_t)-d;
     if (d < 0) return;                                    /* short handed: no icing */
     g.iflags |= 4;
@@ -2101,7 +2101,7 @@ void puckflip(int16_t d0, struct SortObj *puck)
 
 /* checks94.asm:puckshadow. Assignment for the puck shadow: follow the puck, one below; when
  * its frame is not the puck it is the goal siren instead. */
-void puckshadow(uint8_t *tm, struct SortObj *shadow)
+void puckshadow(rp tm, struct SortObj *shadow)
 {
     const struct SortObj *puck = shadow - 1;
     if (shadow->frame != SPFpuck) {
@@ -2572,7 +2572,7 @@ void playeracc(int16_t dir, struct SortObj *o)
     }
     if (g.OptLine != 0) return;
     if (vdp_hv16() & 0x7F) return;
-    uint8_t *tm = own_team(o);
+    rp tm = own_team(o);
     int16_t pd1 = (int16_t)((int8_t)o->pnum * 2);
     e = (int16_t)(getpde(o) - rule_scale(RULE_TIRING, 0x21));   /* (rules: tiring) */
     if (e < 0xC00) { setpde(tm, pd1, e); return; }

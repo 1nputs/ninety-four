@@ -14,7 +14,7 @@ static inline int16_t puckx(void) { return (int16_t)g.puckx[0]; }
 static inline int16_t pucky(void) { return (int16_t)g.pucky; }
 static inline int16_t puckvy(void) { return (int16_t)g.puckvy; }
 static inline int16_t puckc(void) { return (int16_t)g.puckc; }
-static inline uint8_t *own_team(const struct SortObj *o) { return team_struct(PFLAG(o, pfteam)); }
+static inline rp own_team(const struct SortObj *o) { return team_struct(PFLAG(o, pfteam)); }
 static inline struct SortObj *opponents(const struct SortObj *o) { return sortobj(o->SCnum >= 6 ? 0 : 6); }
 /* the other team has the puck carrier (puckc - 6 and SCnum - 6 differ in sign) */
 static inline int carrier_is_opponent(int16_t carrier, const struct SortObj *o) { return (int16_t)((carrier - 6) ^ (o->SCnum - 6)) < 0; }
@@ -81,13 +81,13 @@ static void take_new_position(struct SortObj *o)
 
 /* assign94.asm:assbench. Player a3 should go to the bench: skate to the gate, glide through
  * it (SPAwallleft), then the new player comes on (setplayer). */
-void assbench(uint8_t *tm, struct SortObj *o)
+void assbench(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfalock)) return;
     if (o->temp1 == 0x64) {                               /* through the gate */
         o->frame = 0;
-        uint8_t *a0 = own_team(o);
-        wr16(a0 + tmpdst + (int8_t)o->pnum * 2, 0xFFFE);  /* he is on the bench */
+        rp a0 = own_team(o);
+        w16(a0, tmpdst + (int8_t)o->pnum * 2, 0xFFFE);    /* he is on the bench */
         uint8_t d3 = o->newpnum;
         take_new_position(o);
         setplayer(d3, o);
@@ -134,7 +134,7 @@ nodec:
 }
 
 /* assign94.asm:asseben. Player a3 should exit the bench area: hop the boards at his slot. */
-void asseben(uint8_t *tm, struct SortObj *o)
+void asseben(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfalock)) return;
     if (PFLAG(o, pfna)) {
@@ -161,7 +161,7 @@ void asseben(uint8_t *tm, struct SortObj *o)
 
 /* assign94.asm:asspenalty. Player a3 should go to the penalty box: skate to the box on his
  * team's side (stacked by how many are in it), turn to the boards and hop over. */
-void asspenalty(uint8_t *tm, struct SortObj *o)
+void asspenalty(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfalock)) return;
     if (PFLAG(o, pfna)) {
@@ -213,7 +213,7 @@ st:
 }
 
 /* assign94.asm:assdopen. Add player a3 to the penalty box. */
-void assdopen(uint8_t *tm, struct SortObj *o)
+void assdopen(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfalock)) return;
     uint8_t d0 = PFLAG(o, pfteam) ? 1 : 0x10;
@@ -223,7 +223,7 @@ void assdopen(uint8_t *tm, struct SortObj *o)
 }
 
 /* assign94.asm:assepen. Player a3 should exit the penalty area: hop back onto the ice. */
-void assepen(uint8_t *tm, struct SortObj *o)
+void assepen(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfalock)) return;
     if (PFLAG(o, pfna)) {
@@ -257,7 +257,7 @@ void assepen(uint8_t *tm, struct SortObj *o)
 
 /* assign94.asm:assgoaliebreakwait. In a shootout or penalty shot park the idle goalie off
  * the ice, else exit. */
-void assgoaliebreakwait(uint8_t *tm, struct SortObj *o)
+void assgoaliebreakwait(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfalock)) return;
     if (!(g.BA_PS_flags & HI(2)) && !(g.gmode2 & HI(0))) { assexit(o); return; }
@@ -268,7 +268,7 @@ void assgoaliebreakwait(uint8_t *tm, struct SortObj *o)
 }
 
 /* assign94.asm:assfaceoff. Players do nothing until the faceoff is over. */
-void assfaceoff(uint8_t *tm, struct SortObj *o)
+void assfaceoff(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfalock)) return;
     if (!(g.sflags2 & HI(sf2faceoff))) assexit(o);
@@ -277,7 +277,7 @@ void assfaceoff(uint8_t *tm, struct SortObj *o)
 /* assign94.asm:assfaceoffpl. The two players taking the faceoff: his stick position (from
  * the animation frame and his hand) goes to fofdata2 for the drop; a computer player starts
  * swinging, sometimes early. */
-void assfaceoffpl(uint8_t *tm, struct SortObj *o)
+void assfaceoffpl(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfalock)) return;
     if (!(g.sflags2 & HI(sf2faceoff))) {
@@ -305,8 +305,8 @@ void assfaceoffpl(uint8_t *tm, struct SortObj *o)
 }
 
 /* assign94.asm:assfight, assfwatch. rts only: there is no fighting. */
-void assfight(uint8_t *tm, struct SortObj *o) { }
-void assfwatch(uint8_t *tm, struct SortObj *o) { }
+void assfight(rp tm, struct SortObj *o) { }
+void assfwatch(rp tm, struct SortObj *o) { }
 
 /* assign94.asm:donothing. The player should do nothing: coast. */
 void donothing(struct SortObj *o)
@@ -318,7 +318,7 @@ void donothing(struct SortObj *o)
 
 /* assign94.asm:assstanley. The player skates with the Stanley Cup overhead to the middle
  * of the screen. */
-void assstanley(uint8_t *tm, struct SortObj *o)
+void assstanley(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfalock)) return;
     if (PFLAG(o, pfna)) {
@@ -336,7 +336,7 @@ void assstanley(uint8_t *tm, struct SortObj *o)
 
 /* assign94.asm:assscore. Player a3 celebrates a goal: skate toward the middle, then
  * celebrate (the scorer pumps his arm) at a random moment. */
-void assscore(uint8_t *tm, struct SortObj *o)
+void assscore(rp tm, struct SortObj *o)
 {
     if (PFLAG(o, pfalock)) return;
     if (PFLAG(o, pfna)) {
@@ -367,14 +367,14 @@ void assscore(uint8_t *tm, struct SortObj *o)
 
 /* assign94.asm:assdefo. Player a3 is a defensive player on offense: hold the point just
  * inside the blue line on his side, following the puck across. */
-void assdefo(uint8_t *tm, struct SortObj *o)
+void assdefo(rp tm, struct SortObj *o)
 {
     if (!assignment_prologue(o)) return;
     if (TICK_HIB(o->temp1) < 0) {
         SET_HIB(o->temp1, o->aioff);
         if ((ReadGoaliePulled(o) & CCR_N) || ((g.sflags7 & 0x40) && HIB(o->temp1) != 0))
             SET_HIB(o->temp1, HIB(o->temp1) - 1);
-        if (tm[tmflags] & 0x10) { assreplace(2, o); return; }   /* assdefd */
+        if (r8(tm, tmflags) & 0x10) { assreplace(2, o); return; }   /* assdefd */
         int16_t d1 = pucky();
         if (!PFLAG(o, pfgoal)) d1 = (int16_t)-d1;
         if (d1 < 0x5D) { assreplace(2, o); return; }      /* puck out of the attack zone */
@@ -391,7 +391,7 @@ void assdefo(uint8_t *tm, struct SortObj *o)
 
 /* assign94.asm:assdefd. Player a3 is a defensive player on defense: stay between the
  * attackers and his net, on the puck's side. */
-void assdefd(uint8_t *tm, struct SortObj *o)
+void assdefd(rp tm, struct SortObj *o)
 {
     if (!assignment_prologue(o)) return;
     if (aidef_timer(o)) {
@@ -400,7 +400,7 @@ void assdefd(uint8_t *tm, struct SortObj *o)
         if (!PFLAG(o, pfgoal)) { d1 = (int16_t)-d1; d3 = (int16_t)-d3; }
         if (d3 < 0) d3 = 0;
         d3 = (int16_t)(d3 + d1);
-        if (d3 >= 0x58 && !(tm[tmflags] & 0x10)) {
+        if (d3 >= 0x58 && !(r8(tm, tmflags) & 0x10)) {
             d1 = puckc();
             if (d1 >= 0 && !chkpk(o) && !carrier_is_opponent(d1, o)) {
                 assreplace(1, o);                         /* assdefo */
@@ -447,7 +447,7 @@ void assdefd(uint8_t *tm, struct SortObj *o)
 
 /* assign94.asm:asswingd. Player a3 is a winger on defense: cover the far side, level with
  * the puck in the defensive zone. */
-void asswingd(uint8_t *tm, struct SortObj *o)
+void asswingd(rp tm, struct SortObj *o)
 {
     if (!assignment_prologue(o)) return;
     if (aidef_timer(o)) {
@@ -461,7 +461,7 @@ void asswingd(uint8_t *tm, struct SortObj *o)
         d0 = (int16_t)-d0;
         d1 = (int16_t)-d1;
         d2 = -0x4E;
-        if (tm[tmflags] & 0x10) d1 = d2;
+        if (r8(tm, tmflags) & 0x10) d1 = d2;
         else if (d2 > pucky()) {                          /* puck in the defensive zone */
             d2 = -0x108;
             if (!(d2 < pucky())) d1 = d2;                 /* behind the goal line */
@@ -469,7 +469,7 @@ void asswingd(uint8_t *tm, struct SortObj *o)
             d1 = pucky();
     } else {
         d2 = 0x4E;
-        if (tm[tmflags] & 0x10) d1 = d2;
+        if (r8(tm, tmflags) & 0x10) d1 = d2;
         else if (d2 < pucky()) {
             d2 = 0x108;
             if (!(d2 > pucky())) d1 = d2;

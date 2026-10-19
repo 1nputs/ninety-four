@@ -283,9 +283,9 @@ void SetLCmode(struct SortObj *o)
 {
     if (g.OptLine != 0) return;
     if (g.sflags7 & 0x10) return;
-    uint8_t *tm = loadTeamStruct(o, NULL);
-    int was = tm[tmflags] & 2;
-    tm[tmflags] |= 2;
+    rp tm = loadTeamStruct(o, NULL);
+    int was = r8(tm, tmflags) & 2;
+    w8(tm, tmflags, (uint8_t)(r8(tm, tmflags) | 2));
     if (was) return;
     if (!(g.sflags5 & 8)) g.sflags &= (uint16_t)~HI(sfspdir);
     g.sflags &= (uint16_t)~HI(sfssdir);
@@ -296,7 +296,7 @@ void SetLCmode(struct SortObj *o)
 /* input94.asm:SetLCmode2. a2 = team struct. Draw the line change box: the frame, the three
  * line choices with their energy bars (the current line while the choice is pending), and
  * the team name. */
-void SetLCmode2(uint8_t *tm)
+void SetLCmode2(rp tm)
 {
     uint16_t d0, d1;
     setlccords(tm, &d0, &d1);
@@ -312,9 +312,9 @@ void SetLCmode2(uint8_t *tm)
     for (int16_t d4 = 2; d4 >= 0; d4--) {
         int16_t line = getlchoice(d4, tm);
         if (line < 0) continue;
-        if (!(tm[tmflags] & 2)) {
-            if ((uint16_t)d4 != rd16(tm + tmlchoice)) { g.printy -= 1; continue; }
-            line = (int16_t)rd16(tm + tmline);
+        if (!(r8(tm, tmflags) & 2)) {
+            if ((uint16_t)d4 != r16(tm, tmlchoice)) { g.printy -= 1; continue; }
+            line = (int16_t)r16(tm, tmline);
         }
         uint8_t *mes = ram_ptr(RAM_BASE + RAM_OFF_mesarea);   /* "A " .. "C " */
         wr32(mes, 0x00044120);
@@ -325,7 +325,7 @@ void SetLCmode2(uint8_t *tm)
         g.printx -= 5;
         g.printy -= 1;
     }
-    uint32_t a1 = rd32(tm + tmdata);                      /* the team name */
+    uint32_t a1 = r32(tm, tmdata);                        /* the team name */
     a1 += rd16(rom_ptr(a1) + 4);
     a1 += rd16(rom_ptr(a1));
     g.printx += 2;
@@ -334,10 +334,10 @@ void SetLCmode2(uint8_t *tm)
 
 /* input94.asm:setlccords. Set printx / printy to the coordinates of the line change box of
  * team a2 (the home side flips with gmode's gmdir). Returns d0 = 9 (width), d1 = 6 or 5. */
-void setlccords(uint8_t *tm, uint16_t *d0, uint16_t *d1)
+void setlccords(rp tm, uint16_t *d0, uint16_t *d1)
 {
     uint16_t y = 0;
-    if (tm == team_struct(0)) y ^= 0x16;
+    if (rp_same(tm, team_struct(0))) y ^= 0x16;
     if (g.gmode & (1 << gmdir)) y ^= 0x16;
     printz(str_setlccords_1, sizeof str_setlccords_1);
     g.printy += y;
@@ -351,22 +351,22 @@ void setlccords(uint8_t *tm, uint16_t *d0, uint16_t *d1)
 
 /* input94.asm:getlchoice. d0 = 0-2 (a2 = team): the line number that choice means, from
  * the current line and the power play situation; -1 = no such choice. */
-int16_t getlchoice(int16_t choice, const uint8_t *tm)
+int16_t getlchoice(int16_t choice, rp tm)
 {
-    int16_t d2 = (int16_t)rd16(team_struct(tm == team_struct(0)) + tmap);   /* the other team's skaters */
+    int16_t d2 = (int16_t)r16(team_struct(rp_same(tm, team_struct(0))), tmap);   /* the other team's skaters */
     return getlchoice2(choice, d2, tm);
 }
 
 /* input94.asm:getlchoice2. Add $15 to d0 for each player more or fewer than the other team
  * has on the ice, 3 x the current line, then look it up. */
-int16_t getlchoice2(int16_t d0, int16_t d2, const uint8_t *tm)
+int16_t getlchoice2(int16_t d0, int16_t d2, rp tm)
 {
-    d2 = (int16_t)(d2 - (int16_t)rd16(tm + tmap));
+    d2 = (int16_t)(d2 - (int16_t)r16(tm, tmap));
     if (d2 != 0) {
         d0 = (int16_t)(d0 + 0x15);
         if (d2 >= 0) d0 = (int16_t)(d0 + 0x15);
     }
-    int16_t d1 = (int16_t)rd16(tm + tmline);
+    int16_t d1 = (int16_t)r16(tm, tmline);
     d0 = (int16_t)(d0 + d1 + d1 + d1);
     return (int8_t)lchoice_tab[d0];
 }
@@ -376,9 +376,9 @@ int16_t getlchoice2(int16_t d0, int16_t d2, const uint8_t *tm)
 void lineinput(uint16_t d0, uint16_t d1, uint16_t d2, struct SortObj *o)
 {
     if (g.sflags5 & 8) passmode(d0, d2, o);
-    uint8_t *tm = team_struct(PFLAG(o, pfteam));
-    if (tm[tmflags] & 1) {
-        tm[tmflags] &= (uint8_t)~1;
+    rp tm = team_struct(PFLAG(o, pfteam));
+    if (r8(tm, tmflags) & 1) {
+        w8(tm, tmflags, (uint8_t)(r8(tm, tmflags) & (uint8_t)~1));
         lcfound2(tm);
         SetLCmode2(tm);
     }
@@ -391,22 +391,22 @@ void lineinput(uint16_t d0, uint16_t d1, uint16_t d2, struct SortObj *o)
 }
 
 /* input94.asm:lcfound. d2 = choice made 0-2: set the team's line and close the box. */
-void lcfound(uint16_t choice, uint8_t *tm, struct SortObj *o)
+void lcfound(uint16_t choice, rp tm, struct SortObj *o)
 {
-    wr16(tm + tmlchoice, choice);
+    w16(tm, tmlchoice, choice);
     int16_t line = getlchoice((int16_t)choice, tm);
     if (line < 0) return;
     o->pflags2 &= (uint8_t)~8;
     o->pflags |= 1 << pfjoycon;
     tm = loadTeamStruct(o, NULL);
-    tm[tmflags] &= (uint8_t)~2;
-    wr16(tm + tmline, (uint16_t)line);
+    w8(tm, tmflags, (uint8_t)(r8(tm, tmflags) & (uint8_t)~2));
+    w16(tm, tmline, (uint16_t)line);
     setpersonel(tm);
     lcfound2(tm);
 }
 
 /* input94.asm:lcfound2. Close the line change box of team a2. */
-void lcfound2(uint8_t *tm)
+void lcfound2(rp tm)
 {
     if (g.sflags & HI(sfhor)) return;
     uint16_t d0, d1;
@@ -579,8 +579,8 @@ void passto(struct SortObj *rcv, struct SortObj *o)
  * per quarter second), with a hop timed to the meeting. */
 void passtoa0(struct SortObj *rcv, struct SortObj *o)
 {
-    uint8_t *tm = loadTeamStruct(o, NULL);
-    wr16(tm + tmpasses, (uint16_t)(rd16(tm + tmpasses) + 1));    /* pass attempts */
+    rp tm = loadTeamStruct(o, NULL);
+    w16(tm, tmpasses, (uint16_t)(r16(tm, tmpasses) + 1));        /* pass attempts */
     g.passplayer = (uint16_t)rcv->SCnum;
     int16_t d5 = (int16_t)((int16_t)g.passspeed >> 2);
     assinsert(0x13, rcv);                                 /* apassrec */

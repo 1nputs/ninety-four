@@ -140,9 +140,9 @@ uint16_t Clamp0to100(int16_t v)
  * limited to 0 ... $1E. */
 uint8_t AttributeCalc(uint8_t v, struct SortObj *o)
 {
-    const uint8_t *tm = team_struct(PFLAG(o, pfteam));
+    rp tm = team_struct(PFLAG(o, pfteam));
     int16_t d1 = (int16_t)(o->pnum << 4);
-    int32_t hc = (int8_t)tm[tmhotcold + d1];
+    int32_t hc = (int8_t)r8(tm, tmhotcold + d1);
     hc = (int16_t)m68k_divs(hc, 3);
     hc = rule_scale(RULE_STREAKS, hc);                    /* (rules: the streaks' effect) */
     int16_t d3 = (int16_t)(v * 5 + hc);
@@ -154,28 +154,28 @@ uint8_t AttributeCalc(uint8_t v, struct SortObj *o)
 /* crowd94.asm:NextHomeHotPlayer etc. The next hot / cold player of a team for the matchups
  * text (the one entry lists at homehotplayer ...), with its team struct. */
 static uint16_t listed(uint16_t list, uint16_t idx) { return rd16(ram_ptr(RAM_BASE + list + idx * 2)); }
-uint16_t NextHomeHotPlayer(uint8_t **team)
+uint16_t NextHomeHotPlayer(rp *team)
 {
     *team = team_struct(0);
     uint16_t d1 = listed(RAM_OFF_homehotplayer, g.homehotidx);
     if ((int16_t)g.homehotidx < 0) g.homehotidx++;       /* (only below 0: it stays at the first) */
     return d1;
 }
-uint16_t NextAwayHotPlayer(uint8_t **team)
+uint16_t NextAwayHotPlayer(rp *team)
 {
     *team = team_struct(1);
     uint16_t d1 = listed(RAM_OFF_awayhotplayer, g.awayhotidx);
     if ((int16_t)g.awayhotidx < 0) g.awayhotidx++;
     return d1;
 }
-uint16_t NextHomeColdPlayer(uint8_t **team)
+uint16_t NextHomeColdPlayer(rp *team)
 {
     *team = team_struct(0);
     uint16_t d1 = listed(RAM_OFF_homecoldplayer, g.homecoldidx);
     if ((int16_t)g.homecoldidx < 0) g.homecoldidx++;
     return d1;
 }
-uint16_t NextAwayColdPlayer(uint8_t **team)
+uint16_t NextAwayColdPlayer(rp *team)
 {
     *team = team_struct(1);
     uint16_t d1 = listed(RAM_OFF_awaycoldplayer, g.awaycoldidx);
@@ -198,10 +198,10 @@ void BuildHotColdLists(void)
 
 /* crowd94.asm:SortHotColdStarters. Sum the hot / cold values of the 6 starters of team a0 into
  * TempBuffer (byte pairs: player, sum), then sort them by sum. */
-void SortHotColdStarters(const uint8_t *tm)
+void SortHotColdStarters(rp tm)
 {
-    const uint8_t *hc = tm + tmhotcold;
-    const uint8_t *a0 = rom_ptr(rd32(tm + tmdata));
+    rp hc = rp_add(tm, tmhotcold);
+    const uint8_t *a0 = rom_ptr(r32(tm, tmdata));
     a0 += rd16(a0 + 6);                                   /* the starters */
     uint8_t *a1 = g.TempBuffer;
     for (int i = 0; i < 6; i++) {
@@ -212,7 +212,7 @@ void SortHotColdStarters(const uint8_t *tm)
         idx = (int16_t)(idx + 3);
         for (int d7 = 3; d7 != 0x10; d7++, idx++) {
             if (d7 == 9 || d7 == 0xD) continue;
-            *a1 = (uint8_t)(*a1 + hc[idx]);
+            *a1 = (uint8_t)(*a1 + r8(hc, idx));
         }
         a1++;
     }
@@ -259,7 +259,7 @@ uint16_t CompareHotColdTotals(void)
 }
 
 /* crowd94.asm:GetHotColdTotal. The hot / cold total of the starters of team a0. */
-uint16_t GetHotColdTotal(const uint8_t *tm)
+uint16_t GetHotColdTotal(rp tm)
 {
     SortHotColdStarters(tm);
     int16_t d1 = 0;

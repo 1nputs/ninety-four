@@ -40,14 +40,14 @@ void ShowGoalBox(void)
     }
     Framer(0x13, rows);
     CountGoalies();
-    uint8_t *tm = team_struct(0);
+    rp tm = team_struct(0);
     g.scorergoalies = g.homegoalies;
     if (e[2] & 0x80) { tm = team_struct(1); g.scorergoalies = g.awaygoalies; }
     uint32_t text = SYM_GoalBigTxt;
     if (g.DelayedPen & 1) { g.DelayedPen &= (uint8_t)~1; text = SYM_PPGoalBigTxt; }
-    if (tm[tmpgoals + e[3]] == 3 && e[3] >= g.scorergoalies) {      /* third goal of a skater */
+    if (r8(tm, tmpgoals + e[3]) == 3 && e[3] >= g.scorergoalies) {  /* third goal of a skater */
         text += rd16(rom_ptr(text));                               /* HAT TRICK! */
-        if (rd16(tm + tmteam) == g.HomeTeam) StartArenaAnim(0);
+        if (r16(tm, tmteam) == g.HomeTeam) StartArenaAnim(0);
     }
     printbig(text);
     uint16_t scorer = e[3];
@@ -109,11 +109,11 @@ void ShowThreeStars(void)
     CalcStarScores(6);                                   /* d2 still 6 from dobitmap */
     g.printy = 0x12;
     for (int i = 0; i < 3; i++) {
-        uint8_t *tm;
+        rp tm;
         uint16_t player = TakeTopStarScore(&tm);
         g.printx = 0x1A;
         g.printy++;
-        uint32_t data = rd32(tm + tmdata);
+        uint32_t data = r32(tm, tmdata);
         uint32_t abbr = data + (int16_t)rd16(rom_ptr(data + 4));
         abbr += (int16_t)rd16(rom_ptr(abbr));
         print(abbr);
@@ -121,7 +121,7 @@ void ShowThreeStars(void)
         g.printx = 3;
         print(name);
     }
-    if ((int16_t)(rd16(team_struct(0) + tmscore) - rd16(team_struct(1) + tmscore)) > 0) song(SYM_SFXhomewin);
+    if ((int16_t)(r16(team_struct(0), tmscore) - r16(team_struct(1), tmscore)) > 0) song(SYM_SFXhomewin);
 }
 
 /* data94.asm:CalcStarScores. The star score of every roster slot of both teams to ThreeStars
@@ -143,18 +143,18 @@ void CalcStarScores(uint16_t d2)
  * the goal difference. Skaters: goals * 11000 + assists * 10100 + shots * 10, in a tied game
  * shots * 1000 + time on ice. Goalies on the ice at least d5 who faced shots: +32000 for at most
  * 4 goals per 100 shots, +75000 more for a shutout. -> d3 = the goal difference. */
-int16_t CalcTeamStarScores(uint8_t *tm, const uint8_t *other, uint8_t **out, uint16_t mintime)
+int16_t CalcTeamStarScores(rp tm, rp other, uint8_t **out, uint16_t mintime)
 {
-    int16_t diff = (int16_t)(rd16(tm + tmscore) - rd16(other + tmscore));
+    int16_t diff = (int16_t)(r16(tm, tmscore) - r16(other, tmscore));
     uint16_t goalies = (uint16_t)(0x19 - GetGoalieCount(tm));
-    const uint8_t *stats = tm, *time = tm;
-    for (int16_t slot = 0x19; slot >= 0; slot--, stats++, time += 2, *out += 4) {
+    rp stats = tm, time = tm;
+    for (int16_t slot = 0x19; slot >= 0; slot--, stats = rp_add(stats, 1), time = rp_add(time, 2), *out += 4) {
         uint32_t score = (uint32_t)(int32_t)diff;
         if ((uint16_t)slot > goalies) {                  /* goalie slot */
-            if (mintime > rd16(time + tmptoi)) { wr32(*out, score); continue; }
-            uint16_t shots = stats[tmpshots];
+            if (mintime > r16(time, tmptoi)) { wr32(*out, score); continue; }
+            uint16_t shots = r8(stats, tmpshots);
             if (shots == 0) { wr32(*out, score); continue; }
-            uint16_t pct = (uint16_t)m68k_divu((uint32_t)stats[tmpgoals] * 100, shots);
+            uint16_t pct = (uint16_t)m68k_divu((uint32_t)r8(stats, tmpgoals) * 100, shots);
             if (pct <= 4) {
                 score += 32000;
                 if (pct == 0) score += 75000;
@@ -162,9 +162,9 @@ int16_t CalcTeamStarScores(uint8_t *tm, const uint8_t *other, uint8_t **out, uin
             wr32(*out, score);
             continue;
         }
-        score += stats[tmpgoals] * 11000u + stats[tmpassists] * 10100u;
-        uint32_t shots = stats[tmpshots] * 10u;
-        if (diff == 0) score += (uint16_t)shots * 100u + rd16(time + tmptoi);
+        score += r8(stats, tmpgoals) * 11000u + r8(stats, tmpassists) * 10100u;
+        uint32_t shots = r8(stats, tmpshots) * 10u;
+        if (diff == 0) score += (uint16_t)shots * 100u + r16(time, tmptoi);
         else score += shots;
         wr32(*out, score);
     }
@@ -174,7 +174,7 @@ int16_t CalcTeamStarScores(uint8_t *tm, const uint8_t *other, uint8_t **out, uin
 /* data94.asm:TakeTopStarScore. Take the highest of the 52 star scores (and clear it) -> d0 = the
  * player slot, a2 = his team. (When no score is above 0 the 68k clears through a1 as the caller
  * left it; the scores always include time on ice or shots, so the C takes slot 0.) */
-uint16_t TakeTopStarScore(uint8_t **tm)
+uint16_t TakeTopStarScore(rp *tm)
 {
     uint8_t *s = RAM_W(RAM_OFF_ThreeStars), *best = s;
     int32_t top = 0;
@@ -189,9 +189,9 @@ uint16_t TakeTopStarScore(uint8_t **tm)
 
 /* data94.asm:GetPlayerNamePointer. d0 = roster slot, a2 = team -> a0 = the player's name
  * String in the team data (each player: a String, then 8 bytes). */
-uint32_t GetPlayerNamePointer(uint16_t player, const uint8_t *tm)
+uint32_t GetPlayerNamePointer(uint16_t player, rp tm)
 {
-    uint32_t a = rd32(tm + tmdata);
+    uint32_t a = r32(tm, tmdata);
     a += rd16(rom_ptr(a));
     while (player--) a += rd16(rom_ptr(a)) + 8;
     return a;
@@ -221,7 +221,7 @@ uint32_t FinalizeTextBuffer(uint8_t *end)
 
 /* FormatPlayerName / FormatPlayerNumInitial: "NN " then the name from after the first space
  * (the first name), optionally after the first initial and ". " */
-static uint32_t format_name(uint16_t player, const uint8_t *tm, int initial)
+static uint32_t format_name(uint16_t player, rp tm, int initial)
 {
     uint32_t name = GetPlayerNamePointer(player, tm);
     const uint8_t *p = rom_ptr(name);
@@ -237,10 +237,10 @@ static uint32_t format_name(uint16_t player, const uint8_t *tm, int initial)
 }
 
 /* data94.asm:FormatPlayerName. d0 = roster slot, a2 = team -> a1 = mesarea "NN Last". */
-uint32_t FormatPlayerName(uint16_t player, uint8_t *tm) { return format_name(player, tm, 0); }
+uint32_t FormatPlayerName(uint16_t player, rp tm) { return format_name(player, tm, 0); }
 
 /* data94.asm:FormatPlayerNumInitial. d0 = roster slot, a2 = team -> a1 = mesarea "NN F. Last". */
-uint32_t FormatPlayerNumInitial(uint16_t player, uint8_t *tm) { return format_name(player, tm, 1); }
+uint32_t FormatPlayerNumInitial(uint16_t player, rp tm) { return format_name(player, tm, 1); }
 
 /* data94.asm:FormatLastName. Name string a0 (a length word String): from after the first space
  * (the first name) to its end or a 0 byte, to a1, space padded to TextBuffer + 12 -> a1 =
@@ -257,7 +257,7 @@ uint32_t FormatLastName(uint32_t name, uint8_t *out)
 }
 
 /* data94.asm:FormatPlayerNameShort. d0 = roster slot, a2 = team -> a1 = mesarea " Last". */
-uint32_t FormatPlayerNameShort(uint16_t player, const uint8_t *tm)
+uint32_t FormatPlayerNameShort(uint16_t player, rp tm)
 {
     uint8_t *out = RAM_W(RAM_OFF_TextBuffer);
     *out++ = ' ';
@@ -265,14 +265,14 @@ uint32_t FormatPlayerNameShort(uint16_t player, const uint8_t *tm)
 }
 
 /* data94.asm:FormatPlayerNameLast. d0 = roster slot, a2 = team -> a1 = mesarea "Last". */
-uint32_t FormatPlayerNameLast(uint16_t player, const uint8_t *tm)
+uint32_t FormatPlayerNameLast(uint16_t player, rp tm)
 {
     return FormatLastName(GetPlayerNamePointer(player, tm), RAM_W(RAM_OFF_TextBuffer));
 }
 
 /* data94.asm:getname. d0 = roster slot, a2 = team -> a1 = mesarea "NN First Last" (the
  * number, then appendz / appstring). */
-uint32_t getname(uint16_t player, const uint8_t *tm)
+uint32_t getname(uint16_t player, rp tm)
 {
     uint32_t name = GetPlayerNamePointer(player, tm);
     const uint8_t *p = rom_ptr(name);
@@ -286,7 +286,7 @@ uint32_t getname(uint16_t player, const uint8_t *tm)
 }
 
 /* the player of TempPlOffset (bit 15 set: the away team) */
-static uint8_t *temp_player(uint16_t *player)
+static rp temp_player(uint16_t *player)
 {
     uint16_t p = g.TempPlOffset;
     if ((int16_t)p >= 0) { *player = p; return team_struct(0); }
@@ -298,7 +298,7 @@ static uint8_t *temp_player(uint16_t *player)
 uint32_t GetPlayerName(void)
 {
     uint16_t player;
-    uint8_t *tm = temp_player(&player);
+    rp tm = temp_player(&player);
     return getname(player, tm);
 }
 
@@ -306,7 +306,7 @@ uint32_t GetPlayerName(void)
 uint32_t GetPlayerNumInitial(void)
 {
     uint16_t player;
-    uint8_t *tm = temp_player(&player);
+    rp tm = temp_player(&player);
     return FormatPlayerNumInitial(player, tm);
 }
 
@@ -360,11 +360,11 @@ void AddPlayoffTeamStats(void)
     if ((int16_t)g.OptPlayMode < 1) return;
     ReadTeamStats();
     uint16_t team = RAM_W(RAM_OFF_potree)[(int16_t)g.potreeteam];
-    const uint8_t *tm = team_struct(0);
-    if (rd16(tm + tmteam) != team) tm = team_struct(1);
-    tm += 0xB4;
+    rp tm = team_struct(0);
+    if (r16(tm, tmteam) != team) tm = team_struct(1);
+    tm = rp_add(tm, 0xB4);
     uint8_t *tot = RAM_W(RAM_OFF_statsbuffer);
-    for (int i = 0; i < 0x68; i++) wr16(tot + 2 * i, (uint16_t)(rd16(tot + 2 * i) + tm[i]));
+    for (int i = 0; i < 0x68; i++) wr16(tot + 2 * i, (uint16_t)(rd16(tot + 2 * i) + r8(tm, i)));
     const uint8_t *widths = rom_ptr(SYM_BitWidthTable);
     uint16_t pos = 0;
     for (int16_t n = 0x67; n >= 0; n--, tot += 2) {
