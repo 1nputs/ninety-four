@@ -260,10 +260,10 @@ void checksso(struct Vid *v);                            /* a5, a6, d6 */
 void setsortcords(struct Vid *v);
 void setffo(struct Vid *v);
 void uppads(struct Vid *v);                              /* a5 */
-void QueuePadLabel(uint16_t code, rp pad, struct Vid *v);                    /* d1, a0, a5 */
-void RenderSmallFontChar(uint16_t ch, uint16_t slot, rp pad, struct Vid *v);         /* d2, d0, a0, a5 */
-void addframe(struct SortObj *o, struct Vid *v);         /* a3, a5, a6, d6 */
-void addframe2(int16_t x, int16_t y, struct SortObj *o, struct Vid *v);      /* d0, d1, a3, a5, a6, d6 */
+void QueuePadLabel(uint16_t code, struct RinkObj *pad, struct Vid *v);       /* d1, a0, a5 */
+void RenderSmallFontChar(uint16_t ch, uint16_t slot, const struct RinkObj *pad, struct Vid *v);   /* d2, d0, a0, a5 */
+void addframe(struct RinkObj *o, struct Vid *v);         /* a3, a5, a6, d6 */
+void addframe2(int16_t x, int16_t y, struct SpriteHead *o, struct Vid *v);   /* d0, d1, a3, a5, a6, d6 */
 void find3d(int16_t *x, int16_t *y, int16_t z);          /* d0, d1, d2 -> d0, d1 ($4E20 = off screen) */
 void updatesound(void);
 void KillCrowd(void);
@@ -274,13 +274,13 @@ void ShowReplayIcon(void);
 void EraseReplayIcon(void);
 void ShowReplayBanner(void);
 void EraseReplayBanner(void);
-uint16_t suba4(uint32_t *frame, rp cam);                 /* a4 = frame address (in/out), a5 = camera object -> d7 */
-uint16_t adda4(uint32_t *frame, rp cam);                 /* a4 (in/out), a5 -> d7 */
-uint16_t adda42(uint32_t *frame, rp cam);               /* a4 (in/out), a5 -> d7 (0 at the record point) */
+uint16_t suba4(uint32_t *frame, struct RinkObj *cam);    /* a4 = frame address (in/out), a5 = camera object -> d7 */
+uint16_t adda4(uint32_t *frame, struct RinkObj *cam);    /* a4 (in/out), a5 -> d7 */
+uint16_t adda42(uint32_t *frame, struct RinkObj *cam);  /* a4 (in/out), a5 -> d7 (0 at the record point) */
 void adda43(uint32_t *frame);                            /* a4 += $62, wrapping */
-void UpdateCameraPos(const struct SortObj *o, rp cam);         /* a3, a5 */
-uint16_t RevReplayAdj(uint32_t frame, rp cam);           /* a4, a5 -> d7 */
-uint16_t RestoreReplayFrame(uint32_t frame, rp cam);         /* a4, a5 -> d7 (the frame's elapsed count) */
+void UpdateCameraPos(const struct RinkObj *o, struct RinkObj *cam);   /* a3, a5 */
+uint16_t RevReplayAdj(uint32_t frame, struct RinkObj *cam);   /* a4, a5 -> d7 */
+uint16_t RestoreReplayFrame(uint32_t frame, struct RinkObj *cam);   /* a4, a5 -> d7 (the frame's elapsed count) */
 void ClampReplayView(void);
 void updatereplay(void);                                 /* d7 = elapsed */
 void updateplayers(void);                                /* d7 = elapsed */

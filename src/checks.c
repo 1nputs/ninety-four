@@ -1143,7 +1143,7 @@ void puckshootout(struct Team *tm, struct SortObj *o)
     if (PFLAG(o, pfna)) {
         o->pflags &= (uint8_t)~(1 << pfna);
         g.sflags7 |= 0x80;
-        g.padcont[0] = 0; g.padcont[1] = 0; g.padcont[2] = 0;
+        memset(g.padcont, 0, sizeof g.padcont);         /* (clr.l x 3) */
         g.gmode2 &= (uint16_t)~HI(7);
         if (g.gmode2 & HI(0))
             NextShooter(o);
@@ -1415,7 +1415,7 @@ void puckfaceoff(struct Team *tm, struct SortObj *o)
         g.foy = 0;
     }
     g.sflags7 &= (uint8_t)~0x80;
-    g.padcont[0] = 0; g.padcont[1] = 0; g.padcont[2] = 0;
+    memset(g.padcont, 0, sizeof g.padcont);         /* (clr.l x 3) */
     g.sflags7 &= (uint8_t)~0x40;
     g.sflags7 &= (uint8_t)~4;
     CheckScoreLeader();

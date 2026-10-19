@@ -140,22 +140,20 @@ uint16_t ReloadRefHorTiles(void) { return DecompressGraphicsPlain(ART(RefMap2) +
  * chars, then defaultsprites2 -> d4. */
 uint16_t defaultsprites(uint16_t chars)
 {
-    rp a3 = RAM(sso);
     const uint16_t *t = listsso;
-    for (int i = 0; i < 4; i++, a3 = rp_add(a3, 0x14)) {
-        struct SortObj *o = obj_at(a3);
+    for (int i = 0; i < 4; i++) {
+        struct SpriteHead *o = &g.sso[i];
         o->oldframe = 0xFFFF;                             /* not locked to the rink scroll */
         o->Xpos = (int16_t)*t++;
-        o->Xfrac = *t++;
+        o->Xfrac = *t++;                                  /* (an arrow's y) */
         o->frame = *t++;
         o->attribute = *t++;
         o->VRchar = chars;
         chars += *t++;
     }
-    a3 = RAM(pads);
     t = listffo;
-    for (int i = 0; i < 7; i++, a3 = rp_add(a3, 0x1C)) {
-        struct SortObj *o = obj_at(a3);
+    for (int i = 0; i < 7; i++) {
+        struct RinkObj *o = &g.pads[i];
         ST_W(o->oldframe);                                /* tied to the rink scroll */
         o->Xpos = (int16_t)*t++;
         o->Ypos = (int16_t)*t++;
@@ -321,8 +319,7 @@ void setupice(void)
     ST_W(g.c1playernum);
     ST_W(g.c2playernum);
     struct Vid v = { RAM(DMAList), RAM(Satt), 1 };
-    rp a3 = RAM(pads);
-    for (int i = 0; i < 6; i++, a3 = rp_add(a3, 0x1C)) addframe2(0, 0, obj_at(a3), &v);   /* pads, logo, gloves */
+    for (int i = 0; i < 6; i++) addframe2(0, 0, &g.pads[i].head, &v);                     /* pads, logo, gloves */
     g.DMAlistend = rp_addr(v.dma);
     DoDMAList();
     g.disflags = saved;
@@ -417,8 +414,7 @@ void setupice_highlight(void)
     ST_W(g.c2playernum);
     setupEASNmap();
     struct Vid v = { RAM(DMAList), RAM(Satt), 1 };
-    rp a3 = RAM(pads);
-    for (int i = 0; i < 6; i++, a3 = rp_add(a3, 0x1C)) addframe2(0, 0, obj_at(a3), &v);
+    for (int i = 0; i < 6; i++) addframe2(0, 0, &g.pads[i].head, &v);
     g.DMAlistend = rp_addr(v.dma);
     DoDMAList();
     g.palcount = 0x1C;

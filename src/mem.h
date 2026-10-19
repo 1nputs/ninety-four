@@ -70,8 +70,8 @@ static inline void *ram_struct_(rp p) { return (uint8_t *)&g + p.o; }   /* (a st
 #define RAM_AT(type, p) ((type *)ram_struct_(p))
 static inline rp ram_place(const void *x) { return (rp){ (uint16_t)((const uint8_t *)x - (const uint8_t *)&g) }; }
 
-/* a sort object (struct SortObj, read by its named fields) at a place: the sorted objects, and the
- * regions the original reads as one (the pads, sso's arrows, the camera); and an object's place */
+/* a sort object (struct SortObj) at a place (the 68000 address a team struct keeps of its first:
+ * sortobj_at), and an object's place */
 static inline struct SortObj *obj_at(rp p) { return (struct SortObj *)((uint8_t *)&g + p.o); }   /* (a struct starts where the machine's does) */
 static inline rp obj_place(const struct SortObj *o) { return (rp){ (uint16_t)((const uint8_t *)o - (const uint8_t *)&g) }; }
 

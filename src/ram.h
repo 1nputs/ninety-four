@@ -19,8 +19,8 @@
 #define SCSTRUCT 0x80
 #define Sortobjs 16
 #define puckscnum 14
-/* one sorted graphics object (players, puck, referee ...): SortCords entry */
-struct RAM_PACKED SortObj {
+/* the head of a sort object: what the sprite code draws (addframe2); sso's arrows are one */
+struct RAM_PACKED SpriteHead {
     int16_t Xpos;
     uint16_t Xfrac;
     uint16_t attribute;  /* frame attribute switch bits */
@@ -28,10 +28,55 @@ struct RAM_PACKED SortObj {
     uint16_t oldframe;  /* last frame */
     uint8_t VRoffs[8];  /* offsets to find each sprites start char. (max of 6 sprites / frame) */
     uint16_t VRchar;  /* vram char for graphic */
+};
+_Static_assert(sizeof(struct SpriteHead) == 0x14, "SpriteHead size");
+
+/* a drawn object placed on the rink (addframe): a sort object's first $1C bytes; the pads' markers,
+ * the replay camera and the gloves are one */
+struct RAM_PACKED RinkObj {
+    union {
+        struct SpriteHead head;
+        struct RAM_PACKED {
+            int16_t Xpos;
+            uint16_t Xfrac;
+            uint16_t attribute;  /* frame attribute switch bits */
+            uint16_t frame;  /* alice frame number */
+            uint16_t oldframe;  /* last frame */
+            uint8_t VRoffs[8];  /* offsets to find each sprites start char. (max of 6 sprites / frame) */
+            uint16_t VRchar;  /* vram char for graphic */
+        };
+    };
     int16_t Ypos;
     uint16_t Yfrac;
     int16_t Zpos;
     uint16_t Zfrac;
+};
+_Static_assert(sizeof(struct RinkObj) == 0x1C, "RinkObj size");
+
+/* one sorted graphics object (players, puck, referee ...): SortCords entry; o->head and o->rink
+ * are its parts the drawing code takes */
+struct RAM_PACKED SortObj {
+    union {
+        struct RinkObj rink;
+        struct RAM_PACKED {
+            union {
+                struct SpriteHead head;
+                struct RAM_PACKED {
+                    int16_t Xpos;
+                    uint16_t Xfrac;
+                    uint16_t attribute;  /* frame attribute switch bits */
+                    uint16_t frame;  /* alice frame number */
+                    uint16_t oldframe;  /* last frame */
+                    uint8_t VRoffs[8];  /* offsets to find each sprites start char. (max of 6 sprites / frame) */
+                    uint16_t VRchar;  /* vram char for graphic */
+                };
+            };
+            int16_t Ypos;
+            uint16_t Yfrac;
+            int16_t Zpos;
+            uint16_t Zfrac;
+        };
+    };
     int16_t OldXpos;
     uint16_t OldXfrac;
     int16_t OldYpos;
@@ -88,6 +133,70 @@ struct RAM_PACKED SortObj {
     uint8_t handed[10];  /* bit0 set is left handed */
 };
 _Static_assert(sizeof(struct SortObj) == SCSTRUCT, "SortObj size");
+_Static_assert(offsetof(struct SortObj, Xpos) == 0x00, "SortObj Xpos");
+_Static_assert(offsetof(struct SortObj, Xfrac) == 0x02, "SortObj Xfrac");
+_Static_assert(offsetof(struct SortObj, attribute) == 0x04, "SortObj attribute");
+_Static_assert(offsetof(struct SortObj, frame) == 0x06, "SortObj frame");
+_Static_assert(offsetof(struct SortObj, oldframe) == 0x08, "SortObj oldframe");
+_Static_assert(offsetof(struct SortObj, VRoffs) == 0x0A, "SortObj VRoffs");
+_Static_assert(offsetof(struct SortObj, VRchar) == 0x12, "SortObj VRchar");
+_Static_assert(offsetof(struct SortObj, Ypos) == 0x14, "SortObj Ypos");
+_Static_assert(offsetof(struct SortObj, Yfrac) == 0x16, "SortObj Yfrac");
+_Static_assert(offsetof(struct SortObj, Zpos) == 0x18, "SortObj Zpos");
+_Static_assert(offsetof(struct SortObj, Zfrac) == 0x1A, "SortObj Zfrac");
+_Static_assert(offsetof(struct SortObj, OldXpos) == 0x1C, "SortObj OldXpos");
+_Static_assert(offsetof(struct SortObj, OldXfrac) == 0x1E, "SortObj OldXfrac");
+_Static_assert(offsetof(struct SortObj, OldYpos) == 0x20, "SortObj OldYpos");
+_Static_assert(offsetof(struct SortObj, OldYfrac) == 0x22, "SortObj OldYfrac");
+_Static_assert(offsetof(struct SortObj, OldZpos) == 0x24, "SortObj OldZpos");
+_Static_assert(offsetof(struct SortObj, OldZfrac) == 0x26, "SortObj OldZfrac");
+_Static_assert(offsetof(struct SortObj, Xvel) == 0x28, "SortObj Xvel");
+_Static_assert(offsetof(struct SortObj, Yvel) == 0x2A, "SortObj Yvel");
+_Static_assert(offsetof(struct SortObj, Zvel) == 0x2C, "SortObj Zvel");
+_Static_assert(offsetof(struct SortObj, impactp) == 0x2E, "SortObj impactp");
+_Static_assert(offsetof(struct SortObj, limpact) == 0x30, "SortObj limpact");
+_Static_assert(offsetof(struct SortObj, impact) == 0x32, "SortObj impact");
+_Static_assert(offsetof(struct SortObj, position) == 0x34, "SortObj position");
+_Static_assert(offsetof(struct SortObj, assnum) == 0x36, "SortObj assnum");
+_Static_assert(offsetof(struct SortObj, asslist) == 0x38, "SortObj asslist");
+_Static_assert(offsetof(struct SortObj, temp1) == 0x40, "SortObj temp1");
+_Static_assert(offsetof(struct SortObj, temp2) == 0x42, "SortObj temp2");
+_Static_assert(offsetof(struct SortObj, temp3) == 0x44, "SortObj temp3");
+_Static_assert(offsetof(struct SortObj, temp4) == 0x46, "SortObj temp4");
+_Static_assert(offsetof(struct SortObj, temp5) == 0x48, "SortObj temp5");
+_Static_assert(offsetof(struct SortObj, radiusx) == 0x4A, "SortObj radiusx");
+_Static_assert(offsetof(struct SortObj, radiusy) == 0x4C, "SortObj radiusy");
+_Static_assert(offsetof(struct SortObj, Wallcos) == 0x4E, "SortObj Wallcos");
+_Static_assert(offsetof(struct SortObj, Wallsin) == 0x50, "SortObj Wallsin");
+_Static_assert(offsetof(struct SortObj, SCnum) == 0x52, "SortObj SCnum");
+_Static_assert(offsetof(struct SortObj, facedir) == 0x54, "SortObj facedir");
+_Static_assert(offsetof(struct SortObj, SPA) == 0x58, "SortObj SPA");
+_Static_assert(offsetof(struct SortObj, SPAnum) == 0x5A, "SortObj SPAnum");
+_Static_assert(offsetof(struct SortObj, SPAcnt) == 0x5C, "SortObj SPAcnt");
+_Static_assert(offsetof(struct SortObj, nopuck) == 0x5E, "SortObj nopuck");
+_Static_assert(offsetof(struct SortObj, newpos) == 0x60, "SortObj newpos");
+_Static_assert(offsetof(struct SortObj, newpnum) == 0x61, "SortObj newpnum");
+_Static_assert(offsetof(struct SortObj, pflags) == 0x62, "SortObj pflags");
+_Static_assert(offsetof(struct SortObj, pflags2) == 0x63, "SortObj pflags2");
+_Static_assert(offsetof(struct SortObj, pflags3) == 0x64, "SortObj pflags3");
+_Static_assert(offsetof(struct SortObj, glitch) == 0x65, "SortObj glitch");
+_Static_assert(offsetof(struct SortObj, pnum) == 0x66, "SortObj pnum");
+_Static_assert(offsetof(struct SortObj, weight) == 0x67, "SortObj weight");
+_Static_assert(offsetof(struct SortObj, legstr) == 0x68, "SortObj legstr");
+_Static_assert(offsetof(struct SortObj, legspd) == 0x69, "SortObj legspd");
+_Static_assert(offsetof(struct SortObj, aioff) == 0x6A, "SortObj aioff");
+_Static_assert(offsetof(struct SortObj, aidef) == 0x6B, "SortObj aidef");
+_Static_assert(offsetof(struct SortObj, shotspd) == 0x6C, "SortObj shotspd");
+_Static_assert(offsetof(struct SortObj, shotacc) == 0x6D, "SortObj shotacc");
+_Static_assert(offsetof(struct SortObj, passacc) == 0x6E, "SortObj passacc");
+_Static_assert(offsetof(struct SortObj, rostnum) == 0x6F, "SortObj rostnum");
+_Static_assert(offsetof(struct SortObj, spodds) == 0x70, "SortObj spodds");
+_Static_assert(offsetof(struct SortObj, stickhand) == 0x71, "SortObj stickhand");
+_Static_assert(offsetof(struct SortObj, endurance) == 0x72, "SortObj endurance");
+_Static_assert(offsetof(struct SortObj, aggress) == 0x73, "SortObj aggress");
+_Static_assert(offsetof(struct SortObj, fighting) == 0x74, "SortObj fighting");
+_Static_assert(offsetof(struct SortObj, checking) == 0x75, "SortObj checking");
+_Static_assert(offsetof(struct SortObj, handed) == 0x76, "SortObj handed");
 
 #define tmsize 0x364
 /* a team's struct (team_struct(away)) */
@@ -319,17 +428,11 @@ struct RAM_PACKED Ram {
     uint32_t fofdata2[0x2];  /* $FFFFBDA8 */
     uint16_t fofdata;  /* $FFFFBDB0 */
     uint8_t _padBDB2[0x2];
-    uint8_t pads[0x1C];  /* $FFFFBDB4 */
-    uint8_t Joy1Struct[0x38];  /* $FFFFBDD0 */
-    uint8_t ReplayStarStruct[0x16];  /* $FFFFBE08 */
-    uint8_t replayactive[0x6];  /* $FFFFBE1E */
-    uint8_t Joy3Struct[0x1C];  /* $FFFFBE24 */
-    uint8_t Joy4Struct[0x1C];  /* $FFFFBE40 */
-    uint8_t glovestruct[0x1C];  /* $FFFFBE5C */
+    struct RinkObj pads[7];  /* $FFFFBDB4: the pads' markers (Joy1Struct the second; the fourth the replay camera, ReplayStarStruct), then the gloves (glovestruct) (pads) */
     uint16_t PadControlBits;  /* $FFFFBE78 */
-    uint32_t padcont[0x3];  /* $FFFFBE7A */
+    uint16_t padcont[0x6];  /* $FFFFBE7A */
     uint16_t PadControlBits34;  /* $FFFFBE86: as PadControlBits, for pads 3 and 4 (4 way play) */
-    uint8_t sso[0x50];  /* $FFFFBE88 */
+    struct SpriteHead sso[4];  /* $FFFFBE88: the controlled players' off-screen arrows (x, y at Xfrac's place) (sso) */
     uint16_t shotplayer;  /* $FFFFBED8 */
     uint16_t lastplayer;  /* $FFFFBEDA */
     uint16_t passdir;  /* $FFFFBEDC */
@@ -763,12 +866,12 @@ _Static_assert(offsetof(struct Ram, palfadenew) == 0xBD28, "palfadenew");
 _Static_assert(offsetof(struct Ram, fofdata2) == 0xBDA8, "fofdata2");
 _Static_assert(offsetof(struct Ram, fofdata) == 0xBDB0, "fofdata");
 _Static_assert(offsetof(struct Ram, pads) == 0xBDB4, "pads");
-_Static_assert(offsetof(struct Ram, Joy1Struct) == 0xBDD0, "Joy1Struct");
-_Static_assert(offsetof(struct Ram, ReplayStarStruct) == 0xBE08, "ReplayStarStruct");
-_Static_assert(offsetof(struct Ram, replayactive) == 0xBE1E, "replayactive");
-_Static_assert(offsetof(struct Ram, Joy3Struct) == 0xBE24, "Joy3Struct");
-_Static_assert(offsetof(struct Ram, Joy4Struct) == 0xBE40, "Joy4Struct");
-_Static_assert(offsetof(struct Ram, glovestruct) == 0xBE5C, "glovestruct");
+/* Joy1Struct at 0xBDD0 overlaps the previous field; use RAM_OFF_Joy1Struct */
+/* ReplayStarStruct at 0xBE08 overlaps the previous field; use RAM_OFF_ReplayStarStruct */
+/* replayactive at 0xBE1E overlaps the previous field; use RAM_OFF_replayactive */
+/* Joy3Struct at 0xBE24 overlaps the previous field; use RAM_OFF_Joy3Struct */
+/* Joy4Struct at 0xBE40 overlaps the previous field; use RAM_OFF_Joy4Struct */
+/* glovestruct at 0xBE5C overlaps the previous field; use RAM_OFF_glovestruct */
 _Static_assert(offsetof(struct Ram, PadControlBits) == 0xBE78, "PadControlBits");
 _Static_assert(offsetof(struct Ram, padcont) == 0xBE7A, "padcont");
 _Static_assert(offsetof(struct Ram, PadControlBits34) == 0xBE86, "PadControlBits34");

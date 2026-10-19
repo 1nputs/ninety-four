@@ -18,7 +18,7 @@ RAM_BASE, RAM_SIZE = 0xFFFF0000, 0x10000
 
 CTYPE = {'b': 'uint8_t', 'w': 'uint16_t', 'l': 'uint32_t'}
 # symbols whose width the access scan cannot see (indexed through an address register)
-OVERRIDE = {'OOlistpos': 'w', 'Ylist': 'w', 'OOlist': 'b'}
+OVERRIDE = {'OOlistpos': 'w', 'Ylist': 'w', 'OOlist': 'b', 'padcont': 'w'}
 # symbols kept inside another structure, so no field of their own (a byte area named name_): the
 # game reads and writes them by address, RAM(name), and their bytes follow that structure
 BY_ADDRESS = {'puckc': "the puck's sort object's newpos and newpnum, read by the 68000 as one word"}
@@ -216,6 +216,8 @@ TYPED = {
     'tmstruct': ('struct Team teams[2]', 'the home and away team structs, AwShots the second'),
     'gsstruct': ('struct Matchup matchups[8]', "the night's games: the playoff tree's first round, then each round's"),
     'M68K_RAM': ('struct ReplayFrame replay[458]', "the instant replay's frames, a ring to replayend; between games the save RAM's copy, and the game's RAM kept during a highlight: those by address"),
+    'pads': ('struct RinkObj pads[7]', "the pads' markers (Joy1Struct the second; the fourth the replay camera, ReplayStarStruct), then the gloves (glovestruct)"),
+    'sso': ('struct SpriteHead sso[4]', "the controlled players' off-screen arrows (x, y at Xfrac's place)"),
 }
 SZ = {'uint8_t': 1, 'int8_t': 1, 'uint16_t': 2, 'int16_t': 2, 'uint32_t': 4, 'int32_t': 4}
 
@@ -224,14 +226,52 @@ def decl_size(decl):
     """(type, name, element size, element count) of a declaration such as 'uint8_t lines[7][8]'"""
     m = re.match(r'\s*(struct \w+|u?int(?:8|16|32)_t)\s+(\w+)((?:\[(?:0x[0-9A-Fa-f]+|\d+)\])*);?', decl)
     t = m.group(1)
-    size = SZ[t] if t in SZ else (SCSTRUCT if t == 'struct SortObj' else STRUCTS[t[7:]][0])
+    size = SZ[t] if t in SZ else (SIZES.get(t[7:]) or STRUCTS[t[7:]][0])
     count = 1
     for d in re.findall(r'\[(0x[0-9A-Fa-f]+|\d+)\]', m.group(3)):
         count *= int(d, 0)
     return t, m.group(2), size, count
 
 
-struct_text, struct_scalars = [], {}
+# the sort object's head, in two: what the sprite code draws (addframe2, to $14: an sso arrow is
+# one) and what is placed on the rink (addframe, to $1C: the pads, the gloves, the replay camera)
+HEAD, RINK = 0x14, 0x1C
+SIZES = {'SortObj': SCSTRUCT, 'SpriteHead': HEAD, 'RinkObj': RINK}
+sort_at, at = [], 0
+for l in sort_fields:
+    t, n, size, count = decl_size(l)
+    sort_at.append((at, l, n, size, count))
+    at += size * count
+if not ({a for a, *_ in sort_at} >= {HEAD, RINK}):
+    raise SystemExit('the sort object has no field boundary at $14 or $1C')
+struct_scalars = {}
+for sname, limit in SIZES.items():
+    struct_scalars[sname] = [(a + e * z, z, n) for a, l, n, z, c in sort_at for e in range(c)
+                             if a + (e + 1) * z <= limit and not n.startswith('_pad')]
+head_lines = [l for a, l, *_ in sort_at if a < HEAD]
+rink_lines = [l for a, l, *_ in sort_at if HEAD <= a < RINK]
+rest_lines = [l for a, l, *_ in sort_at if a >= RINK]
+def indent(lines, k):
+    return [' ' * (4 * k) + l for l in lines]
+anon_head = ['union {', '    struct SpriteHead head;', '    struct RAM_PACKED {'] + indent(head_lines, 1) + ['    };', '};']
+sort_text = (
+    "/* the head of a sort object: what the sprite code draws (addframe2); sso's arrows are one */\n"
+    'struct RAM_PACKED SpriteHead {\n' + '\n'.join(head_lines) + '\n};\n'
+    f'_Static_assert(sizeof(struct SpriteHead) == 0x{HEAD:X}, "SpriteHead size");\n\n'
+    "/* a drawn object placed on the rink (addframe): a sort object's first $1C bytes; the pads' markers,\n"
+    " * the replay camera and the gloves are one */\n"
+    'struct RAM_PACKED RinkObj {\n' + '\n'.join(indent(anon_head, 1)) + '\n' + '\n'.join(rink_lines) + '\n};\n'
+    f'_Static_assert(sizeof(struct RinkObj) == 0x{RINK:X}, "RinkObj size");\n\n'
+    '/* one sorted graphics object (players, puck, referee ...): SortCords entry; o->head and o->rink\n'
+    ' * are its parts the drawing code takes */\n'
+    'struct RAM_PACKED SortObj {\n    union {\n        struct RinkObj rink;\n        struct RAM_PACKED {\n'
+    + '\n'.join(indent(anon_head, 3)) + '\n' + '\n'.join(indent(rink_lines, 2)) + '\n        };\n    };\n'
+    + '\n'.join(rest_lines) + '\n};\n'
+    '_Static_assert(sizeof(struct SortObj) == SCSTRUCT, "SortObj size");\n'
+    + '\n'.join(f'_Static_assert(offsetof(struct SortObj, {n}) == 0x{a:02X}, "SortObj {n}");' for a, l, n, *_ in sort_at if not n.startswith('_pad'))
+    + '\n')
+
+struct_text = []
 for sname, (ssize, sdoc, size_name, sdecl) in STRUCTS.items():
     lines, sasserts, at, flat = [], [], 0, []
     for off, decl, com in sdecl:
@@ -310,7 +350,7 @@ struct Ram g;
 
 /* RAM's 16- and 32-bit scalars, as runs (first byte, count, size; the run again reps times, stride
  * bytes on: an array of structs): struct Ram's fields, and struct
- * SortObj's wherever the game reads one (the sorted objects, the pads block, sso) */
+ * SortObj's over the sorted objects, and the game's structs (src/ram.h) wherever RAM holds them */
 static const struct { uint16_t at, n; uint8_t size; uint16_t reps, stride; } runs[] = {@RUNS@
 };
 
@@ -344,13 +384,12 @@ void ram_unpack(const uint8_t in[RAM_SIZE])
 '''
 
 # ---- the map: every scalar of RAM, as the game names it ------------------------------------
-# struct SortObj's fields wherever the game reads one (bytes too: a byte read by name must not lie
-# inside a word): the 16 sorted objects (SortCords, the puck and its shadow past the array), the
-# pads block (the pads, the joypad structs and the replay camera, $1C apart) and sso's arrows
-# ($14 apart). Then struct Ram's fields: inside those regions only a field's first element (the
-# scalar the game names, as g.puckvz[0]: the rest of such an array is the object's own fields),
-# which must agree; elsewhere every element. No two views may disagree.
-SORT_VIEWS = [('SortCords', 16, SCSTRUCT), ('pads', 7, 0x1C), ('sso', 4, 0x14)]
+# struct SortObj's fields over the 16 sorted objects (bytes too: a byte read by name must not lie
+# inside a word; SortCords, the puck and its shadow past the array), where struct Ram's fields count
+# only as the game names them (a field's first element, as g.puckvz[0]: the rest of such an array
+# is the object's own fields), which must agree. Then every scalar of struct Ram's fields, and of
+# the game's structs in the regions typed by them (TYPED). No two views may disagree.
+SORT_VIEWS = [('SortCords', 16, SCSTRUCT)]
 def layout(lines):
     """(name, offset, size, count) of each declared field, in order"""
     out, at = [], 0
@@ -405,7 +444,6 @@ for s, z in starts:
         runs[-1][1] += 1
     else:
         runs.append([s, 1, z])
-
 # a block of runs repeated at a stride (an array of structs): each run once, with its repeats
 packed, i = [], 0
 while i < len(runs):
@@ -448,12 +486,7 @@ hdr = f'''/* Generated by tools/gen_ram.py from the NHL94Genesis RAM map. Do not
 #define SCSTRUCT 0x{SCSTRUCT:X}
 #define Sortobjs 16
 #define puckscnum 14
-/* one sorted graphics object (players, puck, referee ...): SortCords entry */
-struct RAM_PACKED SortObj {{
-{chr(10).join(sort_fields)}
-}};
-_Static_assert(sizeof(struct SortObj) == SCSTRUCT, "SortObj size");
-
+{sort_text}
 {chr(10).join(struct_text)}
 struct RAM_PACKED Ram {{
 {chr(10).join(fields)}

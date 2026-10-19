@@ -68,7 +68,7 @@ void EraseReplayBanner(void)
 /* replay94.asm:suba4. a4 = the current replay frame. Back up one frame (wrapping from M68K_RAM to
  * the end when the buffer has wrapped) and show it. Returns d7: the frame's delay, or 0 at the
  * start of the replay. */
-uint16_t suba4(uint32_t *frame, rp cam)
+uint16_t suba4(uint32_t *frame, struct RinkObj *cam)
 {
     uint32_t a4 = *frame;
     if (a4 == M68K_RAM) {
@@ -87,7 +87,7 @@ end:
 /* replay94.asm:adda4. Step forward one frame. First handles a reverse angle switch (sflags4 bit
  * 6): fade out, reload the rink for the other angle, redraw, and show the icon again. With
  * sf2drec (recording stopped) it stops one frame before the record point. */
-uint16_t adda4(uint32_t *frame, rp cam)
+uint16_t adda4(uint32_t *frame, struct RinkObj *cam)
 {
     if (g.sflags4 & HI(6)) {
         g.sflags4 &= (uint16_t)~HI(6);
@@ -121,7 +121,7 @@ uint16_t adda4(uint32_t *frame, rp cam)
 
 /* replay94.asm:adda42. adda4 without the look-ahead: stop at the record point (d7 = 0), else show
  * the frame and step past it. */
-uint16_t adda42(uint32_t *frame, rp cam)
+uint16_t adda42(uint32_t *frame, struct RinkObj *cam)
 {
     if (*frame == g.recbpr) return 0;
     uint16_t d7 = RestoreReplayFrame(*frame, cam);
@@ -138,13 +138,13 @@ void adda43(uint32_t *frame)
 
 /* replay94.asm:UpdateCameraPos. Camera object a5 = object a3's x / y (negated for the reverse
  * angle), Hpos / Vpos clamped to the rink. */
-void UpdateCameraPos(const struct SortObj *o, rp cam)
+void UpdateCameraPos(const struct RinkObj *o, struct RinkObj *cam)
 {
     int16_t d0 = o->Xpos, d1 = o->Ypos;
     if (g.sflags4 & HI(7)) d0 = (int16_t)-d0;
-    w16(cam, 0, (uint16_t)d0);
+    cam->Xpos = d0;
     if (g.sflags4 & HI(7)) d1 = (int16_t)-d1;
-    w16(cam, 0x14, (uint16_t)d1);
+    cam->Ypos = d1;
     if (!(d0 < 0x3C)) d0 = 0x3C;
     if (!(d0 > -0x3C)) d0 = -0x3C;
     g.Hpos = (uint16_t)d0;
@@ -155,7 +155,7 @@ void UpdateCameraPos(const struct SortObj *o, rp cam)
 
 /* replay94.asm:RevReplayAdj. Flag a reverse angle frame conversion (sflags4 bit 7), then
  * RestoreReplayFrame. */
-uint16_t RevReplayAdj(uint32_t frame, rp cam)
+uint16_t RevReplayAdj(uint32_t frame, struct RinkObj *cam)
 {
     if (g.sflags4 & HI(4)) g.sflags4 |= HI(7);
     return RestoreReplayFrame(frame, cam);
@@ -164,7 +164,7 @@ uint16_t RevReplayAdj(uint32_t frame, rp cam)
 /* replay94.asm:RestoreReplayFrame. Unpack replay frame a4 into the 16 objects and the other
  * replay variables (the inverse of updatereplay). Flips x / y and frames for the reverse angle.
  * Returns d7 = the frame's elapsed count. */
-uint16_t RestoreReplayFrame(uint32_t frame, rp cam)
+uint16_t RestoreReplayFrame(uint32_t frame, struct RinkObj *cam)
 {
     const struct ReplayFrame *f = replay_frame(frame);
     const uint8_t *revtbl = rom_ptr(SYM_revframetbl);
@@ -218,10 +218,10 @@ uint16_t RestoreReplayFrame(uint32_t frame, rp cam)
     g.PBnum = (uint16_t)((f->pbnum << 8) | (g.PBnum & 0xFF));
     g.PadControlBits34 = (uint16_t)((f->padbits34 << 4) | 0xF00F);
     if (g.sflags & HI(sfscrl)) {
-        const struct SortObj *o = obj_at(cam);
+        const struct RinkObj *o = cam;
         if (g.sflags3 & 0x20) {
-            w16(cam, 0x18, 0);
-            o = sortobj((int16_t)r16(cam, 0x16));
+            cam->Zpos = 0;
+            o = &sortobj((int16_t)cam->Yfrac)->rink;      /* (the object it follows) */
         }
         UpdateCameraPos(o, cam);
     } else {
@@ -637,7 +637,8 @@ void ReplayMode(void)
     g.sflags &= (uint16_t)~HI(sfscrl);
     g.sflags3 &= (uint8_t)~0x20;
     w8(RAM(replayactive), 0, 0xFF);
-    rp cam = RAM(ReplayStarStruct);                                /* a5 (not read while sfscrl is clear) */
+    struct RinkObj *cam = &g.pads[3];                     /* a5, the camera (ReplayStarStruct): Xpos, Ypos its place, Yfrac the
+                                                           * object it follows, Zpos < 0 none (not read while sfscrl is clear) */
     uint32_t a4 = g.recbpr;
     do elapsed = (int16_t)suba4(&a4, cam); while (elapsed != 0);
     SprSort();
@@ -666,17 +667,17 @@ void ReplayMode(void)
         int manual = !(d0 & 8);
         if ((g.sflags3 & 0x20) && (d1 & 0xF) == 0) manual = 0;
         if (manual) {                                     /* .dir: move or retarget the camera */
-            if ((int16_t)r16(cam, 0) <= -0xA0) w16(cam, 0, 0);
-            if ((int16_t)r16(cam, 0x14) <= -0x130) w16(cam, 0x14, 0);
+            if (cam->Xpos <= -0xA0) cam->Xpos = 0;
+            if (cam->Ypos <= -0x130) cam->Ypos = 0;
             int scrolling = (g.sflags & HI(sfscrl)) != 0;
             g.sflags |= HI(sfscrl);
-            if (!scrolling) { w16(cam, 0, g.Hpos); w16(cam, 0x14, g.Vpos); }
+            if (!scrolling) { cam->Xpos = (int16_t)g.Hpos; cam->Ypos = (int16_t)g.Vpos; }
             uint16_t dir = (uint16_t)((d0 & 7) ^ 4);
             uint16_t skip = 0xFF;                         /* st d3 */
             int tracking = (g.sflags3 & 0x20) != 0;
             g.sflags3 &= (uint8_t)~0x20;
-            if (tracking) skip = r16(cam, 0x16);
-            int16_t cx = (int16_t)r16(cam, 0), cy = (int16_t)r16(cam, 0x14);
+            if (tracking) skip = cam->Yfrac;
+            int16_t cx = cam->Xpos, cy = cam->Ypos;
             uint32_t best = 0x100;
             for (int i = 0; i < 12; i++) {
                 const struct SortObj *o = sortobj(i);
@@ -688,29 +689,29 @@ void ReplayMode(void)
                 uint32_t dist = (uint32_t)((int32_t)dx * dx) + (uint32_t)((int32_t)dy * dy);
                 if (dist <= 4 || dist > best) continue;
                 best = dist;
-                w16(cam, 0x16, (uint16_t)o->SCnum);
+                cam->Yfrac = (uint16_t)o->SCnum;
                 g.sflags3 |= 0x20;
             }
             if (g.sflags3 & 0x20) {                       /* follow the object found */
-                struct SortObj *o = sortobj((int16_t)r16(cam, 0x16));
+                struct SortObj *o = sortobj((int16_t)cam->Yfrac);
                 setpads(4, o);
-                UpdateCameraPos(o, cam);
+                UpdateCameraPos(&o->rink, cam);
                 setvideo();
                 continue;
             }
             g.sflags |= HI(sfscrl);                       /* .scrl: move the camera */
             dir ^= 4;
-            int16_t nx = (int16_t)(replay_dirtab[2 * dir] + (int16_t)r16(cam, 0));
-            if (nx <= 0x88 && nx >= -0x88) w16(cam, 0, (uint16_t)nx);
-            int16_t ny = (int16_t)(replay_dirtab[2 * dir + 1] + (int16_t)r16(cam, 0x14));
-            if (ny <= 0x126 && ny >= -0x126) w16(cam, 0x14, (uint16_t)ny);
-            w16(cam, 0x18, 0);
+            int16_t nx = (int16_t)(replay_dirtab[2 * dir] + cam->Xpos);
+            if (nx <= 0x88 && nx >= -0x88) cam->Xpos = nx;
+            int16_t ny = (int16_t)(replay_dirtab[2 * dir + 1] + cam->Ypos);
+            if (ny <= 0x126 && ny >= -0x126) cam->Ypos = ny;
+            cam->Zpos = 0;
             g.PadControlBits = (uint16_t)((g.PadControlBits & 0xFFF) | 0xE000);
-            UpdateCameraPos(obj_at(cam), cam);
+            UpdateCameraPos(cam, cam);
             setvideo();
             continue;
         }
-        w8(cam, 0x18, 0xFF);                              /* .nomans */
+        cam->Zpos = (int16_t)(cam->Zpos | 0xFF00);        /* .nomans (st: Zpos's high byte) */
         if ((d1 & 0x20) && !(g.sflags5 & 1)) g.sflags3 ^= 1 << sf3rmplay;
         if ((d3 & 0x40) && !(g.sflags5 & 1)) {            /* A: rewind */
             for (int i = 0; i < 4; i++) elapsed = (int16_t)suba4(&a4, cam);

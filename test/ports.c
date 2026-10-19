@@ -51,6 +51,7 @@ static void run_setInjuryType(const Record *r) { setInjuryType(OBJ(R_A2), OBJ(R_
 #define TEAM(reg) team_at(ram_at(r->regs_in[reg]))
 #define PLACE(reg) ram_at(r->regs_in[reg])                  /* (a place a register holds) */
 #define MATCHUP(reg) RAM_AT(struct Matchup, ram_at(r->regs_in[reg]))
+#define RINK(reg) RAM_AT(struct RinkObj, ram_at(r->regs_in[reg]))   /* (a sort object, a pad or the replay camera) */
 #define BYTES_AT(reg) ((uint8_t *)&g + (uint16_t)r->regs_in[reg])   /* (a byte table inside a team struct: penbox, the goals) */
 static void run_checkwallcoll(const Record *r) { checkwallcoll((int16_t)r->regs_in[R_D2], (int16_t)r->regs_in[R_D3], OBJ(R_A3)); }
 static void run_checkgoal(const Record *r) { checkgoal(OBJ(R_A2), OBJ(R_A3), (int16_t)r->regs_in[R_D2], (int16_t)r->regs_in[R_D3]); }
@@ -280,10 +281,10 @@ static void run_setvideo(const Record *r) { setvideo(); }
 VID_RUN(updatescroll) VID_RUN(showref) VID_RUN(checkfo) VID_RUN(showzam) VID_RUN(showcrowd) VID_RUN(showclock)
 VID_RUN(checksso) VID_RUN(setsortcords) VID_RUN(setffo) VID_RUN(uppads)
 static void run_SetSframe(const Record *r) { VID_IN(v); SetSframe(r->regs_in[R_A0], D16(R_D0), D16(R_D1), (uint16_t)r->regs_in[R_D2], (uint16_t)r->regs_in[R_D3], &v); VID_OUT(v); }
-static void run_QueuePadLabel(const Record *r) { VID_IN(v); QueuePadLabel((uint16_t)r->regs_in[R_D1], ram_at(r->regs_in[R_A0]), &v); VID_OUT(v); }
-static void run_RenderSmallFontChar(const Record *r) { VID_IN(v); RenderSmallFontChar((uint16_t)r->regs_in[R_D2], (uint16_t)r->regs_in[R_D0], ram_at(r->regs_in[R_A0]), &v); VID_OUT(v); }
-static void run_addframe(const Record *r) { VID_IN(v); addframe(OBJ(R_A3), &v); VID_OUT(v); }
-static void run_addframe2(const Record *r) { VID_IN(v); addframe2(D16(R_D0), D16(R_D1), OBJ(R_A3), &v); VID_OUT(v); }
+static void run_QueuePadLabel(const Record *r) { VID_IN(v); QueuePadLabel((uint16_t)r->regs_in[R_D1], RINK(R_A0), &v); VID_OUT(v); }
+static void run_RenderSmallFontChar(const Record *r) { VID_IN(v); RenderSmallFontChar((uint16_t)r->regs_in[R_D2], (uint16_t)r->regs_in[R_D0], RINK(R_A0), &v); VID_OUT(v); }
+static void run_addframe(const Record *r) { VID_IN(v); addframe(RINK(R_A3), &v); VID_OUT(v); }
+static void run_addframe2(const Record *r) { VID_IN(v); addframe2(D16(R_D0), D16(R_D1), RAM_AT(struct SpriteHead, PLACE(R_A3)), &v); VID_OUT(v); }
 static void run_find3d(const Record *r) { int16_t d0 = D16(R_D0), d1 = D16(R_D1); find3d(&d0, &d1, D16(R_D2)); expect_reg16(r, R_D0, (uint16_t)d0, "d0"); expect_reg16(r, R_D1, (uint16_t)d1, "d1"); }
 /* replay94 */
 static void run_getpzjoy(const Record *r) { uint16_t d0, d1, d2, d3; getpzjoy(&d0, &d1, &d2, &d3); expect_reg16(r, R_D0, d0, "d0"); expect_reg16(r, R_D1, d1, "d1"); expect_reg16(r, R_D2, d2, "d2"); expect_reg16(r, R_D3, d3, "d3"); }
@@ -291,12 +292,12 @@ static void run_ShowReplayIcon(const Record *r) { ShowReplayIcon(); }
 static void run_EraseReplayIcon(const Record *r) { EraseReplayIcon(); }
 static void run_ShowReplayBanner(const Record *r) { ShowReplayBanner(); }
 static void run_EraseReplayBanner(const Record *r) { EraseReplayBanner(); }
-#define A4_RUN(name) static void run_##name(const Record *r) { uint32_t a4 = r->regs_in[R_A4]; uint16_t d7 = name(&a4, ram_at(r->regs_in[R_A5])); expect_reg16(r, R_A4, (uint16_t)a4, "a4"); expect_reg16(r, R_D7, d7, "d7"); }
+#define A4_RUN(name) static void run_##name(const Record *r) { uint32_t a4 = r->regs_in[R_A4]; uint16_t d7 = name(&a4, RINK(R_A5)); expect_reg16(r, R_A4, (uint16_t)a4, "a4"); expect_reg16(r, R_D7, d7, "d7"); }
 A4_RUN(suba4) A4_RUN(adda4) A4_RUN(adda42)
 static void run_adda43(const Record *r) { uint32_t a4 = r->regs_in[R_A4]; adda43(&a4); expect_reg16(r, R_A4, (uint16_t)a4, "a4"); }
-static void run_UpdateCameraPos(const Record *r) { UpdateCameraPos(OBJ(R_A3), ram_at(r->regs_in[R_A5])); }
-static void run_RevReplayAdj(const Record *r) { expect_reg16(r, R_D7, RevReplayAdj(r->regs_in[R_A4], ram_at(r->regs_in[R_A5])), "d7"); }
-static void run_RestoreReplayFrame(const Record *r) { expect_reg16(r, R_D7, RestoreReplayFrame(r->regs_in[R_A4], ram_at(r->regs_in[R_A5])), "d7"); }
+static void run_UpdateCameraPos(const Record *r) { UpdateCameraPos(RINK(R_A3), RINK(R_A5)); }
+static void run_RevReplayAdj(const Record *r) { expect_reg16(r, R_D7, RevReplayAdj(r->regs_in[R_A4], RINK(R_A5)), "d7"); }
+static void run_RestoreReplayFrame(const Record *r) { expect_reg16(r, R_D7, RestoreReplayFrame(r->regs_in[R_A4], RINK(R_A5)), "d7"); }
 static void run_ClampReplayView(const Record *r) { ClampReplayView(); }
 static void run_updatereplay(const Record *r) { updatereplay(); }
 static void run_updateplayers(const Record *r) { updateplayers(); }
