@@ -1821,7 +1821,12 @@ static int cup_players(const struct about *A, struct rated *r)
 #define LINE(...) do { if (*at < size) *at += (size_t)snprintf(text + *at, size - *at, __VA_ARGS__); } while (0)
 
 /* a section of the League page: its title, then ten of players (goalie: the goalies, else the
- * skaters) best first by key (the shown value, then the rest), each with the value shown */
+ * skaters), best first: by their card's overall rating, or (col) by the rating of a roster screen
+ * column, then the overall. A column's rating is shown as the roster screen shows it: a rating of
+ * 0 to 6 (the cartridge's scale: the game plays a rating as 5 times it, at most 30, a streak
+ * added: AttributeCalc) as 25, 34, 43, 54, 72, 90 or 99, nothing between. Past 7 the screen's
+ * reckoning runs over (8 to 14 come out as 25), so a league that rates past 7 shows its own
+ * numbers, and says so */
 struct ranked { int i, shown, key[3]; };
 static int by_ranked(const void *a, const void *b)
 {
@@ -1833,17 +1838,20 @@ static void player_section(const struct about *A, const struct rated *r, int n, 
                            const char *unit, char *text, size_t size, size_t *at)
 {
     static struct ranked k[LEAGUE_MAX * ROSTER];
-    int m = 0;
+    int m = 0, most = 0;
     for (int j = 0; j < n; j++) {
         const struct about_player *P = &A->pl[r[j].i];
         if (P->goalie != goalie) continue;
         int raw = 0;
         for (int d2 = 0; d2 < 14; d2++) if (col & 1u << d2) raw += P->nib[13 - d2];
-        int shown = col ? rating_column(rom_cart, P->nib, P->number, col) : r[j].rating;
-        k[m++] = (struct ranked){ r[j].i, shown, { shown, col ? raw : r[j].sum, r[j].sum } };
+        if (raw > most) most = raw;
+        k[m++] = (struct ranked){ r[j].i, col ? raw : r[j].rating, { col ? raw : r[j].sum, r[j].sum, 0 } };
     }
     qsort(k, (size_t)m, sizeof k[0], by_ranked);
+    int own = col && most > 7;                            /* (past the roster screen's reckoning: the league's own numbers) */
+    for (int j = 0; col && !own && j < m; j++) k[j].shown = rating_column(rom_cart, A->pl[k[j].i].nib, A->pl[k[j].i].number, col);
     LINE("\f%s\n", title);
+    if (own) LINE("Rated 0-15, past the game's 0-6\n");
     char name[LEN_NAME + 1];
     for (int j = 0; j < m && j < 10; j++) {
         short_name(name, A->pl[k[j].i].name, 18);
@@ -1873,6 +1881,23 @@ static void team_section(const struct about *A, int b, int least, const char *ti
         if (lines == 10 && j < m) snprintf(abbrs + strlen(abbrs), sizeof abbrs - strlen(abbrs), " ...");
         LINE("  %s\t%s\n", first && k[first - 1].shown == k[first].shown ? "" : value, abbrs);
     }
+}
+
+/* the teams that play for the cup with value v (of bonus b; -1: players on its roster): the team
+ * (its name, the value and unit after it), or those that share it (their abbreviations, a few) */
+static const char *teams_with(const struct about *A, int b, int v, const char *unit, char *out, size_t size)
+{
+    int n = 0, first = -1;
+    for (int t = 0; t < A->playoff_teams; t++)
+        if ((b < 0 ? A->t[t].players : bonus(A, t, b)) == v) { if (first < 0) first = t; n++; }
+    if (n == 1) { snprintf(out, size, b < 0 ? "%s, %d%s" : "%s", A->t[first].name, v, unit); return out; }
+    if (n > 5) { snprintf(out, size, b < 0 ? "%d teams, %d%s" : "%d teams", n, v, unit); return out; }
+    out[0] = 0;
+    for (int t = 0; t < A->playoff_teams; t++)
+        if ((b < 0 ? A->t[t].players : bonus(A, t, b)) == v)
+            snprintf(out + strlen(out), size - strlen(out), "%s%s", out[0] ? " " : "", A->t[t].abbr);
+    if (b < 0) snprintf(out + strlen(out), size - strlen(out), ", %d%s", v, unit);
+    return out;
 }
 
 void league_about(int i, char *text, size_t size)
@@ -1953,21 +1978,25 @@ void league_about(int i, char *text, size_t size)
         LINE("Shooting\t%d left, %d right\n", skaters - right, right);
         if (skaters) LINE("The average skater\t%d lb\n", 140 + (8 * weight + skaters / 2) / skaters);
         if (numbers[most]) LINE("Number worn most\t#%d, by %d skaters\n", most, numbers[most]);
-        int big = 0, small = 0;
+        /* the rosters' sizes; who scores most and allows least when the playoffs simulate their
+         * other games (getscore: the scorer's offense row and the other team's defense row, the
+         * higher the more goals): a team, or how many share it */
+        int lo = 99, hi = 0, olo = 99, ohi = 0;
         for (int t = 0; t < A->playoff_teams; t++) {
-            if (A->t[t].players > A->t[big].players) big = t;
-            if (A->t[t].players < A->t[small].players) small = t;
+            int p = A->t[t].players, o = bonus(A, t, B_OFFENSE), d = bonus(A, t, B_DEFENSE);
+            lo = p < lo ? p : lo; hi = p > hi ? p : hi;
+            ohi = o > ohi ? o : ohi; olo = d < olo ? d : olo;
         }
-        if (A->playoff_teams) LINE("Most on a roster\t%s, %d\n", A->t[big].name, A->t[big].players);
-        if (A->playoff_teams) LINE("Fewest on a roster\t%s, %d\n", A->t[small].name, A->t[small].players);
-        int off = 0, def = 0;                              /* (the playoffs' other games: getscore's rows, the scorer's offense
-                                                             and the other team's defense: the higher, the more goals) */
-        for (int t = 0; t < A->playoff_teams; t++) {
-            if (bonus(A, t, B_OFFENSE) > bonus(A, off, B_OFFENSE)) off = t;
-            if (bonus(A, t, B_DEFENSE) < bonus(A, def, B_DEFENSE)) def = t;
+        if (A->playoff_teams && lo == hi) LINE("Every roster\t%d players\n", hi);
+        else if (A->playoff_teams) {
+            LINE("Rosters\t%d to %d players\n", lo, hi);
+            char who[48];
+            LINE("The most\t%s\n", teams_with(A, -1, hi, " players", who, sizeof who));
+            LINE("The fewest\t%s\n", teams_with(A, -1, lo, " players", who, sizeof who));
         }
-        if (A->playoff_teams) LINE("Scores most when simulated\t%s\n", A->t[off].name);
-        if (A->playoff_teams) LINE("Allows least when simulated\t%s\n", A->t[def].name);
+        char who[48];
+        if (A->playoff_teams) LINE("Scores most when simulated\t%s\n", teams_with(A, B_OFFENSE, ohi, "", who, sizeof who));
+        if (A->playoff_teams) LINE("Allows least when simulated\t%s\n", teams_with(A, B_DEFENSE, olo, "", who, sizeof who));
     }
 }
 #undef LINE

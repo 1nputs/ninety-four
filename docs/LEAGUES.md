@@ -294,16 +294,21 @@ Esc, **League**: the line to choose a league, and under it what the chosen one h
     (worked out the way the cartridge does, hot and cold streaks aside);
   - **Best teams**: the top ten by team rating;
   - **Fastest skaters**, **Hardest shots**, **Sharpest shooters**, **Best passers**, **Best
-    stickhandlers**, **Biggest hitters**: the top ten by that rating as the roster screen shows
-    it (speed, shot power, shot accuracy, pass accuracy, stick handling, checking);
+    stickhandlers**, **Biggest hitters**: the top ten by that rating (speed, shot power, shot
+    accuracy, pass accuracy, stick handling, checking), shown as the roster screen shows it. The
+    game rates each of these 0 to 6 and plays a rating as five times it, at most 30, a hot or cold
+    streak added (so a 7 or more plays as a 6, but for a streak); the roster screen shows 0 to 6 as
+    25, 34, 43, 54, 72, 90 and 99, with nothing between, and its reckoning runs over past 7 (8 to
+    14 come out as 25). So a league that rates past 7 (as NHL 94 2025 does, for its own code)
+    shows its own numbers there instead, and says so;
   - **Heaviest skaters**, **Lightest skaters**: ten of each, in pounds as the roster screen has them;
   - **Power play**, **Penalty killing**, **Home ice**, **On the road**: the teams by the bonus
     their skaters' ratings gain a man up or at home (`pp`, `home`), or lose a man down or away
     (`pk`, `away`), those as good on one line;
   - **The league in numbers**: its players, forwards and defensemen, how many shoot left and
-    right, the average skater's weight, the number worn most, the biggest and smallest rosters,
-    and the teams that score most and allow least when the playoffs simulate their other games
-    (`offense`, `defense`).
+    right, the average skater's weight, the number worn most, the rosters' sizes (the biggest and
+    smallest, or how many teams share them), and the teams that score most and allow least when
+    the playoffs simulate their other games (`offense`, `defense`).
 
 The cartridge's own figures appear once its ROM is chosen.
 
