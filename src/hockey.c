@@ -23,9 +23,9 @@ void ClearShotData(void)
 void restoreteams(void)
 {
     for (int t = 0; t < 2; t++) {
-        rp tm = team_struct(t);
-        w16(tm, tmap, 6);
-        for (int16_t d0 = 0x32; d0 >= 0; d0 -= 2) w16(tm, tmpdst + d0, 0xFFFE);
+        struct Team *tm = team_struct(t);
+        tm->ap = 6;
+        for (int16_t d0 = 0x32; d0 >= 0; d0 -= 2) tm->pdst[d0 / 2] = 0xFFFE;
     }
 }
 
@@ -90,14 +90,14 @@ void RestoreBenchEnergy(void)
 {
     if (g.OptLine != 0) return;
     for (int t = 0; t < 2; t++) {
-        rp tm = team_struct(t);
+        struct Team *tm = team_struct(t);
         for (int16_t d0 = 0x32; d0 >= 0; d0 -= 2) {
-            uint16_t at = r16(tm, tmpdst + d0);           /* (rules: the box rests too: penalty time, not injured) */
+            uint16_t at = tm->pdst[d0 / 2];               /* (rules: the box rests too: penalty time, not injured) */
             int box = rules[RULE_BOX_REST] && (int16_t)at >= 0 && !(at & 0x1000);
             if (at != 0xFFFE && !box) continue;
-            uint16_t e = (uint16_t)(r16(tm, tmpde + d0) + rule_scale(RULE_BENCH_REST, 9));     /* (rules: bench rest) */
+            uint16_t e = (uint16_t)(tm->pde[d0 / 2] + rule_scale(RULE_BENCH_REST, 9));         /* (rules: bench rest) */
             if ((int16_t)e >= 0x1000) e = 0x1000;
-            w16(tm, tmpde + d0, e);
+            tm->pde[d0 / 2] = e;
         }
     }
 }
@@ -190,7 +190,7 @@ void clockcont_0(void)
             rp gs = rp_add(RAM(gsstruct), 0x10 * g.gamenum);
             uint16_t d3 = 0;
             if (r8(gs, 0xE) & 1) d3 ^= 2;
-            if ((int16_t)(g.HmGoals[0] - g.AwGoals[0]) < 0) d3 ^= 2;
+            if ((int16_t)(g.teams[0].score - g.teams[1].score) < 0) d3 ^= 2;
             if (r16(gs, 4 + d3) == 3) cup = 1;
         }
     }
@@ -198,7 +198,7 @@ void clockcont_0(void)
         d0 = 8;                                           /* stanley cup assignment */
         for (int i = 0; i < 12; i++) sortobj(i)->pflags &= (uint8_t)~(1 << pfjoycon);
     }
-    int16_t d1 = (int16_t)(g.HmGoals[0] - g.AwGoals[0]);
+    int16_t d1 = (int16_t)(g.teams[0].score - g.teams[1].score);
     if (d1 != 0) {
         if (d1 < 0) a3 = sortobj(6);                      /* the away team leads */
         for (int i = 0; i < 6; i++, a3++) {
@@ -274,7 +274,7 @@ void SetupPauseScreen(void)
 }
 
 /* hockey94.asm:seta2. The team struct of the pause joystick. */
-rp seta2(void)
+struct Team *seta2(void)
 {
     uint16_t t = (g.sflags & HI(sfpj)) ? g.cont2team : g.cont1team;
     return team_struct(t != 1);
@@ -371,10 +371,10 @@ void Pausemode(void)
     while (g.vcount == v) hal_wait_vblank();
     p_turnoff();
     uint16_t saved = g.sflags;
-    rp tm = seta2();
+    struct Team *tm = seta2();
     uint32_t items = SYM_PauseText;
     if (g.gmode2 & HI(0)) items = SYM_PauseMenuItems;
-    else if (r8(tm, tmflags) & 4) items = SYM_PauseText2;
+    else if (tm->flags & 4) items = SYM_PauseText2;
     InitMenuState(items, SYM_SetupPauseScreen);
     for (;;) {
         vcountwait();
@@ -452,8 +452,8 @@ void StartGame(void)
     if ((int16_t)g.OptPlayMode > 1) ClearShotData();
     clearTeamStats();
     if (g.gmode2 & HI(0)) {
-        Create_HotCold_Table(RAM(tmstruct));
-        Create_HotCold_Table(RAM(AwShots));
+        Create_HotCold_Table(team_struct(0));
+        Create_HotCold_Table(team_struct(1));
     }
     g.ScoreSumbytes = 0;
     g.PenSumLength = 0;

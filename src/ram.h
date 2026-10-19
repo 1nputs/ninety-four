@@ -89,6 +89,103 @@ struct RAM_PACKED SortObj {
 };
 _Static_assert(sizeof(struct SortObj) == SCSTRUCT, "SortObj size");
 
+#define tmsize 0x364
+/* a team's struct (team_struct(away)) */
+struct RAM_PACKED Team {
+    uint16_t shots;  /* shots (tmshots) */
+    uint16_t PwrGoals;  /* power play goals */
+    uint16_t PwrPlays;  /* power plays */
+    uint16_t Penalties;  /* penalties */
+    uint16_t Penmin;  /* penalty minutes */
+    uint16_t ATOP;  /* attack zone time (seconds) */
+    uint16_t score;
+    uint16_t faceoffs;  /* faceoffs won */
+    uint16_t checks;  /* body checks */
+    uint16_t passes;  /* pass attempts */
+    uint16_t passcomp;  /* passes completed */
+    uint16_t line;  /* the line on the ice */
+    uint16_t lasttouch;  /* the last player to touch the puck (roster number, in the low byte) */
+    uint16_t assist1;  /* the two before him ($FFxx: none) */
+    uint16_t assist2;
+    uint32_t data;  /* the team's data (the cartridge's address) */
+    uint16_t sort;  /* its first sort object (an address) */
+    uint16_t ap;  /* active players on the ice, 4-6 */
+    uint16_t goalie;  /* the goalie (roster slot; $FFxx: pulled) */
+    uint16_t team;  /* the team (TeamList index; the asm reads it as Xvel(a2)) */
+    uint32_t neardist;  /* distance squared from the puck to the team's nearest skater */
+    uint16_t lchoice;  /* the line the pad chose */
+    uint8_t flags;
+    uint8_t _pad31;
+    uint16_t pde[26];  /* energy of each roster player */
+    uint16_t pdst[26];  /* where each is: -2 bench, -1 ice, 0 and up the penalty box */
+    uint8_t penbox[26];  /* the penalty box: roster offsets (player * 2), ended by a negative byte */
+    uint8_t pgoals[26];  /* goals (a goalie's: goals against) */
+    uint8_t passists[26];  /* assists */
+    uint8_t pshots[26];  /* shots (a goalie's: shots faced) */
+    uint8_t ppim[26];  /* penalty minutes */
+    uint8_t pchecks[26];  /* body checks */
+    uint16_t ptoi[26];  /* time on ice */
+    uint8_t lines[7][8];  /* the line sets: 7 lines of 8 slots (roster number + 1) */
+    uint8_t hotcold[26][16];  /* 94: each player's hot / cold bytes (signed) */
+    uint16_t pergoals[4];  /* goals by period */
+    uint16_t pershots[4];  /* shots by period */
+    uint16_t pptime;  /* power play time */
+    uint16_t ppshots;  /* power play shots */
+    uint16_t shgoals;  /* shorthanded goals */
+    uint16_t breakaways;
+    uint16_t bagoals;  /* breakaway goals */
+    uint16_t onetimers;  /* one-timer attempts */
+    uint16_t otgoals;  /* one-timer goals */
+    uint16_t psattempts;  /* penalty shot (and shootout) attempts */
+    uint16_t psgoals;  /* penalty shot goals */
+};
+_Static_assert(sizeof(struct Team) == tmsize, "Team size");
+_Static_assert(offsetof(struct Team, shots) == 0x000, "Team shots");
+_Static_assert(offsetof(struct Team, PwrGoals) == 0x002, "Team PwrGoals");
+_Static_assert(offsetof(struct Team, PwrPlays) == 0x004, "Team PwrPlays");
+_Static_assert(offsetof(struct Team, Penalties) == 0x006, "Team Penalties");
+_Static_assert(offsetof(struct Team, Penmin) == 0x008, "Team Penmin");
+_Static_assert(offsetof(struct Team, ATOP) == 0x00A, "Team ATOP");
+_Static_assert(offsetof(struct Team, score) == 0x00C, "Team score");
+_Static_assert(offsetof(struct Team, faceoffs) == 0x00E, "Team faceoffs");
+_Static_assert(offsetof(struct Team, checks) == 0x010, "Team checks");
+_Static_assert(offsetof(struct Team, passes) == 0x012, "Team passes");
+_Static_assert(offsetof(struct Team, passcomp) == 0x014, "Team passcomp");
+_Static_assert(offsetof(struct Team, line) == 0x016, "Team line");
+_Static_assert(offsetof(struct Team, lasttouch) == 0x018, "Team lasttouch");
+_Static_assert(offsetof(struct Team, assist1) == 0x01A, "Team assist1");
+_Static_assert(offsetof(struct Team, assist2) == 0x01C, "Team assist2");
+_Static_assert(offsetof(struct Team, data) == 0x01E, "Team data");
+_Static_assert(offsetof(struct Team, sort) == 0x022, "Team sort");
+_Static_assert(offsetof(struct Team, ap) == 0x024, "Team ap");
+_Static_assert(offsetof(struct Team, goalie) == 0x026, "Team goalie");
+_Static_assert(offsetof(struct Team, team) == 0x028, "Team team");
+_Static_assert(offsetof(struct Team, neardist) == 0x02A, "Team neardist");
+_Static_assert(offsetof(struct Team, lchoice) == 0x02E, "Team lchoice");
+_Static_assert(offsetof(struct Team, flags) == 0x030, "Team flags");
+_Static_assert(offsetof(struct Team, pde) == 0x032, "Team pde");
+_Static_assert(offsetof(struct Team, pdst) == 0x066, "Team pdst");
+_Static_assert(offsetof(struct Team, penbox) == 0x09A, "Team penbox");
+_Static_assert(offsetof(struct Team, pgoals) == 0x0B4, "Team pgoals");
+_Static_assert(offsetof(struct Team, passists) == 0x0CE, "Team passists");
+_Static_assert(offsetof(struct Team, pshots) == 0x0E8, "Team pshots");
+_Static_assert(offsetof(struct Team, ppim) == 0x102, "Team ppim");
+_Static_assert(offsetof(struct Team, pchecks) == 0x11C, "Team pchecks");
+_Static_assert(offsetof(struct Team, ptoi) == 0x136, "Team ptoi");
+_Static_assert(offsetof(struct Team, lines) == 0x16A, "Team lines");
+_Static_assert(offsetof(struct Team, hotcold) == 0x1A2, "Team hotcold");
+_Static_assert(offsetof(struct Team, pergoals) == 0x342, "Team pergoals");
+_Static_assert(offsetof(struct Team, pershots) == 0x34A, "Team pershots");
+_Static_assert(offsetof(struct Team, pptime) == 0x352, "Team pptime");
+_Static_assert(offsetof(struct Team, ppshots) == 0x354, "Team ppshots");
+_Static_assert(offsetof(struct Team, shgoals) == 0x356, "Team shgoals");
+_Static_assert(offsetof(struct Team, breakaways) == 0x358, "Team breakaways");
+_Static_assert(offsetof(struct Team, bagoals) == 0x35A, "Team bagoals");
+_Static_assert(offsetof(struct Team, onetimers) == 0x35C, "Team onetimers");
+_Static_assert(offsetof(struct Team, otgoals) == 0x35E, "Team otgoals");
+_Static_assert(offsetof(struct Team, psattempts) == 0x360, "Team psattempts");
+_Static_assert(offsetof(struct Team, psgoals) == 0x362, "Team psgoals");
+
 struct RAM_PACKED Ram {
     uint8_t M68K_RAM[0x1FFE];  /* $FFFF0000 */
     uint8_t sramcleared[0x8F56];  /* $FFFF1FFE */
@@ -331,14 +428,7 @@ struct RAM_PACKED Ram {
     uint8_t ScoreSum[0x168];  /* $FFFFC474 */
     uint16_t PenSumLength;  /* $FFFFC5DC */
     uint8_t PenSum[0xF0];  /* $FFFFC5DE */
-    uint8_t tmstruct[0xC];  /* $FFFFC6CE */
-    uint16_t HmGoals[0x9];  /* $FFFFC6DA */
-    uint32_t HomeTeamRosterPtr;  /* $FFFFC6EC */
-    uint8_t _padC6F0[0x342];
-    uint8_t AwShots[0xC];  /* $FFFFCA32 */
-    uint16_t AwGoals[0x9];  /* $FFFFCA3E */
-    uint32_t AwayTeamRosterPtr;  /* $FFFFCA50 */
-    uint8_t _padCA54[0x342];
+    struct Team teams[2];  /* $FFFFC6CE: the home and away team structs (tmstruct, AwShots) */
     uint8_t statsbuffer[0xD0];  /* $FFFFCD96 */
     uint8_t gsstruct[0x80];  /* $FFFFCE66 */
     uint16_t gamenum;  /* $FFFFCEE6 */
@@ -768,12 +858,12 @@ _Static_assert(offsetof(struct Ram, ScoreSumbytes) == 0xC472, "ScoreSumbytes");
 _Static_assert(offsetof(struct Ram, ScoreSum) == 0xC474, "ScoreSum");
 _Static_assert(offsetof(struct Ram, PenSumLength) == 0xC5DC, "PenSumLength");
 _Static_assert(offsetof(struct Ram, PenSum) == 0xC5DE, "PenSum");
-_Static_assert(offsetof(struct Ram, tmstruct) == 0xC6CE, "tmstruct");
-_Static_assert(offsetof(struct Ram, HmGoals) == 0xC6DA, "HmGoals");
-_Static_assert(offsetof(struct Ram, HomeTeamRosterPtr) == 0xC6EC, "HomeTeamRosterPtr");
-_Static_assert(offsetof(struct Ram, AwShots) == 0xCA32, "AwShots");
-_Static_assert(offsetof(struct Ram, AwGoals) == 0xCA3E, "AwGoals");
-_Static_assert(offsetof(struct Ram, AwayTeamRosterPtr) == 0xCA50, "AwayTeamRosterPtr");
+_Static_assert(offsetof(struct Ram, teams) == 0xC6CE, "teams");
+/* HmGoals at 0xC6DA overlaps the previous field; use RAM_OFF_HmGoals */
+/* HomeTeamRosterPtr at 0xC6EC overlaps the previous field; use RAM_OFF_HomeTeamRosterPtr */
+/* AwShots at 0xCA32 overlaps the previous field; use RAM_OFF_AwShots */
+/* AwGoals at 0xCA3E overlaps the previous field; use RAM_OFF_AwGoals */
+/* AwayTeamRosterPtr at 0xCA50 overlaps the previous field; use RAM_OFF_AwayTeamRosterPtr */
 _Static_assert(offsetof(struct Ram, statsbuffer) == 0xCD96, "statsbuffer");
 _Static_assert(offsetof(struct Ram, gsstruct) == 0xCE66, "gsstruct");
 _Static_assert(offsetof(struct Ram, gamenum) == 0xCEE6, "gamenum");

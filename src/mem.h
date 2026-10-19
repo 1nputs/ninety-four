@@ -68,3 +68,8 @@ static inline uint32_t m32(uint32_t a) { return (uint32_t)m16(a) << 16 | m16(a +
  * regions the original reads as one (the pads, sso's arrows, the camera); and an object's place */
 static inline struct SortObj *obj_at(rp p) { return (struct SortObj *)((uint8_t *)&g + p.o); }   /* (a struct starts where the machine's does) */
 static inline rp obj_place(const struct SortObj *o) { return (rp){ (uint16_t)((const uint8_t *)o - (const uint8_t *)&g) }; }
+
+/* a team's struct at a place, and its place (for what reads a team struct by offset: the stats
+ * tables, and the code the original runs on whatever it is handed) */
+static inline struct Team *team_at(rp p) { return (struct Team *)((uint8_t *)&g + p.o); }
+static inline rp team_place(const struct Team *t) { return (rp){ (uint16_t)((const uint8_t *)t - (const uint8_t *)&g) }; }

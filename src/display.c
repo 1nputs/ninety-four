@@ -271,7 +271,7 @@ void showzam(struct Vid *v)
     d2 += 2;
     SetSframe(ART(ZamFrameList), d0, d1, d2, d3, v);
     d2 = 5;
-    if (!(g.HmGoals[0] > g.AwGoals[0])) { SetSframe(ART(ZamFrameList), d0, d1, d2, d3, v); return; }
+    if (!(g.teams[0].score > g.teams[1].score)) { SetSframe(ART(ZamFrameList), d0, d1, d2, d3, v); return; }
     int16_t t = (int16_t)(d0 - 0xDA);
     if (t < 0) t = 0;
     t = (int16_t)((uint16_t)t >> 2);

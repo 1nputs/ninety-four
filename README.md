@@ -231,8 +231,8 @@ tell us what it said.
 - **Native state** (the owner's direction): the game's RAM is a native struct (the 68000's offsets,
   the host's byte order, any compiler); the console's big-endian view of it is made on demand
   (`src/mem.h` reads and writes by 68000 address through `src/ram.c`'s generated map,
-  `ram_pack`/`ram_unpack` for the checks and states). Next: RAM's regions as typed native structs,
-  then leagues as native tables.
+  `ram_pack`/`ram_unpack` for the checks and states). RAM's regions become typed native structs
+  one by one: the team structs are (`struct Team`); then the rest, then leagues as native tables.
 - **Deferred by the owner.** WebAssembly (the game's code compiles for it now; a browser platform
   for pulseman is the job) and the cartridge's slowdown (it needs a 68k cost model).
 - **Read first.** `ext/pulseman/README.md` and `docs/API.md` there; the comments at the top

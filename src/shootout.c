@@ -23,7 +23,7 @@ void ShootoutModeBox(void)
     print(FormatPlayerNumInitial(sortobj((int16_t)g.BA_Goalie_SCnum)->pnum, team_struct(g.BA_Team == 0)));
     for (int away = 0; away < 2; away++) {
         printz(away ? str_ShootoutModeBox_4 : str_ShootoutModeBox_3, away ? sizeof str_ShootoutModeBox_4 : sizeof str_ShootoutModeBox_3);
-        uint32_t data = r32(team_struct(away), tmdata);
+        uint32_t data = team_struct(away)->data;
         print(data + (int16_t)rd16(rom_ptr(data + 4)));
         g.printx = 0x15;
         print(PushNumberWidth(away ? g.awayshootgoals : g.homeshootgoals, 3));
@@ -111,12 +111,12 @@ void ClearShootout(void)
 /* ---- the Shootout Shooters menu item ------------------------------------------------------------- */
 
 /* the shooter list of team a2 (6 words: 5 shooters, then the goalie) */
-static rp shooters(rp tm) { return rp_same(tm, team_struct(0)) ? RAM(homeshooters) : RAM(awayshooters); }
+static rp shooters(struct Team *tm) { return tm == team_struct(0) ? RAM(homeshooters) : RAM(awayshooters); }
 
 /* shootout94.asm:ShootoutShooters. Shootout Shooters for team a2 (a menu item, in a shootout
  * only): the 5 shooter slots and the goalie's; up / down a shooter slot, left / right the first
  * shooter or the goalie, C a player for the slot from a list (ShooterSelectList), Start leaves. */
-void ShootoutShooters(rp tm)
+void ShootoutShooters(struct Team *tm)
 {
     if (!(g.gmode2 & HI(0))) { ExitStatsScreen(); return; }
     SetupScreen(0, 0x1C);
@@ -162,7 +162,7 @@ void ShootoutShooters(rp tm)
 /* shootout94.asm:ShooterSelectList. C on slot TestList: "{Select Player}", the team's skaters
  * (the goalies for the goalie slot) in Satt, the slot's player highlighted ($C000); up / down
  * the player, left / right the attribute column, C takes him, Start goes back. */
-void ShooterSelectList(rp tm)
+void ShooterSelectList(struct Team *tm)
 {
     rp list = shooters(tm);
     uint16_t cur = r16(list, (int16_t)(uint16_t)(g.TestList[0] << 1));
@@ -242,7 +242,7 @@ static uint32_t attrib_column(uint32_t list)
 /* shootout94.asm:PrintShooterList. The column header (the overall column with the shooters' own
  * mask: ShooterOverallTxt / ShooterOverallTxt2), then six rows of Satt from PlayerScrollCtr: name
  * and attribute (GetNameandAttrib), row VertLineScrolling highlighted. */
-void PrintShooterList(rp tm)
+void PrintShooterList(struct Team *tm)
 {
     printz(str_PrintShooterList_1, sizeof str_PrintShooterList_1);
     uint32_t base = g.TestList[0] == 5 ? SYM_GAttribOverall : SYM_PAttribOverall;
@@ -265,7 +265,7 @@ void PrintShooterList(rp tm)
 
 /* shootout94.asm:ShootersBackground. The screen cleared (ClearShooterScreen), the background
  * (ScoutMap, no tiles), the "Shootout" title box and team a2's block. */
-void ShootersBackground(rp tm)
+void ShootersBackground(struct Team *tm)
 {
     ClearShooterScreen();
     printz(str_ShootersBackground_1, sizeof str_ShootersBackground_1);
@@ -275,7 +275,7 @@ void ShootersBackground(rp tm)
     printz(str_ShootersBackground_2, sizeof str_ShootersBackground_2);
     Framer(0x1A, 6);
     printbigz(str_ShootersBackground_3, sizeof str_ShootersBackground_3);
-    PutTeamBlock(rp_same(tm, team_struct(0)) ? 0 : 0x2C);
+    PutTeamBlock(tm == team_struct(0) ? 0 : 0x2C);
 }
 
 /* shootout94.asm:ClearShooterScreen. Plane B's top $A rows erased. */
@@ -308,7 +308,7 @@ void PrintShooterSlots(void)
 
 /* shootout94.asm:PrintShooterBox. The box with the full name of slot TestList's player (getname),
  * centred on column $15. */
-void PrintShooterBox(rp tm)
+void PrintShooterBox(struct Team *tm)
 {
     printsmallz(str_PrintShooterBox_1, sizeof str_PrintShooterBox_1);
     Framer(0x18, 3);
@@ -322,7 +322,7 @@ void PrintShooterBox(rp tm)
 
 /* shootout94.asm:PrintShooterNames. The six slots' last names (FormatPlayerNameShort) from row
  * $E, two rows apart, the goalie's at ($19, $E); slot TestList in font set 2. */
-void PrintShooterNames(rp tm)
+void PrintShooterNames(struct Team *tm)
 {
     printsmallz(str_PrintShooterNames_1, sizeof str_PrintShooterNames_1);
     rp list = shooters(tm);

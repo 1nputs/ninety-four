@@ -39,8 +39,8 @@ void ScoutingReport(void)
     song(SYM_SngScout);
     g.vbint = SYM_vb2;
     clearTeamStats();
-    Create_HotCold_Table(RAM(tmstruct));
-    Create_HotCold_Table(RAM(AwShots));
+    Create_HotCold_Table(team_struct(0));
+    Create_HotCold_Table(team_struct(1));
     BuildHotColdLists();
     g.disflags &= (uint16_t)~HI(df32c);
     g.Map1col1 = 6;
@@ -157,7 +157,7 @@ void PageMatchup(int16_t by)
 
 /* scout94.asm:PrintMatchupRating. Team a0's rating (GetTeamRating) as 2 digits at printx / printy
  * over two spaces -> d0 = the rating. */
-uint16_t PrintMatchupRating(rp tm)
+uint16_t PrintMatchupRating(struct Team *tm)
 {
     PrintTwoSpaces();
     uint16_t r = GetTeamRating(tm);
@@ -243,7 +243,7 @@ uint32_t GetTeamLogo(uint16_t *d3)
 
 /* the rating of player d0 of team a2 (CalcAttrib with the overall weights of a skater or, in the
  * goalie matchup, a goalie) as a percentage, adjusted (AttribAdjust) */
-static uint16_t player_rating(uint16_t player, rp tm)
+static uint16_t player_rating(uint16_t player, struct Team *tm)
 {
     uint32_t mask = rd32(rom_ptr(g.matchupslot ? SYM_PAttribOverallMask : SYM_GAttribOverallMask));
     uint16_t div, v = CalcAttrib(player, tm, mask, &div);
@@ -275,10 +275,10 @@ void PrintMatchupRatings(void)
         g.printfontset = 2;
         PRINTZ(str_PrintMatchupRatings_2);
         PRINTZ(str_PrintMatchupRatings_3);
-        g.homerating = PrintMatchupRating(RAM(tmstruct));
+        g.homerating = PrintMatchupRating(team_struct(0));
         g.printfontset = 2;
         PRINTZ(str_PrintMatchupRatings_4);
-        g.visrating = PrintMatchupRating(RAM(AwShots));
+        g.visrating = PrintMatchupRating(team_struct(1));
         return;
     }
     uint32_t a1 = SYM_MatchupPosNames;                    /* the position */
@@ -289,16 +289,16 @@ void PrintMatchupRatings(void)
     g.printfontset = 2;
     PRINTZ(str_PrintMatchupRatings_6);                    /* the home player */
     PRINTZ(str_PrintMatchupRatings_7);
-    PrintPlayerNameRight(g.matchuphome, RAM(tmstruct));
-    uint16_t r = player_rating(g.matchuphome, RAM(tmstruct));
+    PrintPlayerNameRight(g.matchuphome, team_struct(0));
+    uint16_t r = player_rating(g.matchuphome, team_struct(0));
     g.homerating = r;
     a1 = PushNumberWidth(r, 2);
     PRINTZ(str_PrintMatchupRatings_8);
     PrintTwoSpaces();
     printsmall(a1);
     PRINTZ(str_PrintMatchupRatings_9);                    /* the visitors' */
-    PrintPlayerNameRight(g.matchupvis, RAM(AwShots));
-    r = player_rating(g.matchupvis, RAM(AwShots));
+    PrintPlayerNameRight(g.matchupvis, team_struct(1));
+    r = player_rating(g.matchupvis, team_struct(1));
     g.visrating = r;
     a1 = PushNumberWidth(r, 2);
     PRINTZ(str_PrintMatchupRatings_10);
@@ -310,16 +310,16 @@ void PrintMatchupRatings(void)
  * matchup. */
 void GetMatchupPlayers(void)
 {
-    g.matchuphome = GetMatchupPlayer(RAM(tmstruct));
-    g.matchupvis = GetMatchupPlayer(RAM(AwShots));
+    g.matchuphome = GetMatchupPlayer(team_struct(0));
+    g.matchupvis = GetMatchupPlayer(team_struct(1));
 }
 
 /* scout94.asm:GetMatchupPlayer. -> d0 = the roster index of team a0's player for the matchup:
  * slot MatchupLineSlots[matchup] (matchupslot; 0 goalie, 1 / 2 defense, 3 / 5 wings, 4 center)
  * of the first of its line sets. */
-uint16_t GetMatchupPlayer(rp tm)
+uint16_t GetMatchupPlayer(struct Team *tm)
 {
-    uint32_t data = r32(tm, tmdata);
+    uint32_t data = tm->data;
     const uint8_t *lines = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 6)));
     int16_t slot = (int8_t)rom_ptr(SYM_MatchupLineSlots)[g.matchup];
     g.matchupslot = (uint16_t)slot;
@@ -354,9 +354,9 @@ void PrintAdvantageMarks(void)
 }
 
 /* the team data Strings after the city (city, abbreviation, nickname, arena): String n of team a2 */
-static uint32_t team_string(rp tm, int n)
+static uint32_t team_string(struct Team *tm, int n)
 {
-    uint32_t a1 = r32(tm, tmdata);
+    uint32_t a1 = tm->data;
     a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1 + 4));
     while (n-- > 0) a1 += (uint32_t)(int16_t)rd16(rom_ptr(a1));
     return a1;
@@ -364,15 +364,15 @@ static uint32_t team_string(rp tm, int n)
 
 /* scout94.asm:GetTeamNickname. The text player's '=' (a2 the home team) and '*' -> a1 = the
  * team's nickname, or 'Home' / 'Visitors' when it has none (the all-star teams). */
-uint32_t GetTeamNickname(rp tm)
+uint32_t GetTeamNickname(struct Team *tm)
 {
     uint32_t a1 = team_string(tm, 2);
-    if (rd16(rom_ptr(a1)) == 2) a1 = rp_same(tm, RAM(tmstruct)) ? SYM_HomeTxt : SYM_VisitorsTxt;
+    if (rd16(rom_ptr(a1)) == 2) a1 = tm == team_struct(0) ? SYM_HomeTxt : SYM_VisitorsTxt;
     return a1;
 }
 
 /* scout94.asm:GetTeamArena. The text player's '^' and ';' -> a1 = the team's arena. */
-uint32_t GetTeamArena(rp tm)
+uint32_t GetTeamArena(struct Team *tm)
 {
     return team_string(tm, 3);
 }

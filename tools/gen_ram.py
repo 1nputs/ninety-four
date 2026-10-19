@@ -120,6 +120,65 @@ for i, (n, off, com) in enumerate(members):
 if pos < SCSTRUCT:
     sort_fields.append(f'    uint8_t _pad{pos:02X}[{SCSTRUCT - pos}];')
 
+# ---- the team struct (HmShots / AwShots, tmsize apart) ------------------------------------
+# equals.inc's tm offsets, named as the code and the game's own stats table (TeamStatTextTbl) name
+# them. Offsets are asserted; the struct must fill tmsize.
+TMSIZE = 0x364
+TEAM_DECL = [
+    (0x000, 'uint16_t shots;', 'shots (tmshots)'),
+    (0x002, 'uint16_t PwrGoals;', 'power play goals'),
+    (0x004, 'uint16_t PwrPlays;', 'power plays'),
+    (0x006, 'uint16_t Penalties;', 'penalties'),
+    (0x008, 'uint16_t Penmin;', 'penalty minutes'),
+    (0x00A, 'uint16_t ATOP;', 'attack zone time (seconds)'),
+    (0x00C, 'uint16_t score;', ''),
+    (0x00E, 'uint16_t faceoffs;', 'faceoffs won'),
+    (0x010, 'uint16_t checks;', 'body checks'),
+    (0x012, 'uint16_t passes;', 'pass attempts'),
+    (0x014, 'uint16_t passcomp;', 'passes completed'),
+    (0x016, 'uint16_t line;', 'the line on the ice'),
+    (0x018, 'uint16_t lasttouch;', 'the last player to touch the puck (roster number, in the low byte)'),
+    (0x01A, 'uint16_t assist1;', 'the two before him ($FFxx: none)'),
+    (0x01C, 'uint16_t assist2;', ''),
+    (0x01E, 'uint32_t data;', "the team's data (the cartridge's address)"),
+    (0x022, 'uint16_t sort;', 'its first sort object (an address)'),
+    (0x024, 'uint16_t ap;', 'active players on the ice, 4-6'),
+    (0x026, 'uint16_t goalie;', 'the goalie (roster slot; $FFxx: pulled)'),
+    (0x028, 'uint16_t team;', 'the team (TeamList index; the asm reads it as Xvel(a2))'),
+    (0x02A, 'uint32_t neardist;', "distance squared from the puck to the team's nearest skater"),
+    (0x02E, 'uint16_t lchoice;', 'the line the pad chose'),
+    (0x030, 'uint8_t flags;', ''),
+    (0x031, 'uint8_t _pad31;', ''),
+    (0x032, 'uint16_t pde[26];', 'energy of each roster player'),
+    (0x066, 'uint16_t pdst[26];', 'where each is: -2 bench, -1 ice, 0 and up the penalty box'),
+    (0x09A, 'uint8_t penbox[26];', 'the penalty box: roster offsets (player * 2), ended by a negative byte'),
+    (0x0B4, 'uint8_t pgoals[26];', "goals (a goalie's: goals against)"),
+    (0x0CE, 'uint8_t passists[26];', 'assists'),
+    (0x0E8, 'uint8_t pshots[26];', "shots (a goalie's: shots faced)"),
+    (0x102, 'uint8_t ppim[26];', 'penalty minutes'),
+    (0x11C, 'uint8_t pchecks[26];', 'body checks'),
+    (0x136, 'uint16_t ptoi[26];', 'time on ice'),
+    (0x16A, 'uint8_t lines[7][8];', 'the line sets: 7 lines of 8 slots (roster number + 1)'),
+    (0x1A2, 'uint8_t hotcold[26][16];', "94: each player's hot / cold bytes (signed)"),
+    (0x342, 'uint16_t pergoals[4];', 'goals by period'),
+    (0x34A, 'uint16_t pershots[4];', 'shots by period'),
+    (0x352, 'uint16_t pptime;', 'power play time'),
+    (0x354, 'uint16_t ppshots;', 'power play shots'),
+    (0x356, 'uint16_t shgoals;', 'shorthanded goals'),
+    (0x358, 'uint16_t breakaways;', ''),
+    (0x35A, 'uint16_t bagoals;', 'breakaway goals'),
+    (0x35C, 'uint16_t onetimers;', 'one-timer attempts'),
+    (0x35E, 'uint16_t otgoals;', 'one-timer goals'),
+    (0x360, 'uint16_t psattempts;', 'penalty shot (and shootout) attempts'),
+    (0x362, 'uint16_t psgoals;', 'penalty shot goals'),
+]
+team_fields, team_asserts = [], []
+for off, decl, com in TEAM_DECL:
+    team_fields.append('    ' + decl + ('  /* ' + com + ' */' if com else ''))
+    fname = re.match(r'\w+ (\w+)', decl).group(1)
+    if not fname.startswith('_pad'):
+        team_asserts.append(f'_Static_assert(offsetof(struct Team, {fname}) == 0x{off:03X}, "Team {fname}");')
+
 # ---- RAM struct ---------------------------------------------------------------------------
 fields, asserts = [], []
 pos = 0
@@ -138,7 +197,10 @@ for i, r in enumerate(inram):
     gap = nxt - off
     com = r.get('comment', '').replace('*/', '* /')
     cm = f'  /* ${r["addr"]:08X}{": " + com if com else ""} */'
-    if name == 'SortCords':
+    if name == 'tmstruct':
+        fields.append(f'    struct Team teams[2];  /* ${r["addr"]:08X}: the home and away team structs (tmstruct, AwShots) */')
+        name, pos = 'teams', off + 2 * TMSIZE
+    elif name == 'SortCords':
         n = gap // SCSTRUCT
         fields.append(f'    struct SortObj SortCords[{n}];{cm}')
         pos = off + n * SCSTRUCT
@@ -217,10 +279,12 @@ def layout(lines):
     """(name, offset, size, count) of each declared field, in order"""
     out, at = [], 0
     for l in lines:
-        m = re.match(r'\s+(struct SortObj|u?int(?:8|16|32)_t)\s+(\w+)(?:\[(0x[0-9A-Fa-f]+|\d+)\])?;', l)
+        m = re.match(r'\s+(struct SortObj|struct Team|u?int(?:8|16|32)_t)\s+(\w+)((?:\[(?:0x[0-9A-Fa-f]+|\d+)\])*);', l)
         if m:
-            size = SCSTRUCT if m.group(1) == 'struct SortObj' else SZ[m.group(1)]
-            count = int(m.group(3), 0) if m.group(3) else 1
+            size = {'struct SortObj': SCSTRUCT, 'struct Team': TMSIZE}.get(m.group(1)) or SZ[m.group(1)]
+            count = 1
+            for d in re.findall(r'\[(0x[0-9A-Fa-f]+|\d+)\]', m.group(3)):
+                count *= int(d, 0)
             out.append((m.group(2), at, size, count))
             at += size * count
     return out
@@ -237,18 +301,18 @@ def unit(start, size, what):
         unit_of[b] = (start, size, what)
 
 
-sortobj = layout(sort_fields)
+sortobj, teamobj = layout(sort_fields), layout(team_fields)
 base_of = {r['name']: r['addr'] - RAM_BASE for r in inram}
 in_view = set()
-for region, count, stride in SORT_VIEWS:
+for region, count, stride in SORT_VIEWS + [('tmstruct', 2, TMSIZE)]:
     in_view.update(range(base_of[region], base_of[region] + count * stride))
     for k in range(count):
-        for n, at, size, cnt in sortobj:
+        for n, at, size, cnt in (teamobj if region == 'tmstruct' else sortobj):
             for e in range(cnt):
                 if at + (e + 1) * size <= stride:
                     unit(base_of[region] + k * stride + at + e * size, size, f'{region} {k} {n}')
 for n, at, size, count in layout(fields):
-    if size == SCSTRUCT or n.startswith('_pad'):
+    if size in (SCSTRUCT, TMSIZE) or n.startswith('_pad'):
         continue                                          # (padding: nothing names it)
     if at in in_view and n not in NAMED:
         continue                                          # (reached by address only: the view's layout)
@@ -293,6 +357,14 @@ struct RAM_PACKED SortObj {{
 {chr(10).join(sort_fields)}
 }};
 _Static_assert(sizeof(struct SortObj) == SCSTRUCT, "SortObj size");
+
+#define tmsize 0x{TMSIZE:X}
+/* a team's struct (team_struct(away)) */
+struct RAM_PACKED Team {{
+{chr(10).join(team_fields)}
+}};
+_Static_assert(sizeof(struct Team) == tmsize, "Team size");
+{chr(10).join(team_asserts)}
 
 struct RAM_PACKED Ram {{
 {chr(10).join(fields)}

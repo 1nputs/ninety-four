@@ -432,8 +432,8 @@ void setoptions(void)
     defaultsprites2(c);
     sortobj(0)->OldXpos = 0x28;
     sortobj(6)->OldXpos = 0x28;
-    g.tmstruct[0] = 0xFF;
-    g.AwShots[0] = 0xFF;
+    ST_W(g.teams[0].shots);
+    ST_W(g.teams[1].shots);
 }
 
 /* optsetup94.asm:ReadSetupPads. Each frame for up to $5460 frames (six minutes): the pads (four

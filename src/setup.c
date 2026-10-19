@@ -28,17 +28,17 @@ void PeriodOver(void)
             g.gsp = 3;
             if (g.OptPlayMode == 0) g.gsp = 4;
         }
-        if (r16(team_struct(0), tmscore) != r16(team_struct(1), tmscore)) g.gsp = 4;
+        if (team_struct(0)->score != team_struct(1)->score) g.gsp = 4;
     }
     forceblack();
     IntermissionStart();
 }
 
 /* resetplstuff's .top: team a2's skaters lose their flags and glide again */
-static void reset_team(rp tm)
+static void reset_team(struct Team *tm)
 {
-    w8(tm, tmflags, (uint8_t)(r8(tm, tmflags) & (uint8_t)~0x10));   /* team offside bit */
-    struct SortObj *o = sortobj_at(r16(tm, tmsort));
+    tm->flags &= (uint8_t)~0x10;                                    /* team offside bit */
+    struct SortObj *o = sortobj_at(tm->sort);
     for (int i = 0; i < 6; i++, o++) {
         o->pflags2 = 0;
         if (o->position < 0) continue;
@@ -106,7 +106,7 @@ uint16_t ReloadCrowdTiles(void) { return DecompressGraphicsPlain(ART(CrowdFrameL
 void setplayercolors(void)
 {
     for (int away = 0; away < 2; away++) {
-        uint32_t data = r32(team_struct(away), tmdata);
+        uint32_t data = team_struct(away)->data;
         const uint8_t *src = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 2)) + 0x20 * away);
         rp dst = rp_add(RAM(palfadenew), 0x40 + 0x20 * away);
         for (int i = 0; i < 0x20; i++) w8(dst, i, src[i]);
@@ -333,34 +333,34 @@ void setupice(void)
 
 /* setup94.asm:InitTeamStructure. Team struct a2 for team d0: the team number ($28), its data
  * (tmdata, from TeamList) and its line sets at $16A (the layout by OptLine). */
-void InitTeamStructure(uint16_t team, rp tm)
+void InitTeamStructure(uint16_t team, struct Team *tm)
 {
-    w16(tm, tmteam, team);
-    w32(tm, tmdata, rd32(rom_ptr(LG(TeamList) + (uint16_t)(team << 2))));
+    tm->team = team;
+    tm->data = rd32(rom_ptr(LG(TeamList) + (uint16_t)(team << 2)));
     InitTeamLines(tm);
 }
 
 /* setup94.asm:InitTeamStructure+$10. Team struct a2's line sets at $16A from its data's (the
  * layout by OptLine); the line editor's "Set Original lines". */
-void InitTeamLines(rp tm)
+void InitTeamLines(struct Team *tm)
 {
-    uint32_t data = r32(tm, tmdata);
+    uint32_t data = tm->data;
     const uint8_t *src = rom_ptr(data + (int16_t)rd16(rom_ptr(data + 6)));
-    rp dst = rp_add(tm, tmlines);
+    uint8_t *dst = tm->lines[0];                          /* (the 7 line sets, row after row) */
     if (g.OptLine != 0) {
-        ram_write(dst, src, 8);
-        ram_write(rp_add(dst, 8), src + 16, 12 * 4);
+        memcpy(dst, src, 8);
+        memcpy(dst + 8, src + 16, 12 * 4);
     } else {
-        ram_write(dst, src + 8, 14 * 4);
+        memcpy(dst, src + 8, 14 * 4);
     }
 }
 
 /* setup94.asm:setteams. Both team structs from HomeTeam / VisTeam, with their sort objects. */
 void setteams(void)
 {
-    w16(team_struct(0), tmsort, RAM_OFF_SortCords);
+    team_struct(0)->sort = RAM_OFF_SortCords;
     InitTeamStructure(g.HomeTeam, team_struct(0));
-    w16(team_struct(1), tmsort, RAM_OFF_SortCords + 6 * 0x80);
+    team_struct(1)->sort = RAM_OFF_SortCords + 6 * 0x80;
     InitTeamStructure(g.VisTeam, team_struct(1));
 }
 
@@ -369,19 +369,19 @@ void setteams(void)
  * last roster slot's place is -1. Falls into setteams. */
 void clearTeamStats(void)
 {
-    rp home = team_struct(0), away = team_struct(1);
-    uint16_t hg = r16(home, tmgoalie), ag = r16(away, tmgoalie);
-    ram_copy(ram_at(RAM_BASE + (RAM_OFF_homehotcoldsave)), rp_add(home, 0x1A2), 0x1A0);
-    ram_copy(ram_at(RAM_BASE + (RAM_OFF_awayhotcoldsave)), rp_add(away, 0x1A2), 0x1A0);
-    ram_fill(home, 0, tmsize);
-    ram_fill(away, 0, tmsize);
+    struct Team *home = team_struct(0), *away = team_struct(1);
+    uint16_t hg = home->goalie, ag = away->goalie;
+    ram_write(RAM(homehotcoldsave), home->hotcold, 0x1A0);
+    ram_write(RAM(awayhotcoldsave), away->hotcold, 0x1A0);
+    memset(home, 0, sizeof *home);
+    memset(away, 0, sizeof *away);
     rules_clear_stats();                                  /* (the rules' own, beside the RAM) */
-    ram_copy(rp_add(home, 0x1A2), ram_at(RAM_BASE + (RAM_OFF_homehotcoldsave)), 0x1A0);
-    ram_copy(rp_add(away, 0x1A2), ram_at(RAM_BASE + (RAM_OFF_awayhotcoldsave)), 0x1A0);
-    w16(away, tmgoalie, ag);
-    w16(home, tmgoalie, hg);
-    w8(home, tmpdst + 0x34, 0xFF);
-    w8(away, tmpdst + 0x34, 0xFF);
+    ram_read(home->hotcold, RAM(homehotcoldsave), 0x1A0);
+    ram_read(away->hotcold, RAM(awayhotcoldsave), 0x1A0);
+    away->goalie = ag;
+    home->goalie = hg;
+    home->penbox[0] = 0xFF;                               /* (st tmpdst+$34: the penalty box empty) */
+    away->penbox[0] = 0xFF;
     setteams();
 }
 
@@ -699,14 +699,14 @@ void UpdateScoutingDisplay(void)
     g.typedelay = 0xA;
     d0 = (int16_t)g.DispAttribCtr;
     uint32_t str;                                         /* a String the special character puts in */
-    rp tm;
+    struct Team *tm;
     uint16_t d1;
     switch (*a2) {
-    case '_': case '{': str = g.HomeTeamRosterPtr; goto string4;
-    case '+': case '}': str = g.AwayTeamRosterPtr; goto string4;
-    case '$': str = r32(g.awayhotter ? RAM(AwShots) : RAM(tmstruct), 0x1E); goto string4;
-    case '[': tm = RAM(tmstruct); d1 = r16(tm, tmgoalie); goto roster;
-    case ']': tm = RAM(AwShots); d1 = r16(tm, tmgoalie); goto roster;
+    case '_': case '{': str = g.teams[0].data; goto string4;
+    case '+': case '}': str = g.teams[1].data; goto string4;
+    case '$': str = team_struct(g.awayhotter != 0)->data; goto string4;
+    case '[': tm = team_struct(0); d1 = tm->goalie; goto roster;
+    case ']': tm = team_struct(1); d1 = tm->goalie; goto roster;
     case '<': d1 = NextHomeHotPlayer(&tm); goto roster;
     case '>': d1 = NextAwayHotPlayer(&tm); goto roster;
     case '|': d1 = NextHomeColdPlayer(&tm); goto roster;
@@ -714,10 +714,10 @@ void UpdateScoutingDisplay(void)
     case '@': str = ScoutCrowdRecord(); goto append;
     case '#': str = PlayedByHome(); goto append;
     case '%': str = PlayedByAway(); goto append;
-    case '=': str = GetTeamNickname(RAM(tmstruct)); goto append;
-    case '*': str = GetTeamNickname(RAM(AwShots)); goto append;
-    case '^': str = GetTeamArena(RAM(tmstruct)); goto append;
-    case ';': str = GetTeamArena(RAM(AwShots)); goto append;
+    case '=': str = GetTeamNickname(team_struct(0)); goto append;
+    case '*': str = GetTeamNickname(team_struct(1)); goto append;
+    case '^': str = GetTeamArena(team_struct(0)); goto append;
+    case ';': str = GetTeamArena(team_struct(1)); goto append;
     default: break;
     }
     {                                                     /* a word, and the spaces after it */
@@ -748,7 +748,7 @@ string4:                                                  /* the String at word 
     str += (uint32_t)(int16_t)rd16(rom_ptr(str + 4));
     goto append;
 roster:                                                   /* player d1's name in team a1's roster */
-    str = r32(tm, tmdata);
+    str = tm->data;
     str += (uint32_t)(int16_t)rd16(rom_ptr(str));
     for (; d1-- != 0;) str += (uint32_t)(int16_t)rd16(rom_ptr(str)) + 8;
 append:

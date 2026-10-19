@@ -52,12 +52,9 @@ void ClampPositionBox(struct SortObj *o)
  * game flags. */
 void ClearGameStats(void)
 {
-    rp a0 = RAM(shootoutstate);
-    for (int i = 0; i < 0x13; i++) w16(a0, i * 2, 0);
-    a0 = team_struct(0);
-    for (int i = 0; i < 0x364; i++) w16(a0, i * 2, 0);
-    a0 = RAM(PenBuf);
-    for (int i = 0; i < 0x25; i++) w16(a0, i * 2, 0);
+    ram_fill(RAM(shootoutstate), 0, 0x13 * 2);
+    memset(g.teams, 0, sizeof g.teams);
+    ram_fill(RAM(PenBuf), 0, 0x25 * 2);
     g.BA_PS_flags = 0;
     g.sflags4 = 0;
     g.sflags6 = 0;
@@ -106,7 +103,7 @@ void AddArenaAnimSprite(rp *sat, uint16_t *link)
 
 /* period94.asm:PrintPlayerNameRight. The name of player d0 of team a2, moved left so it ends
  * before column $29 (a trailing pad byte or two not counted), then the hot / cold icon. */
-void PrintPlayerNameRight(uint16_t player, rp tm)
+void PrintPlayerNameRight(uint16_t player, struct Team *tm)
 {
     g.iconplayer = player;
     uint32_t a1 = FormatPlayerName(player, tm);
@@ -125,7 +122,7 @@ void PrintPlayerNameRight(uint16_t player, rp tm)
 
 /* period94.asm:SkipNameNumber. Unreferenced: the "NN F. Last" string without its first 2
  * characters. */
-uint32_t SkipNameNumber(uint16_t player, rp tm)
+uint32_t SkipNameNumber(uint16_t player, struct Team *tm)
 {
     uint32_t a1 = FormatPlayerNumInitial(player, tm);
     rp p = ram_at(a1);
@@ -188,19 +185,20 @@ void DisplayTeamStatsScreen(void)
 /* period94.asm:PrintStatValue. Print the stat row a0 (two team struct offsets) for team a2
  * centred at printx: the value (offsets $A and $352 are times), "/second" if any, " (pct%)"
  * for passing; offset $FFFF is the shooting percentage. */
-void PrintStatValue(const uint8_t *a0, rp tm)
+void PrintStatValue(const uint8_t *a0, struct Team *tm)
 {
+    rp t = team_place(tm);                                /* (the stats table holds offsets in a team struct) */
     uint32_t mes = RAM_BASE + RAM_OFF_mesarea;
     w16(ram_at(mes), 0, 2);
     uint16_t off = rd16(a0);
     if (off == 0xFFFF) {
-        uint32_t d0 = (uint32_t)r16(tm, tmscore) * 0x64;
-        uint16_t d1 = r16(tm, 0);
+        uint32_t d0 = (uint32_t)tm->score * 0x64;
+        uint16_t d1 = tm->shots;
         if (d1 != 0) d0 = m68k_divu(d0, d1);
         appstring(PushNumber((uint16_t)d0), mes);
         appendz(str_PrintStatValue_1, sizeof str_PrintStatValue_1, mes);
     } else {
-        uint16_t d0 = r16(tm, off);
+        uint16_t d0 = r16(t, off);
         uint32_t a1;
         if (off == 0x352) a1 = PushTime(d0);
         else {
@@ -211,11 +209,11 @@ void PrintStatValue(const uint8_t *a0, rp tm)
         int16_t off2 = (int16_t)rd16(a0 + 2);
         if (off2 >= 0) {
             appendz(str_PrintStatValue_2, sizeof str_PrintStatValue_2, mes);
-            appstring(PushNumber(r16(tm, off2)), mes);
+            appstring(PushNumber(r16(t, off2)), mes);
             if (off == 0x14) {                            /* passing: the percentage */
                 appendz(str_PrintStatValue_3, sizeof str_PrintStatValue_3, mes);
-                uint32_t p = (uint32_t)r16(tm, off) * 0x64;
-                uint16_t d1 = r16(tm, off2);
+                uint32_t p = (uint32_t)r16(t, off) * 0x64;
+                uint16_t d1 = r16(t, off2);
                 if (d1 != 0) p = m68k_divu(p, d1);
                 appstring(PushNumber((uint16_t)p), mes);
                 appendz(str_PrintStatValue_4, sizeof str_PrintStatValue_4, mes);
@@ -231,14 +229,14 @@ void PrintStatValue(const uint8_t *a0, rp tm)
 void updatePPTeamTime(void)
 {
     if (!(g.sflags2 & HI(sf2pwrplay))) return;
-    rp tm = team_struct((g.sflags2 & HI(sf2pwrtm)) != 0);
-    w16(tm, tmpptime, (uint16_t)(r16(tm, tmpptime) + 1));
+    struct Team *tm = team_struct((g.sflags2 & HI(sf2pwrtm)) != 0);
+    tm->pptime++;
 }
 
 /* period94.asm:GetTeamRating. The TeamRatings byte of team $28(a2). */
-uint16_t GetTeamRating(rp tm)
+uint16_t GetTeamRating(struct Team *tm)
 {
-    return rom_ptr(LG(TeamRatings))[r16(tm, tmteam)];
+    return rom_ptr(LG(TeamRatings))[tm->team];
 }
 
 /* period94.asm:ShortenMsgTimer. Cap msgtimer at 2, unless a second pad is on and a3 is not the
@@ -272,9 +270,9 @@ static rp period_num(rp a0)
 }
 
 /* PeriodStatsScreen's .team: team a2's goals (or shots, matchup) by period, then the total */
-static void period_team(rp tm)
+static void period_team(struct Team *tm)
 {
-    rp a0 = rp_add(tm, (g.matchup ? 0x34A : 0x342));
+    rp a0 = rp_add(team_place(tm), g.matchup ? offsetof(struct Team, pershots) : offsetof(struct Team, pergoals));
     g.matchuptimer = 0;
     g.printx = 0xB;
     a0 = period_num(a0);

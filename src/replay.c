@@ -309,9 +309,9 @@ void updatereplay(void)
 }
 
 /* the assignment dispatch table (data94.asm:asstab), indexed by asslist[assnum] */
-typedef void (*assfn)(rp tm, struct SortObj *o);
-static void ass_none(rp tm, struct SortObj *o) { (void)tm; (void)o; }                 /* rtss2 */
-static void ass_puckunflip(rp tm, struct SortObj *o) { (void)tm; puckunflip(o); }
+typedef void (*assfn)(struct Team *tm, struct SortObj *o);
+static void ass_none(struct Team *tm, struct SortObj *o) { (void)tm; (void)o; }       /* rtss2 */
+static void ass_puckunflip(struct Team *tm, struct SortObj *o) { (void)tm; puckunflip(o); }
 static const assfn asstab[0x24] = {
     ass_none, assdefo, assdefd, asswingd, asswingo, asscenterd, asscentero, assscore,           /* 0-7 */
     assstanley, asseben, assepen, assbench, asspenalty, assdopen, assgoaliecpu, assgoalietopuck, /* 8-$F */
@@ -399,9 +399,8 @@ void updateplayers(void)
             o->nopuck[0] = tick_byte(o->nopuck[0]);
             o->nopuck[1] = tick_byte(o->nopuck[1]);
             if ((g.sflags3 & 0x40) && !(o->pnum & 0x80)) {       /* the penalty timer is up: time on ice */
-                rp tm = loadTeamStruct(o, NULL);
-                uint16_t off = (uint16_t)(0x136 + o->pnum * 2);
-                w16(tm, off, (uint16_t)(r16(tm, off) + 1));
+                struct Team *tm = loadTeamStruct(o, NULL);
+                tm->ptoi[o->pnum]++;
             }
             if (o->SPA != SYM_SPAinjuryfall && o->SPA != SYM_SPAinjury1) {
                 uint16_t d4 = (uint16_t)((g.PalMode ? 0x16 : 0x11) * (uint16_t)elapsed);
@@ -483,7 +482,7 @@ void updateplayers(void)
                     FOURWAY_INPUT(cont2team, cont4team, c2playernum, c4playernum, bholdtimer, padword2, padword4, aholdtimer, PadControlBits, d0, d1, d2, d3, 2, o);
                 }
             }
-            rp tm = loadTeamStruct(o, NULL);
+            struct Team *tm = loadTeamStruct(o, NULL);
             asstab[o->asslist[o->assnum]](tm, o);
             o->Wallcos = 0;
             o->Wallsin = 0;

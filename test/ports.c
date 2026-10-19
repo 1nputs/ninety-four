@@ -48,7 +48,9 @@ static void run_Bcheck(const Record *r) { Bcheck(OBJ(R_A2), OBJ(R_A3)); }
 static void run_FallDown(const Record *r) { FallDown(OBJ(R_A2), OBJ(R_A3)); }
 static void run_setInjuryType(const Record *r) { setInjuryType(OBJ(R_A2), OBJ(R_A3)); }
 
-#define TEAM(reg) ram_at(r->regs_in[reg])
+#define TEAM(reg) team_at(ram_at(r->regs_in[reg]))
+#define PLACE(reg) ram_at(r->regs_in[reg])                  /* (a place a register holds) */
+#define BYTES_AT(reg) ((uint8_t *)&g + (uint16_t)r->regs_in[reg])   /* (a byte table inside a team struct: penbox, the goals) */
 static void run_checkwallcoll(const Record *r) { checkwallcoll((int16_t)r->regs_in[R_D2], (int16_t)r->regs_in[R_D3], OBJ(R_A3)); }
 static void run_checkgoal(const Record *r) { checkgoal(OBJ(R_A2), OBJ(R_A3), (int16_t)r->regs_in[R_D2], (int16_t)r->regs_in[R_D3]); }
 static void run_GetPeriodTimeRemaining(const Record *r) { expect_reg16(r, R_D0, GetPeriodTimeRemaining(), "d0"); }
@@ -169,7 +171,7 @@ static void run_setc2player(const Record *r) { setc2player((uint16_t)r->regs_in[
 static void run_Findhittype(const Record *r) { int z = Findhittype((uint16_t)r->regs_in[R_D0], OBJ(R_A3)); if (z != (int)((r->regs_out[R_SR] >> 2) & 1)) { printf("    Z flag: got %d, 68k %d\n", z, (int)((r->regs_out[R_SR] >> 2) & 1)); } }
 static void run_ShotMode(const Record *r) { ShotMode((uint16_t)r->regs_in[R_D0], (uint16_t)r->regs_in[R_D2], OBJ(R_A3)); }
 static void run_setpads(const Record *r) { setpads(D16(R_D4), OBJ(R_A3)); }
-static void run_loadTeamStruct(const Record *r) { rp a1; rp a2 = loadTeamStruct(OBJ(R_A3), &a1); expect_reg16(r, R_A2, (uint16_t)rp_addr(a2), "a2"); expect_reg16(r, R_A1, (uint16_t)rp_addr(a1), "a1"); }
+static void run_loadTeamStruct(const Record *r) { struct Team *a1; struct Team *a2 = loadTeamStruct(OBJ(R_A3), &a1); expect_reg16(r, R_A2, (uint16_t)rp_addr(team_place(a2)), "a2"); expect_reg16(r, R_A1, (uint16_t)rp_addr(team_place(a1)), "a1"); }
 
 static void run_doinput_cbut(const Record *r) { doinput_cbut((uint16_t)r->regs_in[R_D1], (uint16_t)r->regs_in[R_D3], OBJ(R_A3)); }
 O(doinput_chkanim)
@@ -203,7 +205,7 @@ static void run_PushRef(const Record *r) { PushRef((uint16_t)r->regs_in[R_D0]); 
 static void run_prefmes(const Record *r) { prefmes(D16(R_D0)); }
 static void run_PenGoalStuff(const Record *r) { PenGoalStuff(TEAM(R_A1), TEAM(R_A2)); }
 static void run_ProcessPenaltyList(const Record *r) { ProcessPenaltyList(TEAM(R_A2)); }
-static void run_RemovePlayerFromList(const Record *r) { rp a0 = RemovePlayerFromList(TEAM(R_A0)); expect_reg16(r, R_A0, (uint16_t)rp_addr(a0), "a0"); }
+static void run_RemovePlayerFromList(const Record *r) { uint8_t *a0 = RemovePlayerFromList(BYTES_AT(R_A0)); expect_reg16(r, R_A0, (uint16_t)(a0 - (uint8_t *)&g), "a0"); }
 static void run_releasepl(const Record *r) { releasepl(TEAM(R_A2), (uint16_t)r->regs_in[R_D0]); }
 static void run_GetLowestPen(const Record *r) { expect_reg16(r, R_D0, GetLowestPen(TEAM(R_A2), TEAM(R_A3)), "d0"); }
 static void run_PrintTeamNameAndScore(const Record *r) { PrintTeamNameAndScore(TEAM(R_A2)); }
@@ -238,7 +240,7 @@ static void run_HotColdLoop(const Record *r) { HotColdLoop(TEAM(R_A0), D16(R_D1)
 static void run_Create_HotCold_Table(const Record *r) { Create_HotCold_Table(TEAM(R_A0)); }
 static void run_Clamp0to100(const Record *r) { expect_reg16(r, R_D3, Clamp0to100(D16(R_D3)), "d3"); }
 static void run_AttributeCalc(const Record *r) { expect_reg16(r, R_D3, (uint16_t)((r->regs_in[R_D3] & 0xFF00) | AttributeCalc((uint8_t)r->regs_in[R_D3], OBJ(R_A3))), "d3"); }
-#define HOTCOLD(name) static void run_##name(const Record *r) { rp tm; expect_reg16(r, R_D1, name(&tm), "d1"); expect_reg16(r, R_A1, (uint16_t)rp_addr(tm), "a1"); }
+#define HOTCOLD(name) static void run_##name(const Record *r) { struct Team *tm; expect_reg16(r, R_D1, name(&tm), "d1"); expect_reg16(r, R_A1, (uint16_t)rp_addr(team_place(tm)), "a1"); }
 HOTCOLD(NextHomeHotPlayer) HOTCOLD(NextAwayHotPlayer) HOTCOLD(NextHomeColdPlayer) HOTCOLD(NextAwayColdPlayer)
 static void run_SortHotColdStarters(const Record *r) { SortHotColdStarters(TEAM(R_A0)); }
 static void run_CopyHottestPlayer(const Record *r) { CopyHottestPlayer(ram_at(r->regs_in[R_A0])); }
@@ -261,7 +263,7 @@ static void run_PrintStatValue(const Record *r) { PrintStatValue(rom_ptr(r->regs
 static void run_GetTeamRating(const Record *r) { expect_reg16(r, R_D0, GetTeamRating(TEAM(R_A2)), "d0"); }
 static void run_GetPeriodTime(const Record *r) { expect_reg16(r, R_D0, GetPeriodTime(), "d0"); }
 static void run_EndDemoOnPress(const Record *r) { EndDemoOnPress((uint16_t)r->regs_in[R_D1]); }
-static void run_seta2(const Record *r) { expect_reg16(r, R_A2, (uint16_t)rp_addr(seta2()), "a2"); }
+static void run_seta2(const Record *r) { expect_reg16(r, R_A2, (uint16_t)rp_addr(team_place(seta2())), "a2"); }
 
 /* display94: the sprite builders take a5 / a6 / d6 in a struct Vid and leave them advanced */
 #define VID_IN(v) struct Vid v = { ram_at(r->regs_in[R_A5]), ram_at(r->regs_in[R_A6]), (uint16_t)r->regs_in[R_D6] }
@@ -415,25 +417,25 @@ static void run_LoadHomeTeamGfx(const Record *r) { expect_reg16(r, R_D4, LoadHom
 static void run_HotColdIcon(const Record *r) { HotColdIcon(TEAM(R_A2)); }
 static void run_clrTmPdst(const Record *r) { clrTmPdst(TEAM(R_A0)); }
 static void run_PlaceBoardFall(const Record *r) { PlaceBoardFall(OBJ(R_A3)); }
-static void run_PrintParenNumber(const Record *r) { PrintParenNumber(TEAM(R_A2), R16(R_D0)); }
+static void run_PrintParenNumber(const Record *r) { PrintParenNumber(BYTES_AT(R_A2), R16(R_D0)); }
 static void run_PrintPlayerGoals(const Record *r) { PrintPlayerGoals(R16(R_D0), TEAM(R_A2)); }
 static void run_PrintPlayerAssists(const Record *r) { PrintPlayerAssists(R16(R_D0), TEAM(R_A2)); }
 static void run_CalcStarScores(const Record *r) { CalcStarScores(R16(R_D2)); }
 static void run_CalcTeamStarScores(const Record *r)
 {
-    rp out = TEAM(R_A4);
+    rp out = PLACE(R_A4);
     expect_reg16(r, R_D3, (uint16_t)CalcTeamStarScores(TEAM(R_A2), TEAM(R_A3), &out, R16(R_D5)), "d3");
     expect_reg16(r, R_A4, (uint16_t)rp_addr(out), "a4");
 }
 static void run_TakeTopStarScore(const Record *r)
 {
-    rp tm;
+    struct Team *tm;
     expect_reg16(r, R_D0, TakeTopStarScore(&tm), "d0");
-    expect_reg16(r, R_A2, (uint16_t)rp_addr(tm), "a2");
+    expect_reg16(r, R_A2, (uint16_t)rp_addr(team_place(tm)), "a2");
 }
 static void run_GetPlayerNamePointer(const Record *r) { expect_reg16(r, R_A0, (uint16_t)GetPlayerNamePointer(R16(R_D0), TEAM(R_A2)), "a0"); }
-static void run_ConvertByteToDigits(const Record *r) { expect_reg16(r, R_A1, (uint16_t)rp_addr(ConvertByteToDigits(R16(R_D0), TEAM(R_A1))), "a1"); }
-static void run_FinalizeTextBuffer(const Record *r) { expect_reg16(r, R_A1, (uint16_t)FinalizeTextBuffer(TEAM(R_A1)), "a1"); }
+static void run_ConvertByteToDigits(const Record *r) { expect_reg16(r, R_A1, (uint16_t)rp_addr(ConvertByteToDigits(R16(R_D0), PLACE(R_A1))), "a1"); }
+static void run_FinalizeTextBuffer(const Record *r) { expect_reg16(r, R_A1, (uint16_t)FinalizeTextBuffer(PLACE(R_A1)), "a1"); }
 static void run_FormatPlayerName(const Record *r) { expect_reg16(r, R_A1, (uint16_t)FormatPlayerName(R16(R_D0), TEAM(R_A2)), "a1"); }
 static void run_FormatPlayerNumInitial(const Record *r) { expect_reg16(r, R_A1, (uint16_t)FormatPlayerNumInitial(R16(R_D0), TEAM(R_A2)), "a1"); }
 static void run_getname(const Record *r) { expect_reg16(r, R_A1, (uint16_t)getname(R16(R_D0), TEAM(R_A2)), "a1"); }
@@ -490,7 +492,7 @@ static void run_defaultsprites2(const Record *r) { expect_reg16(r, R_D4, default
 static void run_setupTeamBlocksMap(const Record *r) { expect_reg16(r, R_D4, setupTeamBlocksMap(R16(R_D4)), "d4"); }
 static void run_CopyTeamBlockMapData(const Record *r)
 {
-    expect_reg16(r, R_A1, (uint16_t)rp_addr(CopyTeamBlockMapData(r->regs_in[R_A0], R16(R_D0), R16(R_D1), TEAM(R_A1))), "a1");
+    expect_reg16(r, R_A1, (uint16_t)rp_addr(CopyTeamBlockMapData(r->regs_in[R_A0], R16(R_D0), R16(R_D1), PLACE(R_A1))), "a1");
 }
 static void run_ReloadRefHorTiles(const Record *r) { expect_reg16(r, R_D4, ReloadRefHorTiles(), "d4"); }
 static void run_InitMenuState(const Record *r) { expect_reg16(r, R_D1, InitMenuState(r->regs_in[R_A0], r->regs_in[R_A1]), "d1"); }
@@ -499,8 +501,8 @@ V(DoGameFrame) V(Pausemode) V(setupice) V(setSlotBit)
 
 
 /* ---- the intermission, the highlights, the replay, the stats screens, the save records ---- */
-static void run_StartHL(const Record *r) { StartHL(TEAM(R_A0), D16(R_D1)); }
-static void run_StartHL2(const Record *r) { StartHL2(TEAM(R_A0), D16(R_D1)); }
+static void run_StartHL(const Record *r) { StartHL(PLACE(R_A0), D16(R_D1)); }
+static void run_StartHL2(const Record *r) { StartHL2(PLACE(R_A0), D16(R_D1)); }
 static void run_InitTeamStructure(const Record *r) { InitTeamStructure(R16(R_D0), TEAM(R_A2)); }
 static void run_ReloadRefTiles(const Record *r) { expect_reg16(r, R_D4, ReloadRefTiles(), "d4"); }
 static void run_ReloadFaceOffTiles(const Record *r) { expect_reg16(r, R_D4, ReloadFaceOffTiles(), "d4"); }
@@ -787,7 +789,7 @@ static void run_GetJerseyString(const Record *r) { GetJerseyString(R16(R_D0), A(
 static void run_PrintGoalsAssists(const Record *r) { PrintGoalsAssists(R16(R_D0), R16(R_D1), R16(R_D2)); }
 static void run_PrintSaves(const Record *r) { PrintSaves(R16(R_D0), R16(R_D1), R16(R_D2)); }
 static void run_DrawPictureBox(const Record *r) { DrawPictureBox(); }
-static void run_GetCardTeam(const Record *r) { expect_reg32(r, R_A0, rp_addr(GetCardTeam()), "a0"); }
+static void run_GetCardTeam(const Record *r) { expect_reg32(r, R_A0, rp_addr(team_place(GetCardTeam())), "a0"); }
 static void run_GetCardPlayer(const Record *r) { expect_reg16(r, R_D0, GetCardPlayer(), "d0"); }
 static void run_BuildCardPlayerLists(const Record *r) { BuildCardPlayerLists(); }
 static void run_BuildCardPlayerList(const Record *r) { BuildCardPlayerList(TEAM(R_A0), ram_at(A(R_A1))); }
@@ -812,7 +814,7 @@ static void run_FormatPlayerNameShort(const Record *r) { expect_reg32(r, R_A1, F
 static void run_FormatPlayerNameLast(const Record *r) { expect_reg32(r, R_A1, FormatPlayerNameLast(R16(R_D0), TEAM(R_A2)), "a1"); }
 static void run_GetLeagueCrowdRecord(const Record *r) { expect_reg16(r, R_D0, GetLeagueCrowdRecord(), "d0"); }
 static void run_ClearWinRecords(const Record *r) { ClearWinRecords(); }
-static void run_GetTeamStruct(const Record *r) { expect_reg32(r, R_A2, rp_addr(GetTeamStruct(R16(R_D2))), "a2"); }
+static void run_GetTeamStruct(const Record *r) { expect_reg32(r, R_A2, rp_addr(team_place(GetTeamStruct(R16(R_D2)))), "a2"); }
 
 const Port ports[] = {
     { SYM_checkwallcoll, "checkwallcoll", run_checkwallcoll },
