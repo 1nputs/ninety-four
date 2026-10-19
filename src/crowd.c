@@ -96,8 +96,8 @@ void checkcornercoll(int16_t x, int16_t y, struct SortObj *o)
         int32_t dist = (int32_t)dy * dy + (int32_t)dx * dx;
         if ((uint32_t)dist > 0x1000) {
             int16_t r = (int16_t)sroot((uint32_t)dist);
-            c = (int16_t)m68k_divs((int32_t)c << 8, r);
-            s = (int16_t)m68k_divs((int32_t)s << 8, r);
+            c = (int16_t)m68k_divs((int32_t)c * 256, r);     /* (asl.l #8; a negative's shift undefined in C) */
+            s = (int16_t)m68k_divs((int32_t)s * 256, r);
             wallcollb(c, s, o);
         }
     }

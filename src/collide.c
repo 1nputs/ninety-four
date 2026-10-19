@@ -551,7 +551,7 @@ void checkwallcoll(int16_t x, int16_t y, struct SortObj *o)
         uint32_t dist2 = (uint32_t)((int32_t)ry * ry + (int32_t)rx * rx);
         if (dist2 > 0x1000) {                              /* outside the circle: hit the curved boards */
             int16_t dist = (int16_t)sroot(dist2);
-            wallcollb((int16_t)m68k_divs((int32_t)d0 << 8, dist), (int16_t)m68k_divs((int32_t)d1 << 8, dist), o);
+            wallcollb((int16_t)m68k_divs((int32_t)d0 * 256, dist), (int16_t)m68k_divs((int32_t)d1 * 256, dist), o);   /* (asl.l #8) */
         }
     }
     if ((uint16_t)(o->Wallcos | o->Wallsin) != 0)
@@ -795,7 +795,7 @@ void checkgoalp(struct SortObj *goal, struct SortObj *o, int16_t x, int16_t y)
         return;
     int16_t d3 = (int16_t)(y - goal->Ypos), d0 = (int16_t)-d3;
     int16_t d2 = (int16_t)(x - goal->Xpos), d1 = d2;
-    int16_t sx = (int16_t)(d2 << 4), sy = (int16_t)(d3 << 4);
+    int16_t sx = (int16_t)(d2 * 16), sy = (int16_t)(d3 * 16);   /* (asl #4; a negative's shift undefined in C) */
     uint16_t qx = (uint16_t)m68k_divu((uint32_t)((int32_t)sx * sx), 0x400);
     if (qx > 0x100)
         return;
@@ -805,8 +805,8 @@ void checkgoalp(struct SortObj *goal, struct SortObj *o, int16_t x, int16_t y)
     if (CheckBump(goal, o))
         return;
     int16_t dist = (int16_t)(sroot((uint32_t)((int32_t)d0 * d0 + (int32_t)d1 * d1)) + 1);
-    int16_t c = (int16_t)m68k_divs((int32_t)d0 << 8, dist);
-    int16_t s = (int16_t)m68k_divs((int32_t)d1 << 8, dist);
+    int16_t c = (int16_t)m68k_divs((int32_t)d0 * 256, dist);
+    int16_t s = (int16_t)m68k_divs((int32_t)d1 * 256, dist);
     g.sflags6 |= HI(4);
     wallcoll(c, s, o);
     g.sflags6 &= (uint16_t)~HI(4);

@@ -64,8 +64,9 @@ static inline void pal_load_w(unsigned c, const uint16_t *src, unsigned n) { for
  * cartridge passes TeamLogoPalettes + team x 32 less one or two palettes, so that one is its) */
 static inline void logo_colours(uint16_t team, unsigned palbits) { pal_load_w(palbits == 4 ? 0x20 : 0x10, lg(team)->logo_colours, 16); }
 
-/* a 16.16 position as the 68k reads it with move.l */
-#define POS32(o, f) (((int32_t)(o) << 16) | f)
+/* a 16.16 position as the 68k reads it with move.l (the high word unsigned while it is shifted: a
+ * negative's shift is undefined in C) */
+#define POS32(o, f) ((int32_t)((uint32_t)(uint16_t)(o) << 16 | (uint16_t)(f)))
 /* a sort object from a stored tmsort word (the low word of its RAM address) */
 static inline struct SortObj *sortobj_at(uint16_t lo) { return obj_at(ram_at(RAM_BASE + lo)); }
 

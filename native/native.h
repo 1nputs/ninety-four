@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include "mdrt/mdrt.h"
 #include "mdrt/platform_sdl2.h"
+#include "mdrt/net_udp.h"
 #include "league.h"
 
 extern mdrt *native_m;                  /* the console */
@@ -42,6 +43,22 @@ long native_handshakes(void);                        /* the handshakes this proc
 size_t native_hal_save(uint8_t *out);                /* the HAL's part of a state */
 int native_hal_load(const uint8_t *in, size_t size);
 long native_golden_lines(void);                      /* the golden run's lines so far (main.c) */
+
+/* netplay (net.c): two players over UDP, the host pad 1 and the guest pad 2, from power on; a
+ * rollback goes on from the game loop's wait. The window's sessions are made by its Online page
+ * (or from the command line), headless runs' by --host / --join / --peer (mdrt_net_parse) */
+#define NATIVE_ROM_CRC32 0x9438F5DDu                      /* "NHL 94 (UE) [!].gen" (SHA-1 7b1489ab...) */
+typedef uint16_t (*native_input_fn)(int pad, int k);     /* the k-th pad this player plays (pad p + 1): its buttons now */
+const char *native_net_identity(const char *setup);     /* setup: the command line's options that change the game */
+int native_net_open(const mdrt_net_options *o, const char *setup, native_input_fn input, char *err, size_t errsize);
+int native_net_connect(void);                           /* headless: connected (0: refused, or gone; why on stderr) */
+void native_net_start(mdrt *m);                         /* at power on, the states' parts added */
+void native_net_stop_at(long frame);                    /* headless: the session ends at --frames */
+void native_net_wait(void);                             /* at each of the game's waits, before the handshake */
+int native_net_on(void);                                /* in a session (headless: from before power on) */
+mdrt_net *native_net(void);                             /* the command line's session, and its link */
+mdrt_udp *native_net_udp(void);
+void native_net_close(void);
 
 /* game rules (rules.c; src/rules.h): the menu's catalogue, the next game's rules (the platform's
  * options_use, or the command line's --rule NAME=VALUE), set at power on, and the state part */

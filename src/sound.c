@@ -511,7 +511,7 @@ void p_initialZ80(void)
     uint16_t at = 0x2000;
     for (int16_t div = 8; div < 8 + 0x1D; div++) {
         for (int16_t x = 0xFF; x >= 0; x--) {
-            int32_t q = m68k_divs((int32_t)(int16_t)((x - 0x80) << 3), div);
+            int32_t q = m68k_divs((int32_t)(int16_t)((x - 0x80) * 8), div);   /* (asl #3: times 8, a negative's shift undefined in C) */
             z80_ram_write8(--at, (uint8_t)((int16_t)q + 0x80));
         }
         z80_ram_write8(at, 0);

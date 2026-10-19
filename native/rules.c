@@ -252,13 +252,14 @@ const char *rules_arg(const char *arg)
 /* the state's part, the game's session: a version, the rules' count, each rule's value (a state
  * from a build with fewer rules leaves the rest Classic; one with more is not this build's), the
  * stats the rules keep beside the RAM (rule_plusminus), then (from version 3) the league: its
- * checksum (8 bytes, 0 the cartridge's) and folder (a length byte, the name). The league's tables
+ * checksum (8 bytes, 0 the cartridge's) and folder (a length byte, the name; none in a netplay
+ * session, whose states stay in memory and whose hash the peers compare). The league's tables
  * are in the ROM the state's RAM points into, so a state loads with its own league or not at all.
  * Version 4's values are the rules' numbers; before it, each rule's choice on the page. */
 size_t rules_state_save(void *user, uint8_t *out)
 {
     (void)user;
-    const char *dir = league_dir();
+    const char *dir = native_net_on() ? "" : league_dir();   /* (netplay: the folder is the player's own, not the game's: the checksum says) */
     size_t n = strlen(dir) > 255 ? 255 : strlen(dir), at = 2 + RULE_COUNT + sizeof rule_plusminus;
     if (out) {
         uint64_t h = league_hash();

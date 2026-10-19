@@ -12,6 +12,8 @@
  *              [--four-way] [--input2 FILE] [--input3 FILE] [--input4 FILE]
  *              [--rule NAME=VALUE ...] [--league DIR] [--check-league DIR] [--export-league DIR]
  *              [--extract-rom HACK DIR] [--pack-league DIR FILE.zip] [--art-check | --art-map]
+ *              [--hashes FILE] [--host [PORT] | --join ADDR[:PORT] | --peer ADDR[:PORT]] [--port PORT]
+ *              [--delay N] [--name NAME] [--net-sim MS,MS,%,%]
  *
  * --art-check (headless) counts every byte the VDP takes by DMA from the game's data and those in
  * no piece of the art map (art.c: every piece of art the game reads by number, the cartridge's
@@ -45,7 +47,12 @@
  * --extract-rom HACK DIR a hack's, one made on the community's 32-team template (read as data,
  * never run); --check-league DIR builds one and says what is wrong with it, or what it holds;
  * --pack-league DIR FILE.zip makes a folder a package (its files in a zip: to send, or to keep
- * in leagues/, which plays it as it is). */
+ * in leagues/, which plays it as it is). --host, --join and --peer play online (net.c: two
+ * players from power on, the host pad 1; in the window it connects first; headless, each plays
+ * its pad's script and the run ends at --frames once both have every button), --delay the input
+ * delay, --net-sim a simulated network for tests. --hashes FILE (headless) writes a line a frame
+ * at its wait, the frame and hashes of work RAM, the VDP and Z80 RAM, frames a rollback plays
+ * again included (tools/netplay_check.py compares the last of each with a solo run's). */
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -81,6 +88,7 @@ static int states, rewind_states;       /* states on (the window, or --save-stat
 static long stop_after = -1, shots_every = 600;
 static int boot = 1;                    /* power on, unless --snap */
 static long restart_frame = -1;         /* --restart-at */
+static FILE *hashes;                    /* --hashes: a line a frame at its wait, frames played again included */
 static int restarting;
 static jmp_buf out;
 
@@ -199,7 +207,6 @@ static uint8_t read68k(void *user, uint32_t addr)
 }
 
 /* the ROM in the window: pulseman's menu asks whether a file will do, then hands it over */
-#define ROM_CRC32 0x9438F5DDu                             /* "NHL 94 (UE) [!].gen" (SHA-1 7b1489ab...) */
 
 static uint32_t crc32_of(const uint8_t *b, size_t n)
 {
@@ -216,7 +223,7 @@ static const char *rom_check(const uint8_t *b, size_t n, void *user)
     static char why[64];
     (void)user;
     if (n != ROM_SIZE) { snprintf(why, sizeof why, "%u KB: NHL '94 is a 1 MB cartridge", (unsigned)(n >> 10)); return why; }
-    return crc32_of(b, n) == ROM_CRC32 ? NULL : "not the 1 MB US/Europe NHL '94 cartridge";
+    return crc32_of(b, n) == NATIVE_ROM_CRC32 ? NULL : "not the 1 MB US/Europe NHL '94 cartridge";
 }
 
 static void rom_use(const uint8_t *b, size_t n, void *user) { (void)n; (void)user; rom_cart = b; rom_art = NULL; rom_limit = ROM_SIZE; }
@@ -331,6 +338,7 @@ void native_game(mdrt *m, void *user)
     if (!load_state_path) record(m, MDRT_TRACE_SOUND);    /* (from the first frame: the chips' every write) */
     if (boot) { record(m, MDRT_TRACE_VDP); record(m, MDRT_TRACE_PADS); }
     if (states) native_states_init(m, rewind_states ? state_file : NULL, rewind_states);
+    native_net_start(m);                                  /* (netplay: from power on, the states' parts added) */
     if (save_state_path) native_save_state_at(save_state_frame, save_state_path);
     if (load_state_path) {                                /* a native state: the game loop from its wait */
         native_hal_start(m, 0);
@@ -475,6 +483,31 @@ static unsigned script_request(void *user)
     return r;
 }
 
+/* netplay's local player, headless: this pad's script, at the frame the session asks in */
+static uint16_t script_pad(int pad, int k)
+{
+    (void)k;
+    size_t i = script_at(pad, native_frames());
+    return i < scripts[pad].len ? (uint16_t)scripts[pad].e[i].buttons : 0;
+}
+
+/* netplay's local player in the window: the window's player k's controls (pad 1's for the first pad
+ * this peer plays) */
+static uint16_t window_pad(int pad, int k)
+{
+    (void)pad;
+    uint16_t b[MDRT_PADS];
+    mdrt_platform_input(native_m, b);
+    return b[k];
+}
+
+/* an option that changes the simulation, into netplay's identity */
+static void add_setup(char *setup, size_t size, const char *opt, const char *value)
+{
+    size_t k = strlen(setup);
+    snprintf(setup + k, size - k, "%s %s ", opt, value);
+}
+
 /* pictures to files */
 static void write_ppm(const char *path)
 {
@@ -498,6 +531,15 @@ void native_frame_done(long frame, int wait)
 {
     if (wait) lockstep_check(frame);
     if (golden) golden_wait();
+    if (hashes) {
+        static uint8_t ram[RAM_SIZE];
+        mdrt_vdp_state v;
+        mdrt_vdp_get_state(mdrt_get_vdp(native_m), &v);
+        ram_pack(ram);
+        fprintf(hashes, "%ld %016llx %016llx %016llx\n", frame, (unsigned long long)fnv(FNV0, ram, 0x10000),
+                (unsigned long long)fnv(fnv(fnv(fnv(FNV0, v.reg, 24), v.vram, 0x10000), v.cram, sizeof v.cram), v.vsram, sizeof v.vsram),
+                (unsigned long long)fnv(FNV0, z80_ram, 0x2000));
+    }
     for (int i = 0; i < nwatch; i++) {
         uint16_t v = r16(ram_at(watch[i]), 0);
         if (v != watched[i] || frame == 1) printf("nhl94: frame %ld: $%06X = $%04X\n", frame, (unsigned)watch[i], v);
@@ -513,7 +555,7 @@ void native_frame_done(long frame, int wait)
         restarting = 1;
         native_quit();
     }
-    if (stop_after >= 0 && frame >= stop_after) {
+    if (stop_after >= 0 && frame >= stop_after && !native_net_on()) {   /* (netplay: net.c ends it) */
         if (shot_path) write_ppm(shot_path);
         native_quit();
     }
@@ -564,7 +606,14 @@ int main(int argc, char **argv)
     const char *export_dir = NULL, *check_dir = NULL, *extract_rom = NULL, *extract_dir = NULL, *pack_dir = NULL, *pack_zip = NULL;
     int sram_given = 0;
     int scale = 0, aspect = 0, headless = 0;
+    const char *hashes_path = NULL;
+    mdrt_net_options netopt;
+    char setup[1024] = "", err[256];
+    mdrt_net_options_init(&netopt);
     for (int i = 1; i < argc; i++) {
+        int net = mdrt_net_parse(&netopt, argc, argv, &i, err, sizeof err);
+        if (net < 0) { fprintf(stderr, "%s\n", err); return 2; }
+        if (net) continue;
         if (!strcmp(argv[i], "--rom") && i + 1 < argc) rom = rom_given = argv[++i];
         else if (!strcmp(argv[i], "--snap") && i + 1 < argc) { snap = argv[++i]; boot = 0; }
         else if (!strcmp(argv[i], "--boot")) boot = 1;
@@ -573,7 +622,7 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--frames") && i + 1 < argc) stop_after = atol(argv[++i]);
         else if (!strcmp(argv[i], "--shot") && i + 1 < argc) shot_path = argv[++i];
         else if (!strcmp(argv[i], "--sram") && i + 1 < argc) { sram = argv[++i]; sram_given = 1; }
-        else if (!strcmp(argv[i], "--league") && i + 1 < argc) league_arg = league_folder(argv[++i]);
+        else if (!strcmp(argv[i], "--league") && i + 1 < argc) { league_arg = league_folder(argv[++i]); add_setup(setup, sizeof setup, "--league", argv[i]); }
         else if (!strcmp(argv[i], "--export-league") && i + 1 < argc) export_dir = argv[++i];
         else if (!strcmp(argv[i], "--check-league") && i + 1 < argc) check_dir = league_folder(argv[++i]);
         else if (!strcmp(argv[i], "--extract-rom") && i + 2 < argc) { extract_rom = argv[++i]; extract_dir = argv[++i]; }
@@ -588,11 +637,13 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--art-map")) art_check = 2;
         else if (!strcmp(argv[i], "--input") && i + 1 < argc) input_path[0] = argv[++i];
         else if (!strncmp(argv[i], "--input", 7) && argv[i][7] >= '2' && argv[i][7] <= '4' && !argv[i][8] && i + 1 < argc) { int pad = argv[i][7] - '1'; input_path[pad] = argv[++i]; }
-        else if (!strcmp(argv[i], "--four-way")) four_way = 1;
+        else if (!strcmp(argv[i], "--four-way")) { four_way = 1; add_setup(setup, sizeof setup, "--four-way", ""); }
         else if (!strcmp(argv[i], "--rule") && i + 1 < argc) {
             const char *why = rules_arg(argv[++i]);
             if (why) { fprintf(stderr, "--rule %s: %s\n", argv[i], why); return 2; }
+            add_setup(setup, sizeof setup, "--rule", argv[i]);
         }
+        else if (!strcmp(argv[i], "--hashes") && i + 1 < argc) hashes_path = argv[++i];
         else if (!strcmp(argv[i], "--state") && i + 1 < argc) state_file = argv[++i];
         else if (!strcmp(argv[i], "--record") && i + 1 < argc) record_dir = argv[++i];
         else if (!strcmp(argv[i], "--watch") && i + 1 < argc) {
@@ -615,7 +666,8 @@ int main(int argc, char **argv)
                             "       [--restart-at FRAME] [--four-way] [--input2 FILE] [--input3 FILE] [--input4 FILE]\n"
                             "       [--rule NAME=VALUE ...] (the game rules: native/rules.c) [--league DIR] (league.c)\n"
                             "       [--check-league DIR] [--export-league DIR] [--extract-rom HACK DIR] [--pack-league DIR FILE.zip]\n"
-                            "       [--art-check | --art-map] (the art map: art.c)\n", argv[0]);
+                            "       [--art-check | --art-map] (the art map: art.c) [--hashes FILE]\n"
+                            "       %s (netplay: net.c)\n", argv[0], MDRT_NET_USAGE);
             return 2;
         }
     }
@@ -649,8 +701,13 @@ int main(int argc, char **argv)
     if (snap && load_state_path) { fprintf(stderr, "--snap or --load-state, not both\n"); return 2; }
     if (lockstep_path && !rules_classic()) { fprintf(stderr, "--lockstep: the original is played by the Classic rules only\n"); return 2; }
     if (lockstep_path && !league_next_is_cartridge()) { fprintf(stderr, "--lockstep: the original is played by the cartridge's teams only\n"); return 2; }
+    if (netopt.on && (snap || load_state_path || lockstep_path || restart_frame >= 0 || script_requests)) {
+        fprintf(stderr, "netplay: from power on, without --snap, --load-state, --lockstep, --restart-at or a script's requests\n");
+        return 2;
+    }
+    if (netopt.on && headless && crc32_of(rom_cart, ROM_SIZE) != NATIVE_ROM_CRC32) { fprintf(stderr, "netplay: %s is not the 1 MB US/Europe cartridge\n", rom); return 1; }
     if (snap) read_snapshot();
-    states = !lockstep_path && (!headless || load_state_path || save_state_path || script_requests);
+    states = !lockstep_path && (!headless || load_state_path || save_state_path || script_requests || netopt.on);   /* (netplay: rollbacks load them) */
     rewind_states = !headless || script_requests;
     mdrt_config c = { 0 };
     c.fm_core = fm_core ? fm_core : fm_model_given ? mdrt_fm_core() : NULL;   /* (NULL: the window's settings) */
@@ -667,11 +724,20 @@ int main(int argc, char **argv)
         sram_base = sram;
         o.options = rules_page(&o.noptions);
         o.pages = rules_pages(&o.npages);
-        return mdrt_sdl_run(&c, &o, native_game, NULL);
+        o.net_identity = native_net_identity("");        /* (the menu's Online page) */
+        if (netopt.on) {                                  /* (the window connects, then powers on) */
+            if (!native_net_open(&netopt, "", window_pad, err, sizeof err)) { fprintf(stderr, "netplay: %s\n", err); return 1; }
+            o.net = native_net();
+            o.net_udp = native_net_udp();
+        }
+        int r = mdrt_sdl_run(&c, &o, native_game, NULL);
+        native_net_close();
+        return r;
     }
     if (wav_path && !(wav = fopen(wav_path, "wb"))) { fprintf(stderr, "cannot write %s\n", wav_path); return 1; }
     if (wav) wav_header(c.audio_rate);
     if (golden_path && !(golden = fopen(golden_path, "w"))) { fprintf(stderr, "cannot write %s\n", golden_path); return 1; }
+    if (hashes_path && !(hashes = fopen(hashes_path, "w"))) { fprintf(stderr, "cannot write %s\n", hashes_path); return 1; }
     c.platform = (mdrt_platform){ .present = golden ? golden_present : NULL, .audio = wav_audio };
     if (script_requests) c.platform.requests = script_request;
     mdrt *m = mdrt_new(&c);
@@ -680,7 +746,12 @@ int main(int argc, char **argv)
     if (golden) mdrt_set_hv_source(m, golden_hv, m);
     if (inputs) mdrt_set_pad_source(m, script_source, m);
     if (four_way) mdrt_pads_set_adaptor(mdrt_get_pads(m), MDRT_ADAPTOR_EA4WAY);
-    if (lockstep_path || golden) sram = NULL;             /* lockstep, golden: save RAM blank, as the oracle's at power on */
+    if (lockstep_path || golden || netopt.on) sram = NULL;   /* lockstep, golden: save RAM blank, as the oracle's at power on (netplay: as the window's sessions) */
+    if (netopt.on) {                                      /* (from power on: the session's pads replace the scripts') */
+        if (!native_net_open(&netopt, setup, script_pad, err, sizeof err)) { fprintf(stderr, "netplay: %s\n", err); return 1; }
+        if (!native_net_connect()) return 1;
+        native_net_stop_at(stop_after);
+    }
     FILE *f = sram ? fopen(sram, "rb") : NULL;            /* save RAM: as the window's platform keeps it */
     if (f) { if (fread(mdrt_get_sram(m)->bytes, 1, 0x2000, f) != 0x2000) fprintf(stderr, "%s: short\n", sram); fclose(f); }
     native_game(m, NULL);
@@ -693,9 +764,11 @@ int main(int argc, char **argv)
         if (four_way) mdrt_pads_set_adaptor(mdrt_get_pads(m), MDRT_ADAPTOR_EA4WAY);
         native_game(m, NULL);
     }
+    native_net_close();
     if (sram && mdrt_get_sram(m)->dirty && (f = fopen(sram, "wb"))) { fwrite(mdrt_get_sram(m)->bytes, 1, 0x2000, f); fclose(f); }
     if (wav) { wav_header(c.audio_rate); fclose(wav); }
     if (golden) fclose(golden);
+    if (hashes) fclose(hashes);
     mdrt_free(m);
     if (art_check) {
         printf("art check: %lu bytes taken by DMA from the game's data, %lu in no piece of art (the first at $%06X), %d pieces overlapping\n",

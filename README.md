@@ -74,6 +74,7 @@ Esc (or a controller's Back button) opens it; arrows and Enter, or the d-pad, A 
   cartridge: set it, Reset, then choose Players: Three or Four in the game's setup screen).
 - **League**: who plays (below).
 - **Game rules**: how the game plays (below).
+- **Online play**: two players at their own machines (below).
 - **Options** and **Keys**: pausing when the window loses focus, fast-forward's speed, quick
   resume, the frames a second at the picture's top right, and every key of the pads and the
   controls (pick one and press the new key, with Shift, Ctrl or Alt if you like).
@@ -122,6 +123,25 @@ same (`--rule skating=115`; a wrong one says what the rule takes).
 The ranges are what the game's motion takes: headless games at both ends of every one, all at
 once, play on with every speed well inside what the game keeps. The on / off rules and period
 lengths are `on` / `off` and `classic` / `more`; the rink view is `classic` / `wide`.
+
+### Online play
+
+Two players, each at their own machine, over the internet or a LAN, with rollback: each game
+plays your buttons at once and guesses the other player's, and when theirs arrive different it
+plays the last few frames again with them before drawing the next, so neither of you waits. The
+menu's **Online play** page: your name; host, join a host, or both connecting at once (most home
+routers let that through without a forwarded port); the other's address and the port; this
+machine's LAN address; and the input delay (frames between pressing and the game seeing it, 2 by
+default: more means fewer rollbacks over a long way). Start connects, then the game powers on for
+both: the host is pad 1, the one who joined pad 2 (choose Players: Two - Head to Head, or Two -
+Teammates, on the setup screen). From the command line: `--host [PORT]`, `--join ADDR[:PORT]`,
+`--peer ADDR[:PORT]` (both connecting, `--port` your own), `--delay N`, `--name NAME`.
+
+While two play, the window's pause, slow motion, fast-forward, rewind, states, reset and 4 Way
+Play are not to be had, and save RAM (records, edited lines) is neither read nor written. Both
+players need the same build of the game and the US/Europe cartridge, or the other is refused. For
+now both choose the same league and rules on their pages too (sending the host's to the other is
+next): a difference ends the session as a desync.
 
 ## Leagues
 
@@ -222,7 +242,10 @@ tell us what it said.
   runs, about 227,000 frames, the rules' and leagues' own among them), plus save-state round
   trips. `make golden-cross` builds the game and pulseman with Clang and checks the same runs
   against it: the game plays bit for bit the same whatever compiles it, as netplay between
-  builds will need. `make rulestest` checks the game rules on the game's own routines (and the League page's
+  builds needs; `make golden-ubsan` checks them with the undefined behaviour sanitizer. `make
+  netplay-check` plays three two-player sessions from power on (headless, over the loopback
+  through a simulated network: delay, jitter, loss, duplicates; a league, rules, input delay 0),
+  each peer's every frame as a solo run of the same buttons. `make rulestest` checks the game rules on the game's own routines (and the League page's
   ratings against the cards' for every player). `make leaguetest` checks the leagues: the
   cartridge's exported and built again, its tables and art the cartridge's; a 32-team one; 22 broken ones refused; and
   with hack ROMs in `../roms` (or `HACKS=`), each extracted, built to its teams, colours and art
@@ -233,7 +256,9 @@ tell us what it said.
   states and rewind. Then the game rules (`src/rules.h`: numbers, Classic the original's, kept in
   states) and leagues (`src/league.h`'s tables; `native/league.c` reads and builds them,
   `native/romsrc.c` reads hacks, `native/art.c` the pictures, `docs/LEAGUES.md` the format), the
-  League and Game rules pages. In pulseman: the console's state as a value, a client-owned clock
+  League and Game rules pages. Rollback netplay (`native/net.c`: pulseman's `mdrt/netplay.h`,
+  resuming at the game loop's wait as a state does; the window's Online play page, or `--host`,
+  `--join`, `--peer`). In pulseman: the console's state as a value, a client-owned clock
   with line-by-line drawing and an H-interrupt hook, a bus map, FM cores and models chosen at run
   time, a trace recorder, PNG and zip, the client's option pages, and vsync.
 - **Native state** (the owner's direction): the game's state is native structs (the 68000's

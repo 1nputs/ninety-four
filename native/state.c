@@ -28,9 +28,6 @@ static long seen;                       /* the handshake whose requests were tak
 
 /* ---- the game's parts ------------------------------------------------------------------------ */
 
-/* the relay: Z80 RAM, then the relay's struct up to its steps, the steps' counters, and the
- * steps of the routine it is in (the rest are never read) */
-#define Z80_HEAD offsetof(struct Z80Relay, ops)
 /* work RAM as the 68000 has it (the state's bytes are the console's, whatever the host) */
 static size_t ram_save(void *user, uint8_t *out)
 {
@@ -46,39 +43,66 @@ static int ram_load(void *user, const uint8_t *in, size_t size)
     return 0;
 }
 
+/* the relay: Z80 RAM, then the relay's struct up to its steps, the steps' counters, and the
+ * steps of the routine it is in (the rest are never read). Field by field, little-endian, so a
+ * state is the same bytes on every host and compiler (netplay compares the simulation's hash):
+ * as the struct was on a little-endian host, a zero where it had a byte of padding */
+#define Z80_HEAD 58
+#define Z80_OP 6
+static uint8_t *put16(uint8_t *o, uint16_t v) { o[0] = (uint8_t)v; o[1] = (uint8_t)(v >> 8); return o + 2; }
+static uint8_t *put64(uint8_t *o, uint64_t v) { for (int k = 0; k < 8; k++) o[k] = (uint8_t)(v >> 8 * k); return o + 8; }
+static uint16_t get16(const uint8_t **i) { uint16_t v = (uint16_t)((*i)[0] | (*i)[1] << 8); *i += 2; return v; }
+static uint64_t get64(const uint8_t **i) { uint64_t v = 0; for (int k = 0; k < 8; k++) v |= (uint64_t)(*i)[k] << 8 * k; *i += 8; return v; }
+
 static size_t z80_save(void *user, uint8_t *out)
 {
     (void)user;
-    size_t n = 0x2000 + Z80_HEAD + 7 + (size_t)z80.nops * sizeof *z80.ops;
+    size_t n = 0x2000 + Z80_HEAD + 7 + (size_t)z80.nops * Z80_OP;
     if (out) {
         memcpy(out, z80_ram, 0x2000); out += 0x2000;
-        memcpy(out, &z80, Z80_HEAD); out += Z80_HEAD;
-        memcpy(out, &z80.nops, 2); memcpy(out + 2, &z80.op, 2); memcpy(out + 4, &z80.ret, 2); out[6] = z80.poll; out += 7;
-        memcpy(out, z80.ops, (size_t)z80.nops * sizeof *z80.ops);
+        out = put64(out, z80.now); out = put64(out, z80.zc); out = put64(out, z80.frame); out = put64(out, z80.ym_free);
+        *out++ = z80.running; *out++ = z80.bus_taken; *out++ = z80.prog; *out++ = 0;
+        out = put16(out, z80.pc); out = put16(out, z80.hl); out = put16(out, z80.iy); out = put16(out, z80.sp);
+        *out++ = z80.a; *out++ = z80.b; *out++ = z80.c; *out++ = z80.d; *out++ = z80.e; *out++ = z80.carry;
+        out = put16(out, z80.bc2); out = put16(out, z80.de2); out = put16(out, z80.hl2);
+        *out++ = z80.bank; *out++ = z80.n;
+        out = put16(out, z80.nops); out = put16(out, z80.op); out = put16(out, z80.ret); *out++ = z80.poll;
+        for (int k = 0; k < z80.nops; k++) {
+            const struct Z80Op *o = &z80.ops[k];
+            *out++ = o->kind; *out++ = o->part; *out++ = o->reg; *out++ = o->val;
+            out = put16(out, o->cycles);
+        }
     }
     return n;
 }
 static int z80_load(void *user, const uint8_t *in, size_t size)
 {
     (void)user;
-    uint16_t nops;
     if (size < 0x2000 + Z80_HEAD + 7) return -1;
-    memcpy(&nops, in + 0x2000 + Z80_HEAD, 2);
-    if (nops > Z80_OPS || size != 0x2000 + Z80_HEAD + 7 + (size_t)nops * sizeof *z80.ops) return -1;
+    const uint8_t *at = in + 0x2000 + Z80_HEAD;
+    uint16_t nops = get16(&at);
+    if (nops > Z80_OPS || size != 0x2000 + Z80_HEAD + 7 + (size_t)nops * Z80_OP) return -1;
     memcpy(z80_ram, in, 0x2000); in += 0x2000;
-    memcpy(&z80, in, Z80_HEAD); in += Z80_HEAD;
-    memcpy(&z80.nops, in, 2); memcpy(&z80.op, in + 2, 2); memcpy(&z80.ret, in + 4, 2); z80.poll = in[6]; in += 7;
-    memcpy(z80.ops, in, (size_t)nops * sizeof *z80.ops);
+    z80.now = get64(&in); z80.zc = get64(&in); z80.frame = get64(&in); z80.ym_free = get64(&in);
+    z80.running = in[0]; z80.bus_taken = in[1]; z80.prog = in[2]; in += 4;
+    z80.pc = get16(&in); z80.hl = get16(&in); z80.iy = get16(&in); z80.sp = get16(&in);
+    z80.a = in[0]; z80.b = in[1]; z80.c = in[2]; z80.d = in[3]; z80.e = in[4]; z80.carry = in[5]; in += 6;
+    z80.bc2 = get16(&in); z80.de2 = get16(&in); z80.hl2 = get16(&in);
+    z80.bank = in[0]; z80.n = in[1]; in += 2;
+    z80.nops = get16(&in); z80.op = get16(&in); z80.ret = get16(&in); z80.poll = *in++;
+    for (int k = 0; k < nops; k++, in += Z80_OP)
+        z80.ops[k] = (struct Z80Op){ in[0], in[1], in[2], in[3], (uint16_t)(in[4] | in[5] << 8) };
     return 0;
 }
 
-/* the C port's registers kept across routines, then the HAL's clock */
+/* the C port's registers kept across routines, then the HAL's clock (little-endian) */
 static size_t nhl_save(void *user, uint8_t *out)
 {
     (void)user;
     if (out) {
-        uint16_t e = (uint16_t)elapsed;
-        memcpy(out, &e, 2); memcpy(out + 2, &assign_d2, 4); memcpy(out + 6, &le_player, 2); memcpy(out + 8, &le_attr, 2);
+        uint8_t *o = put16(out, (uint16_t)elapsed);
+        o = put16(o, (uint16_t)assign_d2); o = put16(o, (uint16_t)(assign_d2 >> 16));
+        o = put16(o, le_player); put16(o, le_attr);
     }
     return 10 + native_hal_save(out ? out + 10 : NULL);
 }
@@ -86,9 +110,9 @@ static int nhl_load(void *user, const uint8_t *in, size_t size)
 {
     (void)user;
     if (size < 10 || native_hal_load(in + 10, size - 10)) return -1;
-    uint16_t e;
-    memcpy(&e, in, 2); elapsed = (int16_t)e;
-    memcpy(&assign_d2, in + 2, 4); memcpy(&le_player, in + 6, 2); memcpy(&le_attr, in + 8, 2);
+    elapsed = (int16_t)get16(&in);
+    assign_d2 = get16(&in); assign_d2 |= (uint32_t)get16(&in) << 16;
+    le_player = get16(&in); le_attr = get16(&in);
     return 0;
 }
 
@@ -179,7 +203,7 @@ void native_states_wait(void)
         ring_n = 0;
         restart_at(native_resume_game_loop);
     }
-    if (!rewind_on || !at) return;
+    if (!rewind_on || !at || native_net_on()) return;    /* (netplay: no rewind, and the session keeps its own states) */
     if ((req & MDRT_REQUEST_REWIND) && ring_n) {          /* a step back: the newest, kept when it is the last */
         int i = (ring_first + ring_n - 1) % REWIND_STATES;
         if (ring_n > 1) ring_n--;

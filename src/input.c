@@ -515,7 +515,7 @@ void dopass(struct SortObj *o)
                 int16_t dx = (int16_t)(a1->Xpos - puckx()), dy = (int16_t)(a1->Ypos - pucky());
                 int16_t dd = (int16_t)((vtoa(dx, dy) - g.passdir) & 7);
                 dd = (int16_t)(int8_t)(dd << 5);
-                dd = (int16_t)(dd << 3);
+                dd = (int16_t)(dd * 8);                     /* (asl #3; a negative's shift undefined in C) */
                 int32_t ddsq = sq(dd);
                 if ((uint32_t)ddsq > 0x10000) continue;
                 int32_t d2 = sq(dx) + sq(dy) + ddsq;
@@ -529,10 +529,10 @@ void dopass(struct SortObj *o)
         else {                                            /* nobody: hit it in passdir */
             unsigned idx = (unsigned)g.passdir * 2;
             int32_t v = (int32_t)(int16_t)dirtab[idx + 1] * (int16_t)g.passspeed;
-            v <<= 10;
+            v = (int32_t)((uint32_t)v << 10);             /* (asl.l #10, wrapping as the 68k's) */
             g.puckvy = (uint16_t)((int16_t)m68k_divs(v, 0xBB8) + o->Yvel);
             v = (int32_t)(int16_t)dirtab[idx] * (int16_t)g.passspeed;
-            v <<= 10;
+            v = (int32_t)((uint32_t)v << 10);
             g.puckvx = (uint16_t)((int16_t)m68k_divs(v, 0xBB8) + o->Xvel);
             g.puckvz[0] = randomd0(0x1000);
         }
@@ -588,11 +588,11 @@ void passtoa0(struct SortObj *rcv, struct SortObj *o)
     int16_t d2 = (int16_t)(dx >> 2), d3 = (int16_t)(dy >> 2);
     int16_t vx = (int16_t)(((int32_t)rcv->Xvel * 0xF0) >> 16);   /* pixels per quarter second */
     int16_t vy = (int16_t)(((int32_t)rcv->Yvel * 0xF0) >> 16);
-    int16_t j = (int16_t)((int16_t)((int16_t)((int32_t)vx * d2) + (int16_t)((int32_t)vy * d3)) << 1);
+    int16_t j = (int16_t)((int16_t)((int16_t)((int32_t)vx * d2) + (int16_t)((int32_t)vy * d3)) * 2);
     int32_t k = sq(vx) + sq(vy) - sq(d5);
     int32_t asq = sq(d2) + sq(d3);
     int32_t kasq = (int32_t)(int16_t)asq * (int16_t)k;
-    kasq <<= 2;
+    kasq = (int32_t)((uint32_t)kasq << 2);                /* (asl.l #2, wrapping) */
     int32_t disc = sq(j) - kasq;
     int16_t r = (int16_t)sroot((uint32_t)disc);
     int16_t div = (int16_t)((int16_t)k >> 2);

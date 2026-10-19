@@ -2126,7 +2126,7 @@ static void findpc_calc(struct PuckCross *a1, int16_t d1, int16_t d4)
     int16_t d0 = (int16_t)(d4 - pucky());
     int ovf;
     if (puckvy() != 0) {
-        int32_t d2 = ((int32_t)d0 << 16) >> 4;
+        int32_t d2 = (int32_t)d0 * 4096;                  /* (swap and asr #4: d0 << 16 >> 4, exactly; a negative's shift undefined in C) */
         int32_t q = divs_ovf(d2, puckvy(), &ovf);
         if ((int16_t)q >= 0 && !ovf) {
             a1->frames = (uint16_t)q;                     /* frames until it crosses */
