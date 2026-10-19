@@ -114,6 +114,7 @@ uint32_t art_rgb(uint16_t word);
 uint16_t art_word(uint32_t rgb);
 int art_tiles(const struct romsrc *s, uint32_t a, uint8_t *out, int max);
 int art_logo(const struct romsrc *s, int t, uint8_t px[ART_LOGO * ART_LOGO], uint16_t pal[16]);
+int art_logo_at(const struct romsrc *s, uint32_t bmp, uint8_t px[ART_LOGO * ART_LOGO]);   /* (the logo bitmap at bmp) */
 size_t art_logo_make(const uint8_t px[ART_LOGO * ART_LOGO], uint8_t *out);
 void art_photo_palette(const struct romsrc *s, uint16_t pal[16]);
 int art_photo(const struct romsrc *s, uint32_t pic, uint8_t px[ART_LOGO * ART_LOGO]);

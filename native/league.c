@@ -142,10 +142,11 @@ struct lg {
     struct photo *photo;        /* the folder's photos (art/photos) the pictures name */
     int photos;
 };
-/* a league built: its tables (league.h), and the cartridge with its art past the end */
+/* a league built: its tables (league.h), and its art past the cartridge (art: from ROM_SIZE to
+ * size; NULL when it has none of its own) */
 struct tables { struct LgTeam team[LEAGUE_MAX]; uint8_t seats[ROWS_MAX][16]; };
-struct built { uint8_t *img; uint32_t size; struct league league; struct tables *tables; uint64_t hash; };
-static void built_free(struct built *B) { free(B->img); free(B->tables); B->img = NULL; B->tables = NULL; }
+struct built { uint8_t *art; uint32_t size; struct league league; struct tables *tables; uint64_t hash; };
+static void built_free(struct built *B) { free(B->art); free(B->tables); B->art = NULL; B->tables = NULL; }
 
 /* ---- errors ------------------------------------------------------------------------------------ */
 
@@ -1126,8 +1127,8 @@ static void lg_string(struct LgText *d, const char *s)
 }
 
 /* team t of L as the game reads it (what the cartridge's block and tables hold of a team; its
- * pictures at photo_at for the folder's photos) */
-static void lg_team_of(const struct lg *L, int t, const uint32_t *photo_at, struct LgTeam *G)
+ * pictures at photo_at for the folder's photos, its logo and centre ice at logo and ice) */
+static void lg_team_of(const struct lg *L, int t, const uint32_t *photo_at, uint32_t logo, uint32_t ice, struct LgTeam *G)
 {
     const struct team *T = &L->t[t];
     memset(G, 0, sizeof *G);
@@ -1174,6 +1175,9 @@ static void lg_team_of(const struct lg *L, int t, const uint32_t *photo_at, stru
     char whole[LEN_CITY + LEN_NICK + 2];
     snprintf(whole, sizeof whole, "%s %s", T->city, T->nickname);
     lg_string(&G->option_name, !shared ? T->city : strlen(whole) <= OPTION_NAME ? whole : T->nickname);
+    G->logo = logo;
+    G->ice = ice;
+    memcpy(G->logo_colours, T->pal[PAL_LOGO], sizeof G->logo_colours);
 }
 
 /* the tables' part of a league's checksum, field by field */
@@ -1183,11 +1187,15 @@ static uint64_t tables_hash(uint64_t h, const struct LgTeam *teams, int n, const
         const struct LgTeam *G = &teams[t];
         const struct LgText *text[] = { &G->city, &G->abbr, &G->nickname, &G->arena, &G->option_name };
         for (size_t k = 0; k < sizeof text / sizeof text[0]; k++) h = fnv64(h, text[k]->s, sizeof text[k]->s);
-        uint8_t b[4 * 16 * 2];
-        for (int k = 0; k < 64; k++) {
-            uint16_t c = k < 32 ? G->colours[k / 16][k % 16] : G->matchup[(k - 32) / 16][k % 16];
+        uint8_t b[5 * 16 * 2 + 8];
+        for (int k = 0; k < 80; k++) {
+            uint16_t c = k < 32 ? G->colours[k / 16][k % 16] : k < 64 ? G->matchup[(k - 32) / 16][k % 16] : G->logo_colours[k - 64];
             b[2 * k] = (uint8_t)(c >> 8);
             b[2 * k + 1] = (uint8_t)c;
+        }
+        for (int k = 0; k < 4; k++) {
+            b[160 + k] = (uint8_t)(G->logo >> (24 - 8 * k));
+            b[164 + k] = (uint8_t)(G->ice >> (24 - 8 * k));
         }
         h = fnv64(h, b, sizeof b);
         uint8_t v[] = { G->offense, G->defense, G->pp, G->pk, G->home, G->away, G->forwards, G->defensemen, G->goalies,
@@ -1495,14 +1503,7 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
         photo_at[k] = at(&b);
         put(&b, asset, sizeof asset);
     }
-    lg->table[LG_TeamLogoBitmaps] = at(&b);
-    for (int t = 0; t < L->teams; t++) put32(&b, logo_at[t]);
-    lg->table[LG_TeamGfxList] = at(&b);
-    for (int t = 0; t < L->teams; t++) put32(&b, ice_at[t]);
-    lg->table[LG_TeamLogoPalettes] = at(&b);
-    for (int t = 0; t < L->teams; t++)
-        for (int k = 0; k < 16; k++) put16(&b, L->t[t].pal[PAL_LOGO][k]);
-    for (int t = 0; t < L->teams; t++) lg_team_of(L, t, photo_at, &B->tables->team[t]);   /* (the teams: tables, not in the image) */
+    for (int t = 0; t < L->teams; t++) lg_team_of(L, t, photo_at, logo_at[t], ice_at[t], &B->tables->team[t]);   /* (the teams: tables, not in the image) */
     memcpy(B->tables->seats, L->seats, 16u * (uint32_t)L->rows);
     lg->table[LG_Teamblocksmap] = SYM_Teamblocksmap;
     for (int t = 0; t < L->teams; t++) lg->block[t] = (uint8_t)L->t[t].art;
@@ -1520,9 +1521,13 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
     memcpy(lg->hiscore_at, L->hiscore_at, sizeof lg->hiscore_at);
     lg->playoff_rows = (uint16_t)L->rows;
     for (int t = 0; t < L->teams; t++) lg->art[t] = (uint8_t)L->t[t].art;
-    B->img = b.b;
-    B->size = at(&b);
-    uint64_t h = fnv64(0xCBF29CE484222325ull, B->img + ROM_SIZE, B->size - ROM_SIZE);
+    B->size = at(&b);                                     /* (built on a copy of the cartridge, kept no longer: its art past it) */
+    if (B->size > ROM_SIZE) {
+        memmove(b.b, b.b + ROM_SIZE, B->size - ROM_SIZE);
+        uint8_t *art = realloc(b.b, B->size - ROM_SIZE);
+        B->art = art ? art : b.b;
+    } else free(b.b);
+    uint64_t h = fnv64(0xCBF29CE484222325ull, B->art, B->size - ROM_SIZE);
     uint8_t counts[6] = { (uint8_t)(lg->teams >> 8), (uint8_t)lg->teams, (uint8_t)(lg->playoff_teams >> 8), (uint8_t)lg->playoff_teams,
                           (uint8_t)(lg->playoff_rows >> 8), (uint8_t)lg->playoff_rows };
     h = fnv64(fnv64(fnv64(h, counts, sizeof counts), lg->art, sizeof lg->art), lg->block, sizeof lg->block);
@@ -1535,30 +1540,30 @@ static int build(struct lg *L, const uint8_t *c, struct built *B)
 
 /* ---- this game's league ------------------------------------------------------------------------ */
 
-static struct { char dir[512]; char name[64]; uint64_t hash; uint8_t *img; } now;
+static struct { char dir[512]; char name[64]; uint64_t hash; uint8_t *art; } now;
 static char next_dir[512];
 
 static void use_cartridge(void)
 {
-    rom_image = rom_cart;
+    rom_art = NULL;
     rom_limit = ROM_SIZE;
     league_retail();
-    free(now.img);
-    now.img = NULL;
+    free(now.art);
+    now.art = NULL;
     now.dir[0] = now.name[0] = 0;
     now.hash = 0;
 }
 
 static void use_built(struct built *B, const char *dir, const char *name)
 {
-    uint8_t *old = now.img;
+    uint8_t *old = now.art;
     char clean[512];
     clean_dir(clean, sizeof clean, dir);
     dir = clean;
-    rom_image = B->img;
+    rom_art = B->art;
     rom_limit = B->size;
     league = B->league;
-    now.img = B->img;
+    now.art = B->art;
     now.hash = B->hash;
     snprintf(now.dir, sizeof now.dir, "%s", dir);
     snprintf(now.name, sizeof now.name, "%s", name);

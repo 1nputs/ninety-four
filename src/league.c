@@ -111,6 +111,9 @@ void league_read(void)
             T->picture[T->pictures++].slot = be16(a + 4);
         }
         if (LG(OptionTeamNames)) { uint32_t a = be32(LG(OptionTeamNames) + 4u * t); read_text(&a, &T->option_name); }
+        T->logo = be32(LG(TeamLogoBitmaps) + 4u * t);
+        T->ice = be32(LG(TeamGfxList) + 4u * t);
+        for (int k = 0; k < 16; k++) T->logo_colours[k] = be16(LG(TeamLogoPalettes) + 32u * t + 2u * k);
     }
     memset(lg_seats, 0, sizeof lg_seats);
     memcpy(lg_seats, rom_ptr(LG(playoffseats)), 16u * league.playoff_rows);

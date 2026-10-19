@@ -247,14 +247,14 @@ void ShortenMsgTimer(struct SortObj *o)
     if ((int16_t)g.msgtimer > 2) g.msgtimer = 2;
 }
 
-/* PeriodStatsScreen: team's logo bitmap (TeamLogoBitmaps; its palette is TeamLogoPalettes +
- * team * 32, loaded as palette 2) at printx / printy -> the next char */
+/* PeriodStatsScreen: team's logo bitmap at printx / printy, its colours as palette 2 -> the next
+ * char */
 static uint16_t team_logo(uint16_t team, uint16_t chars)
 {
-    uint32_t bmp = rd32(rom_ptr(LG(TeamLogoBitmaps) + (uint16_t)(team << 2)));
-    uint32_t pal = LG(TeamLogoPalettes) + (int16_t)((uint16_t)(team << 5) - 0x40);
+    uint32_t bmp = lg(team)->logo;
     uint32_t map = bmp + rd32(rom_ptr(bmp + 4));
-    return dobitmap(pal, map, bmp + 8, 0, 0, 6, 6, chars, 4);
+    logo_colours(team, 4);
+    return dobitmap(0, map, bmp + 8, 0, 0, 6, 6, chars, 0);
 }
 
 /* PeriodStatsScreen's .num: team a2's total of period k (goals, or shots in the matchup), added

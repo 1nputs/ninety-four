@@ -122,14 +122,14 @@ int replay_irq(void)
  * addresses appear in it). An interrupt there is the vblank the loop waits for. */
 static int in_wait_loop(uint32_t pc)
 {
-    extern const uint8_t *rom_image;
+    extern const uint8_t *rom_cart;
     for (uint32_t b = pc; b <= pc + 12; b += 2) {
-        uint8_t op = rom_image[b], disp = rom_image[b + 1];
+        uint8_t op = rom_cart[b], disp = rom_cart[b + 1];
         if (op < 0x62 || op > 0x6F || !(disp & 0x80) || disp == 0xFF) continue;   /* a conditional Bcc.s back */
         uint32_t target = b + 2 - (uint32_t)(0x100 - disp);
         if (target > pc || pc - target > 16) continue;
         for (uint32_t a = target; a < b; a += 2) {
-            uint16_t w = (uint16_t)(rom_image[a] << 8 | rom_image[a + 1]);
+            uint16_t w = (uint16_t)(rom_cart[a] << 8 | rom_cart[a + 1]);
             if (w == (uint16_t)RAM_OFF_vcount || w == (uint16_t)RAM_OFF_palcount || w == (uint16_t)RAM_OFF_disflags) return 1;
         }
     }

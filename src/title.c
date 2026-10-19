@@ -240,7 +240,7 @@ void PSandSOpassdir(struct SortObj *o)
  * d4 - $18 -> d4 = the char after them. */
 uint16_t LoadHomeTeamGfx(uint16_t start)
 {
-    uint32_t gfx = rd32(rom_ptr(LG(TeamGfxList) + (int16_t)(g.HomeTeam << 2))) + 8;
+    uint32_t gfx = lg(g.HomeTeam)->ice + 8;
     return DecompressGraphicsPlain(gfx, (uint16_t)(start - 0x18));
 }
 

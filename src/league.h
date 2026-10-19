@@ -1,10 +1,12 @@
 /* The league: the teams a game is played with. The cartridge's own (26 clubs and the two All-Star
  * teams) unless the native side builds another (native/league.c). The game reads its teams from
  * native tables (lg_team, below: read off the cartridge for its own league, made from a league's
- * folder for another) and its art by address: the cartridge's, or a league's own past the
- * cartridge's 1 MB, in the ROM's formats (league.asset, the art's tables). With the cartridge's
- * league the tables are its own numbers and its art its own addresses, so it plays exactly as the
- * original. A league is part of a game's session, like its rules. */
+ * folder for another) and its art by number: the cartridge's addresses, or a league's own art
+ * past the cartridge's 1 MB (rom.h's rom_art), in the cartridge's formats; each team's logo and
+ * centre ice by the number in its table, the art every team shares by league.asset (ART()), the
+ * banners by LG(Teamblocksmap) and LG(BannerSlotMap). With the cartridge's league the tables are
+ * its own numbers and its art its own addresses, so it plays exactly as the original. A league is
+ * part of a game's session, like its rules. */
 #pragma once
 #include <stdint.h>
 
@@ -92,6 +94,10 @@ struct LgTeam {
     struct { uint32_t pic; uint16_t slot; } picture[LG_PICTURES];
     uint32_t pictures_at;                               /* (the cartridge's address of the list) */
     struct LgText option_name;                          /* the setup screen's Team line (s[0] == 0: the cartridge's code, by number) */
+    /* its art, by number (the cartridge's address of it, or a league's own past the cartridge):
+     * its logo (TeamLogoBitmaps), its centre ice (TeamGfxList), and the logo's colours */
+    uint32_t logo, ice;
+    uint16_t logo_colours[16];
 };
 extern struct LgTeam lg_team[LEAGUE_MAX];
 /* the data a league's own team keeps in its team struct: a number for it (the cartridge's teams

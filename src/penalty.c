@@ -463,7 +463,7 @@ void prefmes(int16_t pen)
         printz(str_prefmes_3, sizeof str_prefmes_3);
         const uint8_t *a1 = penalty_entry((uint16_t)pen) + 2;
         g.printx -= rd16(a1) >> 1;
-        print((uint32_t)(a1 - rom_image));
+        print((uint32_t)(a1 - rom_cart));
         return;
     }
     if (pen < 0) {
@@ -482,7 +482,7 @@ void prefmes(int16_t pen)
     Framer(d0, 3);
     g.printy -= 2;
     g.printx += 1;
-    print((uint32_t)(a1 - rom_image));
+    print((uint32_t)(a1 - rom_cart));
 }
 
 /* penalty94.asm:ClearPenaltyMessage. Blank the horizontal mode penalty message line. */

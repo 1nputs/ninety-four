@@ -60,6 +60,9 @@ static inline void wr32(uint8_t *p, uint32_t v) { p[0] = (uint8_t)(v >> 24); p[1
  * words) at colour c */
 static inline void pal_load(unsigned c, const uint8_t *src, unsigned n) { for (unsigned i = 0; i < n; i++) g.palfadenew[c + i] = rd16(src + 2 * i); }
 static inline void pal_load_w(unsigned c, const uint16_t *src, unsigned n) { for (unsigned i = 0; i < n; i++) g.palfadenew[c + i] = src[i]; }   /* (colours as words: the league's) */
+/* team's logo colours where dobitmap's palbits puts a picture's (2: palette 1, 4: palette 2; the
+ * cartridge passes TeamLogoPalettes + team x 32 less one or two palettes, so that one is its) */
+static inline void logo_colours(uint16_t team, unsigned palbits) { pal_load_w(palbits == 4 ? 0x20 : 0x10, lg(team)->logo_colours, 16); }
 
 /* a 16.16 position as the 68k reads it with move.l */
 #define POS32(o, f) (((int32_t)(o) << 16) | f)

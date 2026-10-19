@@ -730,12 +730,11 @@ void ClearCardText(uint16_t x, uint16_t y)
     printz(str_ClearCardText_1, sizeof str_ClearCardText_1);
     g.printx = x;
     g.printy = y;
-    uint16_t t = (uint16_t)(card_team() << 2);
-    uint32_t bm = rd32(rom_ptr(LG(TeamLogoBitmaps) + (int16_t)t));
-    uint32_t pal = LG(TeamLogoPalettes) + (uint32_t)(int16_t)(uint16_t)((uint16_t)(t << 3) - 0x20);
+    uint32_t bm = lg(card_team())->logo;
     uint16_t keep[4];                                     /* (colours $11-$14 kept) */
     for (int i = 0; i < 4; i++) keep[i] = g.palfadenew[0x11 + i];
-    dobitmap(pal, bm + rd32(rom_ptr(bm + 4)), bm + 8, 0, 0, 6, 6, g.cardlogochars1, 2);
+    logo_colours(card_team(), 2);
+    dobitmap(0, bm + rd32(rom_ptr(bm + 4)), bm + 8, 0, 0, 6, 6, g.cardlogochars1, 0);
     for (int i = 0; i < 4; i++) g.palfadenew[0x11 + i] = keep[i];
 }
 

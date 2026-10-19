@@ -50,8 +50,8 @@ test: build/captest
 	@grep -nE '\bram_ptr\(|&g([^.[:alnum:]_]|$$)' $(filter-out src/ram.h src/ram.c src/mem.h,$(wildcard src/*.c src/*.h)); \
 	    case $$? in 1) ;; 0) echo "raw RAM access outside src/mem.h (above)"; exit 1;; *) exit 1;; esac
 	@# (the league's teams through src/league.h's tables: no team data read by its address, no table
-	@#  of the cartridge's formats but the art's)
-	@awk '/(^|[^A-Za-z0-9_])LG\((TeamList|TeamPalettes|TeamSongs|TeamRatings|FeaturedPictures|playoffseats|PlayerRecordOffsets|OptionTeamNames)\)/ || \
+	@#  of the cartridge's formats but the banners', which are art)
+	@awk '/(^|[^A-Za-z0-9_])LG\((TeamList|TeamPalettes|TeamSongs|TeamRatings|FeaturedPictures|playoffseats|PlayerRecordOffsets|OptionTeamNames|TeamLogoBitmaps|TeamLogoPalettes|TeamGfxList)\)/ || \
 	      (/[.>]data([^A-Za-z0-9_]|$$)/ && !/->data = lg\(/) { print FILENAME ":" FNR ": " $$0; bad = 1 } END { exit bad }' \
 	    $(filter-out src/league.c src/league.h,$(wildcard src/*.c src/*.h)); \
 	    case $$? in 0) ;; 1) echo "a team's data read outside the league's tables (above)"; exit 1;; *) exit 1;; esac

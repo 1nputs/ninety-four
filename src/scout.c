@@ -217,12 +217,12 @@ void DrawMatchupPicture(uint32_t pic, uint16_t chars, uint16_t palbits)
     DrawMatchupBitmap(pal, map, ram_addr(g.picturebuf), chars, palbits);
 }
 
-/* scout94.asm:DrawMatchupLogo. Team logo a0 at printx / printy, its palette from
- * TeamLogoPalettes by d3 (the team x 4, from GetTeamLogo) in colour family 1 (d5 = 2) or 2. */
+/* scout94.asm:DrawMatchupLogo. Team logo a0 at printx / printy, the colours of team d3 / 4 (from
+ * GetTeamLogo) in colour family 1 (d5 = 2) or 2. */
 void DrawMatchupLogo(uint32_t logo, uint16_t d3, uint16_t chars, uint16_t palbits)
 {
-    uint16_t off = (uint16_t)((uint16_t)(d3 << 3) - (palbits == 4 ? 0x40 : 0x20));
-    DrawMatchupBitmap(LG(TeamLogoPalettes) + (uint32_t)(int16_t)off, logo + rd32(rom_ptr(logo + 4)), logo + 8, chars, palbits);
+    logo_colours((uint16_t)(d3 >> 2), palbits);
+    DrawMatchupBitmap(0, logo + rd32(rom_ptr(logo + 4)), logo + 8, chars, 0);
 }
 
 /* scout94.asm:DrawMatchupBitmap. A 6 x 6 dobitmap, then the 8 x 3 name area below it erased (at
@@ -235,11 +235,12 @@ void DrawMatchupBitmap(uint32_t pal, uint32_t map, uint32_t tiles, uint16_t char
     eraser(8, 3, 0x7FF);
 }
 
-/* scout94.asm:GetTeamLogo. d3 = team -> a0 = its logo bitmap (TeamLogoBitmaps), d3 = team x 4. */
+/* scout94.asm:GetTeamLogo. d3 = team -> a0 = its logo bitmap, d3 = team x 4. */
 uint32_t GetTeamLogo(uint16_t *d3)
 {
+    uint32_t logo = lg(*d3)->logo;
     *d3 = (uint16_t)(*d3 << 2);
-    return rd32(rom_ptr(LG(TeamLogoBitmaps) + (uint32_t)(int16_t)*d3));
+    return logo;
 }
 
 /* the rating of player d0 of team a2 (CalcAttrib with the overall weights of a skater or, in the

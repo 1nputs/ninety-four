@@ -40,6 +40,17 @@ static const char *string_of(const uint8_t *s)
 }
 static const char *text_of(const struct LgText *x) { return string_of(x->s); }
 
+/* what the game reads by number as one block, the cartridge then a league's art past it
+ * (rom_limit bytes), for the ROM readers (romsrc); free it after */
+static uint8_t *game_view(void)
+{
+    uint8_t *v = malloc(rom_limit);
+    if (!v) { fprintf(stderr, "out of memory\n"); exit(1); }
+    memcpy(v, rom_cart, ROM_SIZE);
+    if (rom_limit > ROM_SIZE) memcpy(v + ROM_SIZE, rom_art, rom_limit - ROM_SIZE);
+    return v;
+}
+
 /* the tables (league.h) the game reads off ROM img (size bytes) by its tables' addresses, as
  * league_read reads them, into teams and seats (the game's own as they were) */
 static struct LgTeam want[LEAGUE_MAX];
@@ -50,10 +61,11 @@ static void read_tables(const uint8_t *img, uint32_t size, const uint32_t table[
     static uint8_t keep_seats[32][16];
     memcpy(keep, lg_team, sizeof keep);
     memcpy(keep_seats, lg_seats, sizeof keep_seats);
-    const uint8_t *ki = rom_image;
+    const uint8_t *kc = rom_cart, *ka = rom_art;
     uint32_t kl = rom_limit;
     struct league kg = league;
-    rom_image = img;
+    rom_cart = img;                                       /* (its first 1 MB where the cartridge's is read, the rest past it) */
+    rom_art = size > ROM_SIZE ? img + ROM_SIZE : NULL;
     rom_limit = size;
     memcpy(league.table, table, sizeof league.table);
     league.teams = (uint16_t)teams;
@@ -61,7 +73,8 @@ static void read_tables(const uint8_t *img, uint32_t size, const uint32_t table[
     league_read();
     memcpy(want, lg_team, sizeof want);
     memcpy(want_seats, lg_seats, sizeof want_seats);
-    rom_image = ki;
+    rom_cart = kc;
+    rom_art = ka;
     rom_limit = kl;
     league = kg;
     memcpy(lg_team, keep, sizeof keep);
@@ -70,7 +83,7 @@ static void read_tables(const uint8_t *img, uint32_t size, const uint32_t table[
 
 /* what of team a is not as team b: "" when all is (but its data and Strings' addresses; and the
  * parts SKIP_ leaves out) */
-enum { SKIP_DEFENSEMEN = 1, SKIP_RECORDS = 2, SKIP_PICTURES = 4, SKIP_OPTION = 8 };
+enum { SKIP_DEFENSEMEN = 1, SKIP_RECORDS = 2, SKIP_PICTURES = 4, SKIP_OPTION = 8, SKIP_ART = 16 };
 static const char *team_diff(const struct LgTeam *a, const struct LgTeam *b, int skip)
 {
     static char why[200];
@@ -96,6 +109,8 @@ static const char *team_diff(const struct LgTeam *a, const struct LgTeam *b, int
         pictures = a->picture[i].slot == b->picture[i].slot && ((skip & SKIP_PICTURES) || a->picture[i].pic == b->picture[i].pic);
     DIFF(!pictures, "pictures");
     DIFF(!(skip & SKIP_OPTION) && memcmp(a->option_name.s, b->option_name.s, LG_TEXT), "setup-name");
+    DIFF(!(skip & SKIP_ART) && (a->logo != b->logo || a->ice != b->ice), "logo-ice");
+    DIFF(memcmp(a->logo_colours, b->logo_colours, sizeof a->logo_colours), "logo-colours");
 #undef DIFF
     return why;
 }
@@ -122,10 +137,10 @@ static void round_trip(const char *dir)
 {
     league_next(dir);
     league_power_on();
-    const uint8_t *c = rom_cart, *m = rom_image;
-    CHECK(league_hash() != 0 && m != c && rom_limit > ROM_SIZE, "%s did not build: %s", dir, league_error());
-    if (m == c) return;
-    CHECK(memcmp(m, c, ROM_SIZE) == 0, "the cartridge's own bytes changed");
+    const uint8_t *c = rom_cart;
+    CHECK(league_hash() != 0, "%s did not build: %s", dir, league_error());
+    if (!league_hash()) return;
+    CHECK(rom_art == NULL && rom_limit == ROM_SIZE, "%u bytes of art past the cartridge, not the cartridge's own", rom_limit - ROM_SIZE);
     CHECK(league.teams == SYM_NumTeams && league.playoff_teams == SYM_NumPlayoffTeams && league.playoff_rows == SYM_PlayoffRows,
           "the counts: %d %d %d", league.teams, league.playoff_teams, league.playoff_rows);
     struct romsrc cs;                                     /* (the screen after the EA logo: the cartridge's places, read off it) */
@@ -133,24 +148,17 @@ static void round_trip(const char *dir)
     CHECK(!memcmp(league.hiscore_at, league_cartridge.hiscore_at, sizeof league.hiscore_at) && !memcmp(cs.hiscore_at, league_cartridge.hiscore_at, sizeof cs.hiscore_at),
           "the screen after the EA logo's places: %d,%d %d,%d", league.hiscore_at[0][0], league.hiscore_at[0][1], league.hiscore_at[1][0], league.hiscore_at[1][1]);
     read_tables(c, ROM_SIZE, league_cartridge.table, SYM_NumTeams, SYM_PlayoffRows);   /* (the cartridge's, as the game reads them) */
-    int teams = 0, tables = 0;
-    for (uint32_t t = 0; t < SYM_NumTeams; t++) {
+    int teams = 0;
+    for (uint32_t t = 0; t < SYM_NumTeams; t++) {               /* (their art the cartridge's: the same numbers) */
         const char *why = team_diff(&lg_team[t], &want[t], SKIP_OPTION);
         CHECK(!*why && lg_team[t].data == LG_DATA(t), "team %u's tables:%s (data %06X)", t, why, lg_team[t].data);
         teams += !*why;
-        static const struct { int table; uint32_t cart, size; } tab[] = {   /* (the art's: by address yet) */
-            { LG_TeamLogoBitmaps, SYM_TeamLogoBitmaps, 4 }, { LG_TeamGfxList, SYM_TeamGfxList, 4 }, { LG_TeamLogoPalettes, SYM_TeamLogoPalettes, 32 },
-        };
-        for (size_t k = 0; k < sizeof tab / sizeof tab[0]; k++) {
-            int same = memcmp(m + league.table[tab[k].table] + t * tab[k].size, c + tab[k].cart + t * tab[k].size, tab[k].size) == 0;
-            CHECK(same, "team %u's entry of table %d", t, tab[k].table);
-            tables += same;
-        }
         CHECK(league.art[t] == t, "team %u shows team %d's art", t, league.art[t]);
     }
     CHECK(memcmp(lg_seats, want_seats, 16 * SYM_PlayoffRows) == 0, "the playoff draws");
     CHECK(!LG(TeamList) && !LG(TeamPalettes) && !LG(TeamSongs) && !LG(TeamRatings) && !LG(FeaturedPictures) && !LG(playoffseats)
-          && !LG(PlayerRecordOffsets) && !LG(OptionTeamNames), "the teams' tables past the cartridge");
+          && !LG(PlayerRecordOffsets) && !LG(OptionTeamNames) && !LG(TeamLogoBitmaps) && !LG(TeamGfxList) && !LG(TeamLogoPalettes),
+          "the teams' tables past the cartridge");
     int own = 0;
     for (int t = 0; t < league.teams; t++) own += league.block_tiles[t] != 0 || league.banner_tiles[t] != 0 || league.block[t] != t;
     CHECK(LG(Teamblocksmap) == SYM_Teamblocksmap && own == 0, "the cartridge's banners (%d teams with others)", own);
@@ -158,11 +166,11 @@ static void round_trip(const char *dir)
     CHECK(!strcmp(text_of(&lg_team[13].option_name), string_of(c + SYM_IslandersTxt))
           && !strcmp(text_of(&lg_team[14].option_name), string_of(c + SYM_RangersTxt)), "the New York teams' names");
     printf("  %s: %d of %d names on the setup screen as the cartridge shows them\n", dir, names, league.teams);
-    printf("  %s: %d of %d teams' tables and %d of %d art table entries the cartridge's\n", dir, teams, SYM_NumTeams, tables, 3 * SYM_NumTeams);
+    printf("  %s: %d of %d teams' tables the cartridge's, their art its own\n", dir, teams, SYM_NumTeams);
     league_next(NULL);
     league_power_on();
     read_tables(rom_cart, ROM_SIZE, league_cartridge.table, SYM_NumTeams, SYM_PlayoffRows);
-    CHECK(rom_image == rom_cart && rom_limit == ROM_SIZE && league_hash() == 0 && LG(TeamList) == SYM_TeamList && !memcmp(lg_team, want, sizeof want)
+    CHECK(rom_art == NULL && rom_limit == ROM_SIZE && league_hash() == 0 && LG(TeamList) == SYM_TeamList && !memcmp(lg_team, want, sizeof want)
           && lg_team[0].data == r32(c, SYM_TeamList), "back to the cartridge's");
 }
 
@@ -170,9 +178,9 @@ static void other(const char *dir)
 {
     league_next(dir);
     league_power_on();
-    const uint8_t *m = rom_image;
+    uint8_t *m = game_view();
     CHECK(league_hash() != 0, "%s did not build: %s", dir, league_error());
-    if (!league_hash()) return;
+    if (!league_hash()) { free(m); return; }
     int teams = league.teams, rows = league.playoff_rows;
     printf("  %s: %d teams, %d for the cup, %d draws\n", dir, teams, league.playoff_teams, rows);
     /* save RAM: each team's 26 player records and crowd record apart, below the line data */
@@ -222,16 +230,18 @@ static void other(const char *dir)
      * KC's photo in colours (a ramp: black to white by brightness) */
     struct romsrc bs, cs;
     romsrc_cartridge(&cs, rom_cart);
-    romsrc_cartridge(&bs, rom_image);
+    romsrc_cartridge(&bs, m);
     bs.size = rom_limit;
     memcpy(bs.table, league.table, sizeof bs.table);
     uint8_t px[ART_LOGO * ART_LOGO], cart[ART_LOGO * ART_LOGO];
     uint16_t pal[16], cpal[16];
     int hou = 29, bos = 1, kc = 27, drawn = 0;
-    CHECK(art_logo(&bs, hou, px, pal) == 0 && r32(m, LG(TeamLogoBitmaps) + 4u * (uint32_t)hou) >= ROM_SIZE, "HOU's logo its own");
+    memcpy(pal, lg_team[hou].logo_colours, sizeof pal);
+    CHECK(art_logo_at(&bs, lg_team[hou].logo, px) == 0 && lg_team[hou].logo >= ROM_SIZE, "HOU's logo its own");
     for (int i = 0; i < ART_LOGO * ART_LOGO; i++) drawn += px[i] == (i % 48 < 8 && i / 48 < 8 ? 0 : i % 48 < 24 ? 1 : 2);
     CHECK(drawn == ART_LOGO * ART_LOGO && pal[1] == art_word(0xFF0000) && pal[2] == art_word(0xFFFFFF), "HOU's logo as drawn (%d pixels)", drawn);
-    CHECK(art_logo(&bs, bos, px, pal) == 0 && art_logo(&cs, bos, cart, cpal) == 0 && r32(m, LG(TeamLogoBitmaps) + 4u * (uint32_t)bos) >= ROM_SIZE
+    memcpy(pal, lg_team[bos].logo_colours, sizeof pal);
+    CHECK(art_logo_at(&bs, lg_team[bos].logo, px) == 0 && art_logo(&cs, bos, cart, cpal) == 0 && lg_team[bos].logo >= ROM_SIZE
           && px[0] == 1 && cart[0] != 1 && !memcmp(px + 1, cart + 1, sizeof px - 1) && !memcmp(pal, cpal, sizeof pal), "BOS's logo, a pixel changed");
     uint32_t pic = lg_team[kc].pictures ? lg_team[kc].picture[lg_team[kc].pictures - 1].pic : 0;
     CHECK(pic >= ROM_SIZE && art_photo(&bs, pic, px) == 0 && px[0] == 6 && px[47] == 5, "KC's photo its own, its shades by brightness");
@@ -248,6 +258,7 @@ static void other(const char *dir)
     free(mine);
     free(theirs);
     printf("  %s: art of its own: a logo drawn, a logo changed, a photo in colours, a sprite's pixel\n", dir);
+    free(m);
     league_next(NULL);
     league_power_on();
 }
@@ -269,9 +280,9 @@ static void hack(const char *path, const char *dir)
     CHECK(romsrc_hack(&s, h, n, rom_cart, why, sizeof why) == 0, "%s: %s", path, why);
     league_next(dir);
     league_power_on();
-    const uint8_t *m = rom_image;
+    uint8_t *m = game_view();
     CHECK(league_hash() != 0, "%s did not build: %s", dir, league_error());
-    if (!league_hash()) return;
+    if (!league_hash()) { free(m); return; }
     CHECK(league.teams == s.teams && league.playoff_teams == s.playoff_teams && league.playoff_rows == s.rows,
           "the counts: %d %d %d, the hack's %d %d %d", league.teams, league.playoff_teams, league.playoff_rows, s.teams, s.playoff_teams, s.rows);
     read_tables(h, n, s.table, s.teams, s.rows);         /* (the hack's, as the game would read them off it) */
@@ -280,13 +291,12 @@ static void hack(const char *path, const char *dir)
         /* (what the game reads of a team, but the count of defensemen, which the game counts
          * itself; its pictures' addresses, its records' places, its setup screen name: the
          * league's own) */
-        const char *differ = team_diff(&lg_team[t], &want[t], SKIP_DEFENSEMEN | SKIP_RECORDS | SKIP_PICTURES | SKIP_OPTION);
+        const char *differ = team_diff(&lg_team[t], &want[t], SKIP_DEFENSEMEN | SKIP_RECORDS | SKIP_PICTURES | SKIP_OPTION | SKIP_ART);
         CHECK(!*differ, "team %d's tables:%s", t, differ);
         blocks += !*differ;
-        /* its colours: the jerseys, the logo's and the matchup screens' (the logo's in the art's
-         * TeamLogoPalettes) */
+        /* its colours: the jerseys, the logo's and the matchup screens' */
         int jerseys = !memcmp(lg_team[t].colours, want[t].colours, sizeof want[t].colours);
-        int logo = memcmp(m + LG(TeamLogoPalettes) + 32u * (uint32_t)t, h + s.table[LG_TeamLogoPalettes] + 32u * (uint32_t)t, 32) == 0;
+        int logo = !memcmp(lg_team[t].logo_colours, want[t].logo_colours, sizeof want[t].logo_colours);
         int matchup = !memcmp(lg_team[t].matchup, want[t].matchup, sizeof want[t].matchup);
         CHECK(jerseys && logo && matchup, "team %d's colours: jerseys %s, logo %s, matchup %s", t, jerseys ? "same" : "DIFFER",
               logo ? "same" : "DIFFER", matchup ? "same" : "DIFFER");
@@ -304,7 +314,7 @@ static void hack(const char *path, const char *dir)
            dir, blocks, s.teams, colours, moved);
     /* its art as the hack's: each logo (and its colours), centre ice, both banners, each photo */
     struct romsrc bs;
-    romsrc_cartridge(&bs, rom_image);
+    romsrc_cartridge(&bs, m);
     bs.size = rom_limit;
     memcpy(bs.table, league.table, sizeof bs.table);
     bs.teams = league.teams;
@@ -316,11 +326,12 @@ static void hack(const char *path, const char *dir)
     }
     for (int t = 0; t < league.teams && t < s.teams; t++) {
         uint16_t pa[ART_BANNER_COLOURS], pb[ART_BANNER_COLOURS];
-        int same = art_logo(&bs, t, a, pa) == 0 && art_logo(&s, t, b, pb) == 0 && !memcmp(a, b, ART_LOGO * ART_LOGO) && !memcmp(pa, pb, 32);
+        int same = art_logo_at(&bs, lg_team[t].logo, a) == 0 && art_logo(&s, t, b, pb) == 0 && !memcmp(a, b, ART_LOGO * ART_LOGO)
+                   && !memcmp(lg_team[t].logo_colours, pb, 32);
         CHECK(same, "team %d's logo", t);
         logos += same;
         uint8_t ta[24 * 32], tb[24 * 32];
-        same = art_tiles(&bs, r32(m, LG(TeamGfxList) + 4u * (uint32_t)t) + 8, ta, 24) == 24
+        same = art_tiles(&bs, lg_team[t].ice + 8, ta, 24) == 24
                && art_tiles(&s, rs32(&s, s.table[LG_TeamGfxList] + 4u * (uint32_t)t) + 8, tb, 24) == 24 && !memcmp(ta, tb, sizeof ta);
         CHECK(same, "team %d's centre ice", t);
         ices += same;
@@ -336,7 +347,7 @@ static void hack(const char *path, const char *dir)
             for (int i = 0; i < 16 * ART_BANNER_W; i++) b[16 * ART_BANNER_W + i] = (uint8_t)(ART_BANNER_SETUP + name[i / ART_BANNER_W][i % ART_BANNER_W]);
         }
         for (int i = 0; same && i < 22 * 64; i++) {
-            int x = i % 88, y = i / 88, tile = (y / 8) * 11 + x / 8, v = rom_image[league.banner_tiles[t] + (uint32_t)(tile * 32 + (y % 8) * 4 + (x % 8) / 2)];
+            int x = i % 88, y = i / 88, tile = (y / 8) * 11 + x / 8, v = m[league.banner_tiles[t] + (uint32_t)(tile * 32 + (y % 8) * 4 + (x % 8) / 2)];
             same = league.banner_tiles[t] && (x % 2 ? v & 15 : v >> 4) == b[(16 + y) * ART_BANNER_W + x] - ART_BANNER_SETUP;
         }
         CHECK(same, "team %d's banners", t);
@@ -380,6 +391,7 @@ static void hack(const char *path, const char *dir)
         free(hb); free(cb); free(mb);
     }
     printf("  %s: its shared art: %d of its own as the hack's, %d the cartridge's\n", dir, own, kept);
+    free(m);
     league_next(NULL);
     league_power_on();
 }

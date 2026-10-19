@@ -610,19 +610,19 @@ void DrawVisBlock(void)
 }
 
 /* optsetup94.asm:DrawTeamLogo. The logo of team logoteam at printx, y 6 (6 x 6), with its
- * palette from TeamLogoPalettes in colour family 1 (home) or 2 (visitors), the rest of the
- * palettes kept; then $B4 frames before a player card. */
+ * colours in colour family 1 (home) or 2 (visitors), the rest of the palettes kept; then $B4
+ * frames before a player card. */
 void DrawTeamLogo(void)
 {
     g.carddelay = 0xB4;
     g.printy = 6;
     int home = (g.setupcardflags & CARD(2)) != 0;
     uint16_t chars = home ? g.homepicchars : g.vispicchars, team = g.logoteam;
-    uint32_t bmp = rd32(rom_ptr(LG(TeamLogoBitmaps) + (uint16_t)(team << 2)));
-    uint32_t pal = LG(TeamLogoPalettes) + (uint32_t)(int16_t)(uint16_t)((uint16_t)(team << 5) - (home ? 0x20 : 0x40));
+    uint32_t bmp = lg(team)->logo;
     uint16_t keep[4];                                     /* (colours $11-$14 kept) */
     for (int i = 0; i < 4; i++) keep[i] = g.palfadenew[0x11 + i];
-    dobitmap(pal, pic_map(bmp), bmp + 8, 0, 0, 6, 6, chars, home ? 2 : 4);
+    logo_colours(team, home ? 2 : 4);
+    dobitmap(0, pic_map(bmp), bmp + 8, 0, 0, 6, 6, chars, 0);
     for (int i = 0; i < 4; i++) g.palfadenew[0x11 + i] = keep[i];
     g.palcount = 0x64;
 }

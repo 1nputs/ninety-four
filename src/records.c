@@ -92,9 +92,9 @@ void NameEntryScreen(void)
     PRINTZ(str_NameEntryScreen_4);
     Framer(8, 8);
     PRINTZ(str_NameEntryScreen_5);                        /* its logo */
-    uint32_t bmp = rd32(rom_ptr(LG(TeamLogoBitmaps) + (uint32_t)(int16_t)(uint16_t)(team << 2)));
-    uint32_t pal = LG(TeamLogoPalettes) + (uint32_t)(int16_t)(uint16_t)((uint16_t)(team << 5) - 0x40);
-    dobitmap(pal, bmp + rd32(rom_ptr(bmp + 4)), bmp + 8, 0, 0, 6, 6, g.homepicchars, 4);
+    uint32_t bmp = lg(team)->logo;
+    logo_colours(team, 4);
+    dobitmap(0, bmp + rd32(rom_ptr(bmp + 4)), bmp + 8, 0, 0, 6, 6, g.homepicchars, 0);
     PRINTZ(str_NameEntryScreen_6);
     Framer(0x24, 6);
     printbigz(str_NameEntryScreen_7, sizeof str_NameEntryScreen_7);

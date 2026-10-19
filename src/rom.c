@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "rom.h"
-const uint8_t *rom_cart, *rom_image;
+const uint8_t *rom_cart, *rom_art;
 uint32_t rom_limit = ROM_SIZE;
 int rom_load(const char *path)
 {
@@ -12,7 +12,8 @@ int rom_load(const char *path)
     size_t n = fread(buf, 1, ROM_SIZE, f);
     fclose(f);
     if (n != ROM_SIZE) { free(buf); return 0; }
-    rom_cart = rom_image = buf;
+    rom_cart = buf;
+    rom_art = NULL;
     rom_limit = ROM_SIZE;
     return 1;
 }
@@ -29,6 +30,6 @@ void rom_bad_address(uint32_t addr)
 uint32_t rom_find(uint32_t from, uint32_t to, const void *bytes, unsigned n)
 {
     for (uint32_t a = from; a + n <= to; a++)
-        if (memcmp(rom_image + a, bytes, n) == 0) return a;
+        if (memcmp(rom_ptr(a), bytes, n) == 0) return a;
     return 0;
 }

@@ -150,14 +150,20 @@ static void tiles_of(const uint8_t *px, int pw, int cx, int cy, uint8_t out[32])
 
 int art_logo(const struct romsrc *s, int t, uint8_t px[ART_LOGO * ART_LOGO], uint16_t pal[16])
 {
+    if (art_logo_at(s, rs32(s, s->table[LG_TeamLogoBitmaps] + 4u * (uint32_t)t), px) < 0) return -1;
+    for (int k = 0; k < 16; k++) pal[k] = rs16(s, s->table[LG_TeamLogoPalettes] + 32u * (uint32_t)t + 2u * (uint32_t)k);
+    return 0;
+}
+
+int art_logo_at(const struct romsrc *s, uint32_t bmp, uint8_t px[ART_LOGO * ART_LOGO])
+{
     static uint8_t tiles[64 * 32];
-    uint32_t bmp = rs32(s, s->table[LG_TeamLogoBitmaps] + 4u * (uint32_t)t), map = bmp + rs32(s, bmp + 4);
+    uint32_t map = bmp + rs32(s, bmp + 4);
     int n = art_tiles(s, bmp + 8, tiles, 64);
     if (n < 0 || rs16(s, map) != 6 || rs16(s, map + 2) != 6) return -1;
     for (int y = 0; y < ART_LOGO; y++)
         for (int x = 0; x < ART_LOGO; x++)
             px[y * ART_LOGO + x] = (uint8_t)cell_pixel(tiles, n, 0, rs16(s, map + 4 + 2u * (uint32_t)(y / 8 * 6 + x / 8)), x % 8, y % 8);
-    for (int k = 0; k < 16; k++) pal[k] = rs16(s, s->table[LG_TeamLogoPalettes] + 32u * (uint32_t)t + 2u * (uint32_t)k);
     return 0;
 }
 

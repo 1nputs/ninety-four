@@ -191,7 +191,7 @@ static const char *rom_check(const uint8_t *b, size_t n, void *user)
     return crc32_of(b, n) == ROM_CRC32 ? NULL : "not the 1 MB US/Europe NHL '94 cartridge";
 }
 
-static void rom_use(const uint8_t *b, size_t n, void *user) { (void)n; (void)user; rom_cart = rom_image = b; rom_limit = ROM_SIZE; }
+static void rom_use(const uint8_t *b, size_t n, void *user) { (void)n; (void)user; rom_cart = b; rom_art = NULL; rom_limit = ROM_SIZE; }
 
 /* the save RAM's file for the game about to start: the league's own (the window's sram_file) */
 static const char *sram_base;
