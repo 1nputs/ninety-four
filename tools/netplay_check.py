@@ -103,12 +103,13 @@ def pad2(seed, last):
 
 
 def last_lines(path):
-    """the last line of each frame: work RAM, VDP, Z80 RAM, save RAM"""
+    """the last line of each frame: work RAM, VDP, Z80 RAM, save RAM (not the simulation's hash
+    after them: a solo run's rules part names its league's folder, a session's does not)"""
     lines = {}
     with open(path) as f:
         for line in f:
             x = line.split()
-            if len(x) == 5:
+            if len(x) == 6:
                 lines[int(x[0])] = x[1:5]
     return lines
 

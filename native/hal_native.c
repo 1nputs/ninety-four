@@ -56,12 +56,18 @@ static void sound_tick(void *user, uint32_t until)
     }
 }
 
-/* power on, as a new process has it (the window's reset starts the game again in this one) */
+/* power on, as a new process has it (the window's reset starts the game again in this one, and
+ * so does a session started from its Online play page): all a native state holds besides work
+ * RAM, the Z80 and the rules, which netplay's desync checks compare */
 void native_power_on(void)
 {
     sr = 0x2700;
     accesses = 0;
     in_vblank = 0;
+    frames = 0;
+    elapsed = 0;                            /* (the C port's registers kept across routines) */
+    assign_d2 = ASSIGN_D2_START;
+    le_player = le_attr = 0;
     z80_relay_power_on();
 }
 

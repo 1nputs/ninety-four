@@ -352,7 +352,7 @@ static uint8_t tick_byte(uint8_t v)
  * updateanim, the no-puck timers, time on ice, deceleration and movement (with the bounce sound
  * when the puck lands), the puck carrier's pad, the human controllers' input (doinput), the
  * assignment from asstab, collisions and the impact decay. d7 = elapsed frames. */
-uint32_t assign_d2 = 6;
+uint32_t assign_d2 = ASSIGN_D2_START;
 
 void updateplayers(void)
 {

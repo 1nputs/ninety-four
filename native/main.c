@@ -38,12 +38,12 @@
  * the ROM is --rom's, else the one chosen last in pulseman's menu (Esc), else "NHL 94 (UE) [!].gen"
  * here; when none is the 1 MB US/Europe cartridge, the menu asks for one. --restart-at FRAME
  * (headless) starts the game again at that frame on a new console, as the menu's reset does
- * (tools/golden.py checks that it goes as a fresh run). --four-way puts EA's 4 Way Play in the
+ * (tools/golden.py checks that it goes as a fresh run), --frames then counting the new game's. --four-way puts EA's 4 Way Play in the
  * ports (the game finds it at power on: four players); --input2 to --input4 script pads 2-4. --watch prints work RAM words (hex addresses,
  * e.g. FFC472) at frame 1 and whenever they change. --rule and --league (headless; the window
  * takes them from its menu's Game rules and League pages) set the game's rules (rules.c) and its
  * league, a folder of teams (league.c: DIR, or a folder of leagues/), whose save RAM is its own
- * (out/nhl94-NAME.srm). --export-league DIR writes the cartridge's league into DIR, to change;
+ * (out/nhl94-NAME.srm, in the window). --export-league DIR writes the cartridge's league into DIR, to change;
  * --extract-rom HACK DIR a hack's, one made on the community's 32-team template (read as data,
  * never run); --check-league DIR builds one and says what is wrong with it, or what it holds;
  * --pack-league DIR FILE.zip makes a folder a package (its files in a zip: to send, or to keep
@@ -52,8 +52,11 @@
  * its pad's script and the run ends at --frames once both have every button), --delay the input
  * delay, --here N the players at this machine, --players N a host's players in all (up to four
  * machines; pads 3 or 4 played: 4 Way Play), --net-sim a simulated network for tests. --hashes FILE (headless) writes a line a frame
- * at its wait, the frame and hashes of work RAM, the VDP, Z80 RAM and save RAM, frames a rollback plays
- * again included (tools/netplay_check.py compares the last of each with a solo run's). */
+ * at its wait, the frame and hashes of work RAM, the VDP, Z80 RAM and save RAM, then the simulation's
+ * (mdrt_sim_hash: all a state holds, which netplay's desync checks compare), frames a rollback plays
+ * again included (tools/netplay_check.py compares the last of each with a solo run's).
+ * Headless, the save RAM is a new cartridge's unless --sram FILE names one (read at power on and
+ * written back if the game changed it); a player's out/nhl94.srm is never touched otherwise. */
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -232,6 +235,18 @@ static void rom_use(const uint8_t *b, size_t n, void *user) { (void)n; (void)use
 /* the save RAM's file for the game about to start: the league's own (the window's sram_file) */
 static const char *sram_base;
 static const char *sram_for(void *user) { (void)user; return league_sram(sram_base); }
+
+/* headless: a console's save RAM from its file (none: blank) and back to it when the game wrote it */
+static void sram_read(mdrt *m, const char *path)
+{
+    FILE *f = path ? fopen(path, "rb") : NULL;
+    if (f) { if (fread(mdrt_get_sram(m)->bytes, 1, 0x2000, f) != 0x2000) fprintf(stderr, "%s: short\n", path); fclose(f); }
+}
+static void sram_write(mdrt *m, const char *path)
+{
+    FILE *f = path && mdrt_get_sram(m)->dirty ? fopen(path, "wb") : NULL;
+    if (f) { fwrite(mdrt_get_sram(m)->bytes, 1, 0x2000, f); fclose(f); }
+}
 /* the window's Start on its Online page: the menu's rules and league (options_use has had them),
  * the league's save RAM (or, the League page says, a new cartridge's: none) */
 static const void *window_settings(size_t *size, void *user) { return native_net_settings(rules_online_fresh() ? NULL : sram_for(user), size); }
@@ -535,9 +550,10 @@ void native_frame_done(long frame, int wait)
         mdrt_vdp_get_state(mdrt_get_vdp(native_m), &v);
         ram_pack(ram);
         mdrt_sram *s = mdrt_get_sram(native_m);
-        fprintf(hashes, "%ld %016llx %016llx %016llx %016llx\n", frame, (unsigned long long)fnv(FNV0, ram, 0x10000),
+        fprintf(hashes, "%ld %016llx %016llx %016llx %016llx %016llx\n", frame, (unsigned long long)fnv(FNV0, ram, 0x10000),
                 (unsigned long long)fnv(fnv(fnv(fnv(FNV0, v.reg, 24), v.vram, 0x10000), v.cram, sizeof v.cram), v.vsram, sizeof v.vsram),
-                (unsigned long long)fnv(FNV0, z80_ram, 0x2000), (unsigned long long)fnv(FNV0, s->bytes, s->size));
+                (unsigned long long)fnv(FNV0, z80_ram, 0x2000), (unsigned long long)fnv(FNV0, s->bytes, s->size),
+                (unsigned long long)mdrt_sim_hash(native_m));
     }
     for (int i = 0; i < nwatch; i++) {
         uint16_t v = r16(ram_at(watch[i]), 0);
@@ -554,7 +570,7 @@ void native_frame_done(long frame, int wait)
         restarting = 1;
         native_quit();
     }
-    if (stop_after >= 0 && frame >= stop_after && !native_net_on()) {   /* (netplay: net.c ends it) */
+    if (stop_after >= 0 && frame >= stop_after && restart_frame < 0 && !native_net_on()) {   /* (netplay: net.c ends it; --restart-at: the game started again) */
         if (shot_path) write_ppm(shot_path);
         native_quit();
     }
@@ -687,6 +703,7 @@ int main(int argc, char **argv)
         league_next(league_arg);
         if (!sram_given) sram = league_sram(sram);
     }
+    if (headless && !sram_given) sram = NULL;             /* (headless: a player's save RAM only when --sram names it) */
     if (sram) make_parent(sram);                          /* (a copy run outside the repository has no out/) */
     if (state_file) make_parent(state_file);
     int inputs = 0;
@@ -705,7 +722,7 @@ int main(int argc, char **argv)
     }
     if (netopt.on && headless && crc32_of(rom_cart, ROM_SIZE) != NATIVE_ROM_CRC32) { fprintf(stderr, "netplay: %s is not the 1 MB US/Europe cartridge\n", rom); return 1; }
     if (snap) read_snapshot();
-    states = !lockstep_path && (!headless || load_state_path || save_state_path || script_requests || netopt.on);   /* (netplay: rollbacks load them) */
+    states = !lockstep_path && (!headless || load_state_path || save_state_path || script_requests || netopt.on || hashes_path);   /* (netplay: rollbacks load them; --hashes: the simulation's hash is of a state's parts) */
     rewind_states = !headless || script_requests;
     mdrt_config c = { 0 };
     c.fm_core = fm_core ? fm_core : fm_model_given ? mdrt_fm_core() : NULL;   /* (NULL: the window's settings) */
@@ -758,20 +775,21 @@ int main(int argc, char **argv)
         native_net_stop_at(stop_after);
     }
     if (lockstep_path || golden || netopt.on) sram = NULL;   /* lockstep, golden: save RAM blank, as the oracle's at power on (netplay: the host's, not written) */
-    FILE *f = sram ? fopen(sram, "rb") : NULL;            /* save RAM: as the window's platform keeps it */
-    if (f) { if (fread(mdrt_get_sram(m)->bytes, 1, 0x2000, f) != 0x2000) fprintf(stderr, "%s: short\n", sram); fclose(f); }
+    sram_read(m, sram);                                   /* save RAM: as the window's platform keeps it */
     native_game(m, NULL);
     while (restarting) {                                  /* --restart-at: the game again on a new console */
         restarting = 0;
+        sram_write(m, sram);                              /* (its save RAM kept, as the window's reset keeps it) */
         mdrt_free(m);
         if (!(m = mdrt_new(&c))) return 1;
+        sram_read(m, sram);
         if (golden) mdrt_set_hv_source(m, golden_hv, m);
         if (inputs) mdrt_set_pad_source(m, script_source, m);
         if (four_way) mdrt_pads_set_adaptor(mdrt_get_pads(m), MDRT_ADAPTOR_EA4WAY);
         native_game(m, NULL);
     }
     native_net_close();
-    if (sram && mdrt_get_sram(m)->dirty && (f = fopen(sram, "wb"))) { fwrite(mdrt_get_sram(m)->bytes, 1, 0x2000, f); fclose(f); }
+    sram_write(m, sram);
     if (wav) { wav_header(c.audio_rate); fclose(wav); }
     if (golden) fclose(golden);
     if (hashes) fclose(hashes);

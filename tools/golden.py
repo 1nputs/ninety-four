@@ -240,14 +240,22 @@ def keys(dirname):
 
 def restart(dirname):
     """power on, started again at frame 1500 in the same process: the 1000 frames after it are
-    those of a fresh power on (the restart's own line is the fresh run's first)"""
+    those of a fresh power on (the restart's own line is the fresh run's first), and so are their
+    --hashes lines, the simulation's hash with them: all a state holds, which netplay's desync
+    checks compare (a session started from the window's Online play page starts the game again
+    in the process, as this does)"""
     fresh, again = os.path.join(dirname, 'restart.fresh'), os.path.join(dirname, 'restart.golden')
-    errs = [run('restart', 1000, [], fresh)[1], run('restart', 2500, ['--restart-at', '1500'], again)[1]]
+    errs = [run('restart', 1000, ['--hashes', fresh + '.hashes'], fresh)[1],
+            run('restart', 1000, ['--restart-at', '1500', '--hashes', again + '.hashes'], again)[1]]
     err = next((e for e in errs if e), None)
     if not err:
         a, b = [l.split() for l in open(fresh)], [l.split() for l in open(again)]
         same = sum(1 for k in range(len(a)) if 1499 + k < len(b) and a[k] == b[1499 + k])
         err = None if same == len(a) and len(a) >= 990 else '%d of %d frames after it as a fresh power on\'s' % (same, len(a))
+    if not err:
+        a, b = [l.split() for l in open(fresh + '.hashes')], [l.split() for l in open(again + '.hashes')]
+        same = sum(1 for k in range(len(a)) if 1500 + k < len(b) and a[k] == b[1500 + k])
+        err = None if same == len(a) else '%d of %d frames after it hashed as a fresh power on\'s (frame and the simulation\'s hash too)' % (same, len(a))
     print('%-15s %s' % ('restart', err or 'the game started again: the %d frames after it as a fresh power on\'s' % sum(1 for _ in open(fresh))))
     return err is not None
 

@@ -356,6 +356,7 @@ void assnearest(struct Team *tm, struct SortObj *o);
 /* the 68k's d2 at the assignment dispatch (updateplayers: 6 or 9 for a player on the ice, else a
  * pad's changed buttons): assnearest reads it when its team has the puck (a register leak) */
 extern uint32_t assign_d2;
+#define ASSIGN_D2_START 6                               /* (at power on) */
 void check4check(struct SortObj *o);
 void asspassrec(struct Team *tm, struct SortObj *o);
 void SkateToTempTarget(struct SortObj *o);
