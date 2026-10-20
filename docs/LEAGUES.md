@@ -296,9 +296,9 @@ can reckon a league's checksum another way, and then its states from before will
 (the cartridge's own league keeps its states). Quick resume is a state too.
 
 Online (README.md, "Online play") the league is the host's: its package (a folder's files packed
-as `--pack-league` packs them, or the package as it is) goes to the other player before the game
-starts, and both build it from those bytes, so the other needs no copy and the two play the same
-league to the byte. The host's save RAM for it goes too; neither player's is written back.
+as `--pack-league` packs them, or the package as it is) goes to every other machine before the
+game starts, and each builds it from those bytes, so no one else needs a copy and all play the
+same league to the byte. The host's save RAM for it goes too; no one's is written back.
 
 ## The League page
 

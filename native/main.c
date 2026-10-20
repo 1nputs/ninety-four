@@ -13,7 +13,7 @@
  *              [--rule NAME=VALUE ...] [--league DIR] [--check-league DIR] [--export-league DIR]
  *              [--extract-rom HACK DIR] [--pack-league DIR FILE.zip] [--art-check | --art-map]
  *              [--hashes FILE] [--host [PORT] | --join ADDR[:PORT] | --peer ADDR[:PORT]] [--port PORT]
- *              [--delay N] [--name NAME] [--pads 1|2] [--net-sim MS,MS,%,%]
+ *              [--delay N] [--name NAME] [--here N] [--players N] [--net-sim MS,MS,%,%]
  *
  * --art-check (headless) counts every byte the VDP takes by DMA from the game's data and those in
  * no piece of the art map (art.c: every piece of art the game reads by number, the cartridge's
@@ -50,8 +50,8 @@
  * in leagues/, which plays it as it is). --host, --join and --peer play online (net.c: two
  * players from power on, the host pad 1; in the window it connects first; headless, each plays
  * its pad's script and the run ends at --frames once both have every button), --delay the input
- * delay, --pads 2 (the host's) two pads each with 4 Way Play, --net-sim a simulated network for
- * tests. --hashes FILE (headless) writes a line a frame
+ * delay, --here N the players at this machine, --players N a host's players in all (up to four
+ * machines; pads 3 or 4 played: 4 Way Play), --net-sim a simulated network for tests. --hashes FILE (headless) writes a line a frame
  * at its wait, the frame and hashes of work RAM, the VDP, Z80 RAM and save RAM, frames a rollback plays
  * again included (tools/netplay_check.py compares the last of each with a solo run's). */
 #include <setjmp.h>
@@ -725,7 +725,7 @@ int main(int argc, char **argv)
         o.net_identity = native_net_identity("");        /* (the menu's Online page) */
         o.net_settings = window_settings;
         o.options_session = rules_page_session;            /* (the pages in a session: the host's) */
-        o.net_pads = 2;                                   /* (two pads each: 4 Way Play, four players) */
+        o.net_pads = 4;                                   /* (up to four players online: 4 Way Play) */
         if (netopt.on) {                                  /* (the window connects, then powers on: by the command line's rules and league) */
             size_t n;
             const void *set = native_net_settings(sram_for(NULL), &n);
@@ -754,7 +754,7 @@ int main(int argc, char **argv)
         const void *set = native_net_settings(sram, &n);
         if (!native_net_open(&netopt, "", set, n, script_pad, err, sizeof err)) { fprintf(stderr, "netplay: %s\n", err); return 1; }
         if (!native_net_connect()) return 1;
-        mdrt_pads_set_adaptor(mdrt_get_pads(m), native_net_two_each() ? MDRT_ADAPTOR_EA4WAY : MDRT_ADAPTOR_NONE);   /* (the session's pads say: two each, 4 Way Play) */
+        mdrt_pads_set_adaptor(mdrt_get_pads(m), native_net_four_way() ? MDRT_ADAPTOR_EA4WAY : MDRT_ADAPTOR_NONE);   /* (the session's pads say: pads 3 or 4, 4 Way Play) */
         native_net_stop_at(stop_after);
     }
     if (lockstep_path || golden || netopt.on) sram = NULL;   /* lockstep, golden: save RAM blank, as the oracle's at power on (netplay: the host's, not written) */

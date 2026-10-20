@@ -53,7 +53,7 @@ const char *native_net_identity(const char *setup);     /* setup: the command li
 int native_net_open(const mdrt_net_options *o, const char *setup, const void *settings, size_t settings_size, native_input_fn input,
                     char *err, size_t errsize);
 int native_net_connect(void);                           /* headless: connected (0: refused, or gone; why on stderr) */
-int native_net_two_each(void);                          /* the session's players have two pads each (4 Way Play) */
+int native_net_four_way(void);                          /* the session plays pads 3 or 4 (EA's 4 Way Play in the ports) */
 void native_net_start(mdrt *m);                         /* at power on, the states' parts added */
 void native_net_stop_at(long frame);                    /* headless: the session ends at --frames */
 void native_net_wait(void);                             /* at each of the game's waits, before the handshake */

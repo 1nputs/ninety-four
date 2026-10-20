@@ -126,29 +126,31 @@ lengths are `on` / `off` and `classic` / `more`; the rink view is `classic` / `w
 
 ### Online play
 
-Two players, each at their own machine, over the internet or a LAN, with rollback: each game
-plays your buttons at once and guesses the other player's, and when theirs arrive different it
-plays the last few frames again with them before drawing the next, so neither of you waits. The
-menu's **Online play** page: your name; host, join a host, or both connecting at once (most home
-routers let that through without a forwarded port); the other's address and the port; this
-machine's LAN address; the input delay (frames between pressing and the game seeing it, 2 by
-default: more means fewer rollbacks over a long way); and, for the host, **Pads each**. Start
-connects, then the game powers on for both: the host is pad 1, the one who joined pad 2 (choose
-Players: Two - Head to Head, or Two - Teammates, on the setup screen). With two pads each, EA's
-4 Way Play is in the ports on both machines and four play: the host's players 1 and 2 on pads 1
-and 2, the other's on 3 and 4 (Players: Three or Four). From the command line: `--host [PORT]`,
-`--join ADDR[:PORT]`, `--peer ADDR[:PORT]` (both connecting, `--port` your own), `--delay N`,
-`--name NAME`, `--pads 2`.
+Two to four machines, over the internet or a LAN, with rollback: each game plays its own players'
+buttons at once and guesses the others', and when theirs arrive different it plays the last few
+frames again with them before drawing the next, so no one waits. The menu's **Online play** page:
+your name; host, join a host, or (two machines) both connecting at once (most home routers let
+that through without a forwarded port); the address and the port; this machine's LAN address;
+the input delay (frames between pressing and the game seeing it, 2 by default: more means fewer
+rollbacks over a long way); **Players here** (how many play at this machine: its players 1, 2 and
+3); and, for the host, **Players in all**. The host waits until they are all in, then the game
+powers on everywhere: the host's players on pads 1 onward, then each machine's as it joined. Two
+machines with a player each, choose Players: Two - Head to Head (or Two - Teammates) on the setup
+screen; four machines with one each, two with two, three with two and one and one, one and three:
+with pads 3 or 4 played EA's 4 Way Play is in the ports on every machine (Players: Three or Four).
+If anyone leaves, the game is over for everyone, each told who left. From the command line:
+`--host [PORT]`, `--join ADDR[:PORT]`, `--peer ADDR[:PORT]` (two machines both connecting,
+`--port` your own), `--delay N`, `--name NAME`, `--here N`, `--players N` (the host's).
 
 The game is the host's: its League and Game rules pages' choices and its save RAM (records,
-edited lines) go to the other player before the game starts, a league as its package (the NHL
-2026 edition's, every photo included, is about 1.7 MB), so the other needs no copy of it. While
-the session lasts both players' League and Game rules pages show the host's choices, greyed
-(their own come back after it), and the host's league stays on the other's League page until
-they quit. Nothing is saved from the session: neither player's save RAM is written back. The
-window's pause, slow motion, fast-forward, rewind, states and reset are not to be had while you
-play together. Both players need the same build of the game and the US/Europe cartridge, or the
-other is refused.
+edited lines) go to every other machine before the game starts, a league as its package (the NHL
+2026 edition's, every photo included, is about 1.7 MB), so no one else needs a copy of it. While
+the session lasts every machine's League and Game rules pages show the host's choices, greyed
+(their own come back after it), and the host's league stays on the others' League pages until
+they quit. Nothing is saved from the session: no one's save RAM is written back. The window's
+pause, slow motion, fast-forward, rewind, states and reset are not to be had while you play
+together. Every machine needs the same build of the game and the US/Europe cartridge, or it is
+refused.
 
 ## Leagues
 
@@ -250,10 +252,10 @@ tell us what it said.
   trips. `make golden-cross` builds the game and pulseman with Clang and checks the same runs
   against it: the game plays bit for bit the same whatever compiles it, as netplay between
   builds needs; `make golden-ubsan` checks them with the undefined behaviour sanitizer. `make
-  netplay-check` plays four sessions from power on (headless, over the loopback through a
+  netplay-check` plays seven sessions from power on (headless, over the loopback through a
   simulated network: delay, jitter, loss, duplicates; the host's league, rules and save RAM
-  sent; input delay 0; four players with 4 Way Play), each peer's every frame as a solo run of
-  the same buttons. `make rulestest` checks the game rules on the game's own routines (and the League page's
+  sent; input delay 0; two to four machines, 4 Way Play: two each, one each on four, two and
+  one and one, one and three), every machine's every frame as a solo run of the same buttons. `make rulestest` checks the game rules on the game's own routines (and the League page's
   ratings against the cards' for every player). `make leaguetest` checks the leagues: the
   cartridge's exported and built again, its tables and art the cartridge's; a 32-team one; 22 broken ones refused; and
   with hack ROMs in `../roms` (or `HACKS=`), each extracted, built to its teams, colours and art
@@ -266,8 +268,8 @@ tell us what it said.
   `native/romsrc.c` reads hacks, `native/art.c` the pictures, `docs/LEAGUES.md` the format), the
   League and Game rules pages. Rollback netplay (`native/net.c`: pulseman's `mdrt/netplay.h`,
   resuming at the game loop's wait as a state does; the window's Online play page, or `--host`,
-  `--join`, `--peer`; the host's league, rules and save RAM sent; four players with two pads
-  each). In pulseman: the console's state as a value, a client-owned clock
+  `--join`, `--peer`; the host's league, rules and save RAM sent; two to four machines, any
+  players at each, up to four). In pulseman: the console's state as a value, a client-owned clock
   with line-by-line drawing and an H-interrupt hook, a bus map, FM cores and models chosen at run
   time, a trace recorder, PNG and zip, the client's option pages, and vsync.
 - **Native state** (the owner's direction): the game's state is native structs (the 68000's
@@ -351,7 +353,7 @@ From the least ambitious to the most.
 - [ ] Lua scripting: overlays, stats, bots
 - [ ] Python bindings: headless training environments, automated tests
 - [ ] Replays and spectating
-- [x] Rollback netplay online: two players, or four with 4 Way Play (two each), the host's league, rules and save RAM sent to the other
+- [x] Rollback netplay online: two to four machines, up to four players (4 Way Play), the host's league, rules and save RAM sent to the others
 - [ ] The next game on the same method and runtime
 
 ## Greets

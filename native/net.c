@@ -1,6 +1,9 @@
-/* Netplay (pulseman's mdrt/netplay.h over mdrt/net_udp.h): two players, each on their own
- * machine, the host pad 1 and the guest pad 2, from power on; or two pads each, the host's choice
- * (--pads 2: EA's 4 Way Play in the ports on both, the host pads 1 and 2, the guest 3 and 4). The game's resumable point is the
+/* Netplay (pulseman's mdrt/netplay.h over mdrt/net_udp.h): two to four machines, a host and its
+ * guests, from power on; the players at each (--here, the Online page's Players here) on the
+ * pads in turn, the host's first, then each guest's as it came, up to the host's players in all
+ * (--players): two machines with one each, the host pad 1 and the guest pad 2; four with one each;
+ * two each; two and one and one ... EA's 4 Way Play is in the ports on every machine when pads 3
+ * or 4 are played. A player who leaves ends the game for all. The game's resumable point is the
  * game loop's wait (setvideo's, where states are taken: state.c), and a rollback goes on from there
  * as a loaded state does (restart_at native_resume_game_loop). The game plays whatever session its
  * console has (mdrt_get_net): the window's, made on its Online page or from the command line, or a
@@ -8,10 +11,10 @@
  * sent, the
  * host's for both (native_net_settings, made where the session is: the window's Start, or the
  * command line): the next game's rules, its league (a package: a folder's files packed), and its
- * save RAM; neither player's save RAM is written while the session lasts. Each player's buttons
- * are their own controls' (the window's players in turn; headless, their pad's script).
- * Headless, a run that reaches --frames waits there until both have every button up to it, then a
- * second more for the other, then says goodbye.
+ * save RAM; no player's save RAM is written while the session lasts. Each player's buttons are
+ * their own controls' (the window's players in turn; headless, their pads' scripts). Headless, a
+ * run that reaches --frames waits there until every machine has every button up to it: the host
+ * then a second more, and says goodbye; a guest until the host's goodbye.
  *
  * mdrt_net_frame is called at every wait before the handshake, as states are taken: a frame's
  * game code, then the session's turn, then the handshake reads the next frame's buttons. */
@@ -141,7 +144,8 @@ int native_net_open(const mdrt_net_options *o, const char *setup, const void *se
     if (!udp) return 0;
     mdrt_net_config c = { .role = o->role, .identity = native_net_identity(setup), .name = o->name, .delay = o->delay,
                           .window = 8, .rollback = 30, .check_every = 60, .settings = set, .settings_size = set ? set_size : 0 };
-    mdrt_net_options_pads(o, &c.host_pads, &c.guest_pads);
+    c.players = o->here;
+    c.players_total = o->players;
     c.link = mdrt_udp_link(udp);
     c.local_input = local_input;
     local_fn = input;
@@ -164,6 +168,16 @@ static mdrt_net *playing(void)
 
 int native_net_on(void) { return playing() != NULL || (headless && !started); }
 
+/* pads, for a person: "pad 2", "pads 1 and 2", "pads 2, 3 and 4" */
+static void pads_text(uint8_t pads, char *buf, size_t size)
+{
+    int n = 0, k = 0;
+    for (int p = 0; p < MDRT_PADS; p++) n += pads >> p & 1;
+    size_t at = (size_t)snprintf(buf, size, n == 1 ? "pad" : "pads");
+    for (int p = 0; p < MDRT_PADS && at < size; p++)
+        if (pads >> p & 1) at += (size_t)snprintf(buf + at, size - at, "%s%d", !k++ ? " " : k == n ? " and " : ", ", p + 1);
+}
+
 /* headless: connect, then the game powers on (native_net_start) */
 int native_net_connect(void)
 {
@@ -177,16 +191,20 @@ int native_net_connect(void)
     }
     mdrt_udp_lock(udp);
     headless = 1;
-    uint8_t pads = mdrt_net_pads(net);
-    fprintf(stderr, "netplay: playing with %s, %s, %s %s, input delay %d\n", mdrt_udp_peer(udp, peer, sizeof peer),
-            mdrt_net_is_host(net) ? "hosting" : "joined", pads & (pads - 1) ? "pads" : "pad",
-            pads == 1 ? "1" : pads == 2 ? "2" : pads == 3 ? "1 and 2" : "3 and 4", mdrt_net_delay(net));
-    const char *who = mdrt_net_peer_name(net);
-    fprintf(stderr, "netplay: %s has joined\n", who[0] ? who : mdrt_net_is_host(net) ? "player 2" : "player 1");
+    char mine[32];
+    pads_text(mdrt_net_pads(net), mine, sizeof mine);
+    fprintf(stderr, "netplay: playing with %s, %s, %s, input delay %d\n", mdrt_udp_peer(udp, peer, sizeof peer),
+            mdrt_net_is_host(net) ? "hosting" : "joined", mine, mdrt_net_delay(net));
+    for (int k = 0; k < mdrt_net_peers(net); k++) {       /* (who plays which) */
+        char pads[32];
+        const char *name = mdrt_net_name_of(net, k);
+        pads_text(mdrt_net_pads_of(net, k), pads, sizeof pads);
+        fprintf(stderr, "netplay: %s%s, %s\n", name[0] ? name : k ? "a guest" : "the host", k == mdrt_net_me(net) ? " (here)" : "", pads);
+    }
     return 1;
 }
 
-int native_net_two_each(void) { uint8_t p = net ? mdrt_net_pads(net) : 0; return (p & (p - 1)) != 0; }
+int native_net_four_way(void) { return net && (mdrt_net_all_pads(net) & 0xC); }
 
 mdrt_net *native_net(void) { return net; }
 mdrt_udp *native_net_udp(void) { return udp; }
@@ -218,11 +236,12 @@ static void over(mdrt_net *n)
     report(n);
 }
 
-/* the end of a headless run: every button up to the last frame known here and there, then a
- * second for the other */
+/* the end of a headless run: every button up to the last frame known on every machine; the host
+ * then a second more for the others and says goodbye, a guest waits for that (15 seconds at most) */
 static void finish(mdrt_net *n, int resumable)
 {
     uint64_t linger = 0;
+    int host = mdrt_net_is_host(n);
     for (;;) {
         int r = mdrt_net_frame(n, resumable);
         if (r == MDRT_NET_RESTART) restart_at(native_resume_game_loop);
@@ -235,7 +254,7 @@ static void finish(mdrt_net *n, int resumable)
         }
         mdrt_net_link l = mdrt_udp_link(udp);
         if (!linger && s.confirmed >= (uint32_t)stop_at && s.remote_has >= (uint32_t)stop_at && s.remote_frame >= (uint32_t)stop_at)
-            linger = l.ticks(l.user) + 1000000u;
+            linger = l.ticks(l.user) + (host ? 1000000u : 15000000u);
         if (linger && l.ticks(l.user) >= linger) break;
         mdrt_udp_wait(udp, 1);
     }
