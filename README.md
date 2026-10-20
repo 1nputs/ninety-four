@@ -142,12 +142,16 @@ If anyone leaves, the game is over for everyone, each told who left. From the co
 `--host [PORT]`, `--join ADDR[:PORT]`, `--peer ADDR[:PORT]` (two machines both connecting,
 `--port` your own), `--delay N`, `--name NAME`, `--here N`, `--players N` (the host's).
 
-The game is the host's: its League and Game rules pages' choices and its save RAM (records,
-edited lines) go to every other machine before the game starts, a league as its package (the NHL
-2026 edition's, every photo included, is about 1.7 MB), so no one else needs a copy of it. While
-the session lasts every machine's League and Game rules pages show the host's choices, greyed
-(their own come back after it), and the host's league stays on the others' League pages until
-they quit. Nothing is saved from the session: no one's save RAM is written back. The window's
+The game is the host's: its League and Game rules pages' choices go to every other machine
+before the game starts, a league as its package (the NHL 2026 edition's, every photo included, is
+about 1.7 MB), so no one else needs a copy of it, and with them the save RAM the game plays with:
+the host's own (its records and edited lines, the League page's **Save RAM online: yours**) or
+a new cartridge's (default lines, no records). Every machine must play the same save RAM, or the
+games would differ at once (the cartridge reads all of it at power on), so a guest's own is not
+used; and nothing is saved from the session: no one's save file is read for it or written by it,
+during it or after it while the game plays on alone. While the session lasts every machine's
+League and Game rules pages show the host's choices, greyed (their own come back after it), and
+the host's league stays on the others' League pages until they quit. The window's
 pause, slow motion, fast-forward, rewind, states and reset are not to be had while you play
 together. Every machine needs the same build of the game and the US/Europe cartridge, or it is
 refused.

@@ -91,8 +91,12 @@ static const uint8_t presets[3][RULE_COUNT] = {
     },
 };
 
-/* the page: the league (who plays: the cartridge's, or a folder of leagues/), the preset, then the rules */
-enum { P_LEAGUE, P_PRESET, P_RULES };
+/* the page: the league (who plays: the cartridge's, or a folder of leagues/) and the save RAM a
+ * host's online game plays with, the preset, then the rules */
+enum { P_LEAGUE, P_SAVE, P_PRESET, P_RULES };
+static const char *const save_names[2] = { "yours", "fresh" };
+static const char *const save_labels[2] = { "yours (records, lines)", "a new cartridge's" };
+static int online_fresh;                                /* (the next session's: a new cartridge's save RAM) */
 mdrt_sdl_option rule_page[P_RULES + RULE_COUNT];
 
 static void page_init(void)
@@ -102,6 +106,7 @@ static void page_init(void)
     int n = league_list(&names, &labels);
     static const mdrt_sdl_browse find = { "Choose a league: its folder, or a package", "Files", "leagues", ".zip", 1 };
     rule_page[P_LEAGUE] = (mdrt_sdl_option){ "rules.league", "League", n, names, labels, 0, 0, 0, 0, NULL, NULL, &find };
+    rule_page[P_SAVE] = (mdrt_sdl_option){ "rules.online_save", "Save RAM online", 2, save_names, save_labels, 0, 0, 0, 0, NULL, NULL, NULL };
     rule_page[P_PRESET] = (mdrt_sdl_option){ "rules.preset", "Preset", 4, preset_names, NULL, 0, 0, 0, 0, NULL, NULL, NULL };
     memcpy(rule_page + P_RULES, rule_options, sizeof rule_options);
 }
@@ -115,7 +120,7 @@ const mdrt_sdl_option *rules_page(int *count)
 
 /* the League page (its line, and below it what the league chosen holds) and the Game rules page */
 static mdrt_sdl_page pages[2] = {
-    { "League", "Custom rosters and assets", P_LEAGUE, 1 },
+    { "League", "Custom rosters and assets", P_LEAGUE, 2 },
     { "Game rules", "For every player, all game. Classic: the original", P_PRESET, 1 + RULE_COUNT },
 };
 
@@ -144,7 +149,7 @@ void rules_page_text(int page, const int *values, char *text, size_t size, void 
 int rules_page_changed(int which, int *values, void *user)
 {
     (void)user;
-    if (which == P_LEAGUE) return 0;
+    if (which == P_LEAGUE || which == P_SAVE) return 0;
     if (which == P_PRESET) {
         if (values[P_PRESET] == PRESET_CUSTOM) return 0;
         for (int i = 0; i < RULE_COUNT; i++) if (i != RULE_VIEW) values[P_RULES + i] = presets[values[P_PRESET]][i];
@@ -165,12 +170,13 @@ int rules_page_changed(int which, int *values, void *user)
 int rules_page_session(int *values, void *user)
 {
     uint8_t v[RULE_COUNT];
-    int sent, host;
-    if (!native_net_session(v, &sent, &host)) return 0;
+    int sent, host, fresh;
+    if (!native_net_session(v, &sent, &host, &fresh)) return 0;
     int k = host ? values[P_LEAGUE] : sent ? league_session_entry() : 0;   /* (the host: its own choice, which was sent) */
     if (k < 0) return 0;                                  /* (not listed yet: asked again) */
     if (k >= rule_page[P_LEAGUE].count) rule_page[P_LEAGUE].count = k + 1;
     values[P_LEAGUE] = k;
+    values[P_SAVE] = fresh;
     for (int i = 0; i < RULE_COUNT; i++) values[P_RULES + i] = v[i];
     rules_page_changed(P_RULES, values, user);            /* (the preset they are) */
     return 1;
@@ -180,6 +186,7 @@ void rules_page_use(const int *values, void *user)
 {
     char dir[600];
     league_next(league_list_dir(values[P_LEAGUE], dir, sizeof dir));   /* (NULL: the cartridge's) */
+    online_fresh = values[P_SAVE] == 1;
     rules_next(values + P_RULES, user);
 }
 
@@ -211,6 +218,8 @@ void rules_next(const int *values, void *user)
 }
 
 void rules_power_on(void) { memcpy(rules, next, sizeof rules); }
+
+int rules_online_fresh(void) { return online_fresh; }
 
 void rules_next_get(uint8_t *v) { memcpy(v, next, sizeof next); }
 

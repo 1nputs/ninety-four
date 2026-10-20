@@ -233,8 +233,8 @@ static void rom_use(const uint8_t *b, size_t n, void *user) { (void)n; (void)use
 static const char *sram_base;
 static const char *sram_for(void *user) { (void)user; return league_sram(sram_base); }
 /* the window's Start on its Online page: the menu's rules and league (options_use has had them),
- * the league's save RAM */
-static const void *window_settings(size_t *size, void *user) { return native_net_settings(sram_for(user), size); }
+ * the league's save RAM (or, the League page says, a new cartridge's: none) */
+static const void *window_settings(size_t *size, void *user) { return native_net_settings(rules_online_fresh() ? NULL : sram_for(user), size); }
 
 /* --extract-rom HACK DIR: a hack's league (one made on the 32-team template) written as a folder,
  * read from it as data (romsrc.c): 0, -1 */

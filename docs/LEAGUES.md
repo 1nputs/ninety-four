@@ -298,7 +298,8 @@ can reckon a league's checksum another way, and then its states from before will
 Online (README.md, "Online play") the league is the host's: its package (a folder's files packed
 as `--pack-league` packs them, or the package as it is) goes to every other machine before the
 game starts, and each builds it from those bytes, so no one else needs a copy and all play the
-same league to the byte. The host's save RAM for it goes too; no one's is written back.
+same league to the byte. The host's save RAM for it goes too (or a new cartridge's, as its League
+page says); no one's save file is written, during the session or after it.
 
 ## The League page
 
