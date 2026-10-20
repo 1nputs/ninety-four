@@ -65,7 +65,7 @@ const void *native_net_settings(const char *sram, size_t *size);
 void native_net_power_on(mdrt *m);                      /* in a session: its settings the next game's (before the rules and league power on) */
 /* the session's rules (RULE_COUNT of them) into v, whether its league is one sent and whether this
  * player hosts it: 1, or 0 when the game has no session's settings (yet) */
-int native_net_session(uint8_t *v, int *sent, int *host, int *fresh);   /* (fresh: a new cartridge's save RAM) */
+int native_net_session(uint8_t *v, int *sent, int *host);
 mdrt_net *native_net(void);                             /* the command line's session, and its link */
 mdrt_udp *native_net_udp(void);
 void native_net_close(void);
@@ -86,7 +86,6 @@ void rules_page_detail(int which, int value, char *text, size_t size, void *user
 void rules_page_use(const int *values, void *user);
 int rules_page_changed(int which, int *values, void *user);
 int rules_page_session(int *values, void *user);        /* the session's choices, for the pages (options_session) */
-int rules_online_fresh(void);                           /* a host's online game with a new cartridge's save RAM (the League page's) */
 const char *rules_arg(const char *arg);   /* NULL, or what is wrong */
 int rules_classic(void);                 /* the next game's are all the original's */
 void rules_power_on(void);

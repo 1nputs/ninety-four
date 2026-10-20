@@ -60,7 +60,7 @@ const char *native_net_identity(const char *setup)
  * a package's bytes) */
 static uint8_t *settings;
 static uint8_t session_rules[RULE_COUNT];               /* the settings the game plays by (the window's pages show them) */
-static int session_league, session_host, session_fresh;
+static int session_league, session_host;
 static atomic_int session_known;
 
 const void *native_net_settings(const char *sram, size_t *size)
@@ -111,18 +111,16 @@ static const char *settings_use(mdrt *m, const uint8_t *b, size_t size)
     rules_next_get(session_rules);
     session_league = n != 0;
     session_host = mdrt_net_is_host(mdrt_get_net(m));
-    session_fresh = sn == 0;
     atomic_store(&session_known, 1);
     return NULL;
 }
 
-int native_net_session(uint8_t *v, int *sent, int *host, int *fresh)
+int native_net_session(uint8_t *v, int *sent, int *host)
 {
     if (!atomic_load(&session_known)) return 0;
     memcpy(v, session_rules, RULE_COUNT);
     *sent = session_league;
     *host = session_host;
-    *fresh = session_fresh;
     return 1;
 }
 

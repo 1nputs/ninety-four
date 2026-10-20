@@ -134,7 +134,7 @@ your name; host, join a host, or (two machines) both connecting at once (most ho
 that through without a forwarded port); the address and the port; this machine's LAN address;
 the input delay (frames between pressing and the game seeing it, 2 by default: more means fewer
 rollbacks over a long way); **Players here** (how many play at this machine: its players 1, 2 and
-3); and, for the host, **Players in all**. The host waits until they are all in, then the game
+3); and, for the host, **Players in all** and **Save RAM** (below). The host waits until they are all in, then the game
 powers on everywhere: the host's players on pads 1 onward, then each machine's as it joined. Two
 machines with a player each, choose Players: Two - Head to Head (or Two - Teammates) on the setup
 screen; four machines with one each, two with two, three with two and one and one, one and three:
@@ -146,8 +146,8 @@ If anyone leaves, the game is over for everyone, each told who left. From the co
 The game is the host's: its League and Game rules pages' choices go to every other machine
 before the game starts, a league as its package (the NHL 2026 edition's, every photo included, is
 about 1.7 MB), so no one else needs a copy of it, and with them the save RAM the game plays with:
-the host's own (its records and edited lines, the League page's **Save RAM online: yours**) or
-a new cartridge's (default lines, no records). Every machine must play the same save RAM, or the
+the host's own (its records and edited lines: the Online play page's **Save RAM**, yours) or a
+new cartridge's (default lines, no records). Every machine must play the same save RAM, or the
 games would differ at once (the cartridge reads all of it at power on), so a guest's own is not
 used; and nothing is saved from the session: no one's save file is read for it or written by it,
 during it or after it while the game plays on alone. While the session lasts every machine's

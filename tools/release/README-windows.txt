@@ -65,8 +65,8 @@ by default; the host's port must be reachable, forwarded on its router for UDP);
 instead both connect at once, which most home routers let through without a forwarded port. When
 everyone is in, the game powers on everywhere: the host's players on pads 1 onward, then each
 machine's as it joined; with pads 3 or 4 played, EA's 4 Way Play is in the ports (Players: Three
-or Four). The host's league, game rules and save RAM (its own, or a new cartridge's: the League
-page's Save RAM online) go to everyone, and nothing is saved from an online game. If anyone
+or Four). The host's league, game rules and save RAM (its own, or a new cartridge's: the host's
+Save RAM on the same page) go to everyone, and nothing is saved from an online game. If anyone
 leaves, the game is over for everyone. Every machine needs this same build and the US/Europe
 cartridge.
 

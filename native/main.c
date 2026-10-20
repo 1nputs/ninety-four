@@ -248,8 +248,8 @@ static void sram_write(mdrt *m, const char *path)
     if (f) { fwrite(mdrt_get_sram(m)->bytes, 1, 0x2000, f); fclose(f); }
 }
 /* the window's Start on its Online page: the menu's rules and league (options_use has had them),
- * the league's save RAM (or, the League page says, a new cartridge's: none) */
-static const void *window_settings(size_t *size, void *user) { return native_net_settings(rules_online_fresh() ? NULL : sram_for(user), size); }
+ * the league's save RAM (or, the Online page's Save RAM says, a new cartridge's: none) */
+static const void *window_settings(size_t *size, int fresh, void *user) { return native_net_settings(fresh ? NULL : sram_for(user), size); }
 
 /* --extract-rom HACK DIR: a hack's league (one made on the 32-team template) written as a folder,
  * read from it as data (romsrc.c): 0, -1 */
@@ -742,6 +742,7 @@ int main(int argc, char **argv)
         o.pages = rules_pages(&o.npages);
         o.net_identity = native_net_identity("");        /* (the menu's Online page) */
         o.net_settings = window_settings;
+        o.net_save_ram = 1;                               /* (the host's Online page: Save RAM, its own or a new cartridge's) */
         o.options_session = rules_page_session;            /* (the pages in a session: the host's) */
         o.net_pads = 4;                                   /* (up to four players online: 4 Way Play) */
         if (netopt.on) {                                  /* (the window connects, then powers on: by the command line's rules and league) */
