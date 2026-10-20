@@ -26,5 +26,7 @@
 	<string>11.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Online play reaches the other players' machines on your network.</string>
 </dict>
 </plist>
