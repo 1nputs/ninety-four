@@ -80,7 +80,8 @@ Esc (or a controller's Back button) opens it; arrows and Enter, or the d-pad, A 
   controls (pick one and press the new key, with Shift, Ctrl or Alt if you like).
 
 All of it is kept in `settings.ini`, in the folder you run the game from, beside its saves; you
-can edit it while the game is closed. On a Mac, hold Fn for the function keys.
+can edit it while the game is closed. The macOS app opened from the Finder keeps them in
+`~/Library/Application Support/ninety-four`. On a Mac, hold Fn for the function keys.
 
 ### Game rules
 
@@ -214,8 +215,9 @@ make nhl94
 ./build/nhl94 --rom "/path/to/NHL 94.gen"
 ```
 
-**macOS** (not tried yet). Apple's `gcc` is really Clang, so install GCC from
-[Homebrew](https://brew.sh) and name it:
+**macOS** (cross-built here with Zig's Clang for Apple Silicon and Intel, not yet run on a Mac).
+To build it there, install GCC from [Homebrew](https://brew.sh) and name it (Apple's `gcc` is
+really Clang):
 
 ```
 brew install gcc sdl2 pkg-config
@@ -223,7 +225,7 @@ make CC=gcc-15 CXX=g++-15 nhl94          # the version brew installed: ls $(brew
 ./build/nhl94 --rom "/path/to/NHL 94.gen"
 ```
 
-**Windows** (cross-built here with MinGW-w64 GCC 14 without a warning, not yet run on Windows),
+**Windows** (cross-built here with MinGW-w64 GCC 14 without a warning, and run on Windows),
 with [MSYS2](https://www.msys2.org), in its *UCRT64* shell:
 
 ```
@@ -237,6 +239,11 @@ The C++ runtime is linked in, so outside the MSYS2 shell `build/nhl94.exe` needs
 
 If a compiler newer than these warns about something, `make WERROR= nhl94` builds anyway; please
 tell us what it said.
+
+`make release VERSION=X` makes the downloads for all three from clean at the commit checked out
+(`tools/release.sh`, which says what it needs: MinGW-w64, Zig, SDL2's macOS framework, llvm-lipo):
+`ninety-four-X-linux-x86_64.tar.gz`, `ninety-four-X-windows-x86_64.zip` and
+`ninety-four-X-macos-universal.zip`, a `ninety-four.app` for macOS 11 or newer.
 
 ## For agents: where this stands (19 October 2026)
 

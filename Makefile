@@ -15,8 +15,8 @@
 #                       hacks on the 32-team template (../roms or HACKS=) extracted
 #   make oracle         the hooked oracle core (build/nhl_oracle.so)
 #   make gen            regenerate the committed headers from ref/ and the asm rebuild
-#   make release VERSION=0.3.1  the downloads for Linux and Windows in out/release/v0.3.1, named
-#                       by the version (tools/release.sh; NOTES=FILE their notes, MINGW=DIR)
+#   make release VERSION=0.3.2  the downloads for Linux, Windows and macOS in out/release/v0.3.2,
+#                       named by the version (tools/release.sh; NOTES=FILE their notes)
 CC      ?= gcc
 WERROR  ?= -Werror
 WARN    := -Wall -Wextra -Wshadow -Wstrict-prototypes -Wmissing-prototypes -Wno-unused-parameter $(WERROR)
@@ -104,7 +104,7 @@ build/build_id.h: FORCE
 FORCE:
 $(BIN): $(NOBJ) mdrt
 	@mkdir -p $(dir $@) out
-	$(CC) $(CFLAGS) $(SANITIZE) -O2 -o $@ $(NOBJ) $(MDRTLIBS) $(SDLLIBS) -lm $(CXXLIB) $(NETLIB)
+	$(CC) $(CFLAGS) $(SANITIZE) -O2 $(LDFLAGS) -o $@ $(NOBJ) $(MDRTLIBS) $(SDLLIBS) -lm $(CXXLIB) $(NETLIB)
 mdrt:
 	@test -f $(MDRT)/Makefile || { echo "no pulseman at $(MDRT): git submodule update --init (or make MDRT=path/to/pulseman)"; exit 1; }
 	$(MAKE) -C $(MDRT) MODE=release B=$(MDRTB) sdl

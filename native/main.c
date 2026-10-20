@@ -617,6 +617,7 @@ static void make_parent(const char *path)
 
 int main(int argc, char **argv)
 {
+    mdrt_sdl_home("ninety-four");                         /* (macOS: the app from the Finder keeps its files in Application Support) */
     const char *rom = "NHL 94 (UE) [!].gen", *rom_given = NULL, *sram = "out/nhl94.srm", *league_arg = NULL;
     const char *export_dir = NULL, *check_dir = NULL, *extract_rom = NULL, *extract_dir = NULL, *pack_dir = NULL, *pack_zip = NULL;
     int sram_given = 0;
