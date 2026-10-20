@@ -163,6 +163,7 @@ def main():
     ap.add_argument('--build', help='the nhl94 to run (default build/nhl94)')
     ap.add_argument('--out', help="check: where the build's own runs go (default DIR-new)")
     a = ap.parse_args()
+    a.dir, a.out = os.path.abspath(a.dir), a.out and os.path.abspath(a.out)   # (reset's script, written there, is an --input)
     global NHL94
     if a.build:                                           # (it exports the roster sets the runs play too)
         NHL94 = rosterstest.NHL94 = os.path.abspath(a.build)
