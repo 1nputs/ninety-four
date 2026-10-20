@@ -15,6 +15,8 @@
 #                       hacks on the 32-team template (../roms or HACKS=) extracted
 #   make oracle         the hooked oracle core (build/nhl_oracle.so)
 #   make gen            regenerate the committed headers from ref/ and the asm rebuild
+#   make release VERSION=0.3.1  the downloads for Linux and Windows in out/release/v0.3.1, named
+#                       by the version (tools/release.sh; NOTES=FILE their notes, MINGW=DIR)
 CC      ?= gcc
 WERROR  ?= -Werror
 WARN    := -Wall -Wextra -Wshadow -Wstrict-prototypes -Wmissing-prototypes -Wno-unused-parameter $(WERROR)
@@ -161,6 +163,10 @@ build/relaytest: test/relaytest.c src/z80.c src/z80.h src/rom.c src/rom.h
 	@mkdir -p build
 	$(CC) $(CFLAGS) -Isrc -o $@ test/relaytest.c src/z80.c src/rom.c
 
+# the release's downloads, named by the version, built from clean at the commit checked out
+release:
+	tools/release.sh $(VERSION)
+
 oracle: build/nhl_oracle.so
 build/nhl_oracle.so: tools/hybrid/oracle_shim.c
 	$(MAKE) -s -f tools/hybrid/Makefile
@@ -193,4 +199,4 @@ gen:
 clean:
 	rm -rf build/captest build/oracle_shim.o build/nhl94 build/obj build/cross build/relaytest
 .PHONY: rulestest leaguetest test oracle clean nhl94 relaytest mdrt vectors lockstep runtime-check runtime-selfcheck golden golden-check \
-	golden-cross golden-ubsan netplay-check gen FORCE
+	golden-cross golden-ubsan netplay-check gen release FORCE
