@@ -16,7 +16,7 @@ void native_game(mdrt *m, void *user);
 void native_quit(void);
 void native_power_on(void);
 void native_power_on_again(void);                      /* (restart_at it) the game from its power on, on the console mdrt_power_on made new */
-void native_script_reset(void);                        /* at every wait: a script's RESET, alone (main.c) */
+void native_script_reset(void);                        /* at every wait: a script's RESET, or --load-at's state, alone (main.c) */
 /* after each frame: the frame count, for shots and the stop (main.c); wait: at one of the game's
  * vblank waits (else a vblank lockstep placed in the middle of its work) */
 void native_frame_done(long frame, int wait);
@@ -36,6 +36,8 @@ void native_resume_game_loop(void);
 void native_states_init(mdrt *m, const char *path, int rewind);   /* path: the F9 / F10 file */
 int native_load_state_file(const char *path);       /* 0: loaded (then run68k(native_resume_game_loop)) */
 void native_save_state_at(long frame, const char *path);   /* headless: at the first game loop wait from frame on */
+/* (a session's, the window's state_check) NULL when the session may load the state, else why not */
+const char *native_state_check(const void *state, size_t size, void *user);
 void native_states_wait(void);                       /* at each of the game's vblank waits, before the handshake */
 int native_at_game_loop_wait(void);                  /* (lockstep.c: the routines the game is in) */
 void native_track_routines(void);
@@ -60,10 +62,11 @@ void native_net_start(mdrt *m);                         /* at power on, the stat
 void native_net_stop_at(long frame);                    /* headless: the session ends at --frames */
 void native_net_wait(void);                             /* at each of the game's waits, before the handshake */
 int native_net_on(void);                                /* in a session (headless: from before power on) */
-/* the session's settings (the host's, sent to the guest before power on): the next game's rules,
- * its roster set as a package, and its save RAM (sram: the file, NULL or missing: blank). Made by the
- * player who may host (the window's Start, or the command line), applied by both at power on */
-const void *native_net_settings(const char *sram, size_t *size);
+/* the session's settings (the host's, sent to the guests before power on): the next game's rules
+ * and its roster set as a package (the save RAM is a new cartridge's on every machine). Made by the
+ * player who may host (the window's Start, or the command line), applied by all at power on */
+const void *native_net_settings(size_t *size);
+void native_net_load_at(long frame, const char *path);   /* headless, the host: --net-load, a state for everyone */
 void native_net_power_on(mdrt *m);                      /* in a session: its settings the next game's (before the rules and roster set power on) */
 /* the session's rules (RULE_COUNT of them) into v, whether its roster set is one sent and whether this
  * player hosts it: 1, or 0 when the game has no session's settings (yet) */
@@ -93,6 +96,7 @@ int rules_classic(void);                 /* the next game's are all the original
 void rules_power_on(void);
 size_t rules_state_save(void *user, uint8_t *out);
 int rules_state_load(void *user, const uint8_t *in, size_t size);
+int rules_state_rosters(const uint8_t *in, size_t size, uint64_t *hash);   /* a RULE part's roster set (0: the cartridge's): 0, -1 */
 
 /* roster sets (rosters.c; src/rosters.h): a folder of text files (teams.csv, players.csv ...), made the
  * game's tables at power on (its art past the cartridge); the cartridge's own when none */

@@ -57,8 +57,8 @@ Esc (or a controller's Back button) opens it; arrows and Enter, or the d-pad, A 
 - **Game ROM**: your cartridge dump, in a file browser.
 - **Reset**, and **Save state** / **Load state**: eight slots, each with a picture of the
   moment, in `states/` beside the game. States are taken during play (not in the menus or a
-  pause). Quit in the middle of a game and the next start puts you back where you were (quick
-  resume, an option).
+  pause). Quitting saves the **Autosave** (where you were, in play), first on the Load page: the
+  game always starts fresh, and loads it only when you choose it.
 - **Video**: a pixel-art upscaler (Scale2x, Scale3x or MMPX, which smooth the staircases without
   blurring or adding colours, or xBR, which blends its edges smooth); sharp, integer or fit
   scaling; square pixels or 4:3; the colours' levels (standard, full range or the console's own);
@@ -75,8 +75,8 @@ Esc (or a controller's Back button) opens it; arrows and Enter, or the d-pad, A 
 - **Rosters**: who plays (below).
 - **Game rules**: how the game plays (below).
 - **Online play**: two to four machines, any players at each (below).
-- **Options** and **Keys**: pause in background, fast-forward speed, quick resume, the FPS
-  counter, and every key of the pads and the
+- **Options** and **Keys**: fast-forward speed, the FPS counter, and every key of the pads and
+  the
   controls (pick one and press the new key, with Shift, Ctrl or Alt if you like).
 
 All of it is kept in `settings.ini`, in the folder you run the game from, beside its saves; you
@@ -134,7 +134,7 @@ frames again with them before drawing the next, so no one waits. The menu's **On
 that through without a forwarded port); the address and the port; this machine's LAN address;
 the input delay (frames between pressing and the game seeing it, 2 by default: more means fewer
 rollbacks over a long way); **Players here** (how many play at this machine: its players 1, 2 and
-3); and, for the host, **Total players** and **Save RAM** (below). The host waits until they are all in, then the game
+3); and, for the host, **Total players**. The host waits until they are all in, then the game
 powers on everywhere: the host's players on pads 1 onward, then each machine's as it joined. Two
 machines with a player each, choose Players: Two - Head to Head (or Two - Teammates) on the setup
 screen; four machines with one each, two with two, three with two and one and one, one and three:
@@ -145,19 +145,22 @@ If anyone leaves, the game is over for everyone, each told who left. From the co
 
 The game is the host's: its Rosters and Game rules pages' choices go to every other machine
 before the game starts, rosters as their package (the NHL 2026 edition's, every photo included, is
-about 1.7 MB), so no one else needs a copy of them, and with them the save RAM the game plays with:
-the host's own (its records and edited lines: the Online play page's **Save RAM**, yours) or a
-new cartridge's (default lines, no records). Every machine must play the same save RAM, or the
-games would differ at once (the cartridge reads all of it at power on), so a guest's own is not
-used; and nothing is saved from the session: no one's save file is read for it or written by it,
-during it or after it while the game plays on alone. While the session lasts every machine's
-Rosters and Game rules pages show the host's choices, greyed (their own come back after it), and
-the host's rosters stay on the others' Rosters pages until they quit. The window's
-pause, slow motion, fast-forward, rewind and states are not to be had while you play together,
-and only the host can reset: the menu's **Reset** (chosen twice) powers every machine's console on
-again at the same frame, the game from its start for everyone and the session going on, the save
-RAM as it is then (the cartridge's battery keeps it). Every machine needs the same build of the
-game and the US/Europe cartridge, or it is refused.
+about 1.7 MB), so no one else needs a copy of them. Every game online starts from a new
+cartridge (default lines, no records): every machine must play the same save RAM, or the games
+would differ at once, so no one's save file is read for it or written by it, during the session or
+after it while the game plays on alone. Seasons, lines and records go online in a state instead:
+anyone's **Save state** saves one every machine has played (all its buttons known), and the
+host's **Load state** loads one for everyone, at the same frame on every machine, the game and its
+save RAM as they were saved (a state of other rosters than the session's is refused, saying so;
+a guest's Load state says only the host can). So a season played alone goes online by saving a
+state, hosting, and loading it; and closing the window in a session saves the Autosave as ever.
+While the session lasts every machine's Rosters and Game rules pages show the host's choices,
+greyed (their own come back after it), and the host's rosters stay on the others' Rosters pages
+until they quit. The window's pause, slow motion, fast-forward and rewind are not to be had while
+you play together, and only the host can reset: the menu's **Reset** (chosen twice) powers every
+machine's console on again at the same frame, the game from its start for everyone and the
+session going on, the save RAM as it is then (the cartridge's battery keeps it). Every machine
+needs the same build of the game and the US/Europe cartridge, or it is refused.
 
 ## Rosters
 
@@ -266,10 +269,11 @@ tell us what it said.
   trips. `make golden-cross` builds the game and pulseman with Clang and checks the same runs
   against it: the game plays bit for bit the same whatever compiles it, as netplay between
   builds needs; `make golden-ubsan` checks them with the undefined behaviour sanitizer. `make
-  netplay-check` plays seven sessions from power on (headless, over the loopback through a
-  simulated network: delay, jitter, loss, duplicates; the host's rosters, rules and save RAM
+  netplay-check` plays nine sessions from power on (headless, over the loopback through a
+  simulated network: delay, jitter, loss, duplicates; the host's rosters and rules
   sent; input delay 0; two to four machines, 4 Way Play: two each, one each on four, two and
-  one and one, one and three), every machine's every frame as a solo run of the same buttons. `make rulestest` checks the game rules on the game's own routines (and the Rosters page's
+  one and one, one and three; the host's reset; a state with records loaded for everyone), every
+  machine's every frame as a solo run of the same buttons. `make rulestest` checks the game rules on the game's own routines (and the Rosters page's
   ratings against the cards' for every player). `make rosterstest` checks the rosters: the
   cartridge's exported and built again, its tables and art the cartridge's; a 32-team one; 22 broken ones refused; and
   with hack ROMs in `../roms` (or `HACKS=`), each extracted, built to its teams, colours and art
@@ -282,8 +286,9 @@ tell us what it said.
   `native/romsrc.c` reads hacks, `native/art.c` the pictures, `docs/ROSTERS.md` the format), the
   Rosters and Game rules pages. Rollback netplay (`native/net.c`: pulseman's `mdrt/netplay.h`,
   resuming at the game loop's wait as a state does; the window's Online play page, or `--host`,
-  `--join`, `--peer`; the host's rosters, rules and save RAM sent; two to four machines, any
-  players at each, up to four). In pulseman: the console's state as a value, a client-owned clock
+  `--join`, `--peer`; the host's rosters and rules sent; two to four machines, any players at
+  each, up to four; the host's reset, and states: anyone's saved, the host's loaded for
+  everyone). In pulseman: the console's state as a value, a client-owned clock
   with line-by-line drawing and an H-interrupt hook, a bus map, FM cores and models chosen at run
   time, a trace recorder, PNG and zip, the client's option pages, and vsync.
 - **Native state** (the owner's direction): the game's state is native structs (the 68000's
@@ -338,10 +343,9 @@ From the least ambitious to the most.
 - [x] Pixel-art upscalers: Scale2x, Scale3x, MMPX 2x and 4x, xBR 2x, 3x and 4x
 - [x] Screenshot key (PNG)
 - [x] Fast-forward, slow motion, frame step
-- [x] Pause in background
 - [x] Controller remapping, player slots, turbo, dead zones
 - [x] Capture: the replay (the last 20 seconds) and recordings, as GIFs
-- [x] Save slots with thumbnails; quick resume on quit and start (states during play)
+- [x] Save slots with thumbnails; the Autosave on quit (states during play)
 - [x] Game rules, the host's for every player (Classic: the original): period lengths, overtime, the weight bug fix, the second assist fix, plus/minus and checks, skating, burst, shots, puck, energy, penalties, streaks, presets, the rink view
 - [x] The rules as numbers: any value in a rule's range in `settings.ini` or `--rule`, named choices on the page
 - [x] Rosters of your own, up to 32 teams: teams, players, lines, colours and pictures in files, name banners drawn for new teams
@@ -367,7 +371,8 @@ From the least ambitious to the most.
 - [ ] Lua scripting: overlays, stats, bots
 - [ ] Python bindings: headless training environments, automated tests
 - [ ] Replays and spectating
-- [x] Rollback netplay online: two to four machines, up to four players (4 Way Play), the host's rosters, rules and save RAM sent to the others
+- [x] Rollback netplay online: two to four machines, up to four players (4 Way Play), the host's rosters and rules sent to the others
+- [x] States online: anyone saves one every machine played, the host loads one for everyone (seasons and records go online so)
 - [ ] The next game on the same method and runtime
 
 ## Greets

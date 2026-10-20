@@ -7,6 +7,7 @@
  * usage: nhl94 [--rom FILE] [--snap FILE | --boot] [--scale N] [--aspect] [--sram FILE]
  *              [--headless] [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE]
  *              [--input FILE] [--state FILE] [--load-state FILE] [--save-state FRAME:FILE]
+ *              [--load-at FRAME:FILE] [--net-load FRAME:FILE]
  *              [--lockstep FILE | --golden FILE] [--record DIR] [--fm-core nuked|ymfm]
  *              [--fm-model ym2612|ym3438] [--watch ADDR,...] [--restart-at FRAME]
  *              [--four-way] [--input2 FILE] [--input3 FILE] [--input4 FILE]
@@ -31,7 +32,10 @@
  * the working directory. --scale and --aspect set the window for this run (otherwise the
  * settings' size and aspect).
  * --load-state FILE starts from a native state; --save-state FRAME:FILE (headless) saves one at
- * the first game loop wait from that frame on. --record DIR has pulseman write the run's
+ * the first game loop wait from that frame on; --load-at FRAME:FILE (headless, alone) loads one at
+ * that frame's wait as a session loads the host's (the frames going on: a solo run of a session's),
+ * and --net-load FRAME:FILE (headless, the host) has the session load one for everyone from that
+ * frame on (it says at which). --record DIR has pulseman write the run's
  * .vdptrace, .padtrace and .sndtrace into DIR (make runtime-selfcheck replays them). --fm-core and
  * --fm-model choose pulseman's FM core (Nuked-OPN2 by default, or the settings' in the window)
  * and the chip (the YM2612 of the first consoles by default, or the later YM3438). In the window
@@ -92,6 +96,8 @@ static int states, rewind_states;       /* states on (the window, or --save-stat
 static long stop_after = -1, shots_every = 600;
 static int boot = 1;                    /* power on, unless --snap */
 static long restart_frame = -1;         /* --restart-at */
+static long load_at_frame = -1, net_load_frame = -1;   /* --load-at, --net-load */
+static const char *load_at_path, *net_load_path;
 static FILE *hashes;                    /* --hashes: a line a frame at its wait, frames played again included */
 static int restarting;
 static long run_offset;                 /* the game's frames less the console's, from the game's first frame */
@@ -249,9 +255,8 @@ static void sram_write(mdrt *m, const char *path)
     FILE *f = path && mdrt_get_sram(m)->dirty ? fopen(path, "wb") : NULL;
     if (f) { fwrite(mdrt_get_sram(m)->bytes, 1, 0x2000, f); fclose(f); }
 }
-/* the window's Start on its Online page: the menu's rules and roster set (options_use has had them),
- * the roster set's save RAM (or, the Online page's Save RAM says, a new cartridge's: none) */
-static const void *window_settings(size_t *size, int fresh, void *user) { return native_net_settings(fresh ? NULL : sram_for(user), size); }
+/* the window's Start on its Online page: the menu's rules and roster set (options_use has had them) */
+static const void *window_settings(size_t *size, void *user) { (void)user; return native_net_settings(size); }
 
 /* --extract-rom HACK DIR: a hack's roster set (one made on the 32-team template) written as a folder,
  * read from it as data (romsrc.c): 0, -1 */
@@ -521,6 +526,13 @@ void native_script_reset(void)
 {
     static long done = -1;
     long f = (long)mdrt_frame_count(native_m);
+    if (load_at_path && f == load_at_frame) {             /* --load-at: as a session loads the host's (netplay's turn comes next) */
+        const char *path = load_at_path;
+        load_at_path = NULL;
+        if (native_load_state_file(path)) native_quit();
+        mdrt_set_frame_count(native_m, (uint64_t)f);
+        restart_at(native_resume_game_loop);
+    }
     if (script_reset < 0 || f != script_reset || f == done) return;
     done = f;
     mdrt_power_on(native_m);
@@ -710,10 +722,19 @@ int main(int argc, char **argv)
             save_state_frame = atol(argv[++i]);
             save_state_path = strchr(argv[i], ':') + 1;
         }
+        else if (!strcmp(argv[i], "--load-at") && i + 1 < argc && strchr(argv[i + 1], ':')) {
+            load_at_frame = atol(argv[++i]);
+            load_at_path = strchr(argv[i], ':') + 1;
+        }
+        else if (!strcmp(argv[i], "--net-load") && i + 1 < argc && strchr(argv[i + 1], ':')) {
+            net_load_frame = atol(argv[++i]);
+            net_load_path = strchr(argv[i], ':') + 1;
+        }
         else {
             fprintf(stderr, "usage: %s [--rom FILE] [--snap FILE | --boot] [--scale N] [--aspect] [--sram FILE] [--headless]\n"
                             "       [--frames N] [--shot FILE.ppm] [--shots DIR --every N] [--wav FILE] [--input FILE]\n"
-                            "       [--state FILE] [--load-state FILE] [--save-state FRAME:FILE] [--lockstep FILE | --golden FILE]\n"
+                            "       [--state FILE] [--load-state FILE] [--save-state FRAME:FILE] [--load-at FRAME:FILE]\n"
+                            "       [--net-load FRAME:FILE] [--lockstep FILE | --golden FILE]\n"
                             "       [--record DIR] [--fm-core nuked|ymfm] [--fm-model ym2612|ym3438] [--watch ADDR,...]\n"
                             "       [--restart-at FRAME] [--four-way] [--input2 FILE] [--input3 FILE] [--input4 FILE]\n"
                             "       [--rule NAME=VALUE ...] (the game rules: native/rules.c) [--rosters DIR] (rosters.c)\n"
@@ -754,13 +775,16 @@ int main(int argc, char **argv)
     if (snap && load_state_path) { fprintf(stderr, "--snap or --load-state, not both\n"); return 2; }
     if (lockstep_path && !rules_classic()) { fprintf(stderr, "--lockstep: the original is played by the Classic rules only\n"); return 2; }
     if (lockstep_path && !rosters_next_is_cartridge()) { fprintf(stderr, "--lockstep: the original is played by the cartridge's teams only\n"); return 2; }
-    if (netopt.on && (snap || load_state_path || lockstep_path || restart_frame >= 0 || script_requests)) {
-        fprintf(stderr, "netplay: from power on, without --snap, --load-state, --lockstep, --restart-at or a script's requests\n");
+    if (netopt.on && (snap || load_state_path || lockstep_path || restart_frame >= 0 || script_requests || load_at_path)) {
+        fprintf(stderr, "netplay: from power on, without --snap, --load-state, --load-at, --lockstep, --restart-at or a script's requests\n");
         return 2;
     }
+    if (net_load_path && (!headless || netopt.role != MDRT_NET_HOST)) { fprintf(stderr, "--net-load: the host's, headless (--host)\n"); return 2; }
+    if (load_at_path && !headless) { fprintf(stderr, "--load-at: headless\n"); return 2; }
+    if (net_load_path) native_net_load_at(net_load_frame, net_load_path);
     if (netopt.on && headless && crc32_of(rom_cart, ROM_SIZE) != NATIVE_ROM_CRC32) { fprintf(stderr, "netplay: %s is not the 1 MB US/Europe cartridge\n", rom); return 1; }
     if (snap) read_snapshot();
-    states = !lockstep_path && (!headless || load_state_path || save_state_path || script_requests || netopt.on || hashes_path);   /* (netplay: rollbacks load them; --hashes: the simulation's hash is of a state's parts) */
+    states = !lockstep_path && (!headless || load_state_path || load_at_path || save_state_path || script_requests || netopt.on || hashes_path);   /* (netplay: rollbacks load them; --hashes: the simulation's hash is of a state's parts) */
     rewind_states = !headless || script_requests;
     mdrt_config c = { 0 };
     c.fm_core = fm_core ? fm_core : fm_model_given ? mdrt_fm_core() : NULL;   /* (NULL: the window's settings) */
@@ -779,13 +803,14 @@ int main(int argc, char **argv)
         o.pages = rules_pages(&o.npages);
         o.net_identity = native_net_identity("");        /* (the menu's Online page) */
         o.net_settings = window_settings;
-        o.net_save_ram = 1;                               /* (the host's Online page: Save RAM, its own or a new cartridge's) */
         o.net_reset = 1;                                  /* (the host's Reset in a session: the console for everyone, MDRT_NET_RESET) */
+        o.net_states = 1;                                 /* (states in a session: anyone's saved, the host's loaded for everyone) */
+        o.state_check = native_state_check;               /* (of the session's roster set) */
         o.options_session = rules_page_session;            /* (the pages in a session: the host's) */
         o.net_pads = 4;                                   /* (up to four players online: 4 Way Play) */
         if (netopt.on) {                                  /* (the window connects, then powers on: by the command line's rules and roster set) */
             size_t n;
-            const void *set = native_net_settings(sram_for(NULL), &n);
+            const void *set = native_net_settings(&n);
             if (!native_net_open(&netopt, "", set, n, window_pad, err, sizeof err)) { fprintf(stderr, "netplay: %s\n", err); return 1; }
             o.net = native_net();
             o.net_udp = native_net_udp();
@@ -806,15 +831,15 @@ int main(int argc, char **argv)
     if (golden) mdrt_set_hv_source(m, golden_hv, m);
     if (inputs) mdrt_set_pad_source(m, script_source, m);
     if (four_way) mdrt_pads_set_adaptor(mdrt_get_pads(m), MDRT_ADAPTOR_EA4WAY);
-    if (netopt.on) {                                      /* (from power on: the session's pads replace the scripts'; its save RAM the host's) */
+    if (netopt.on) {                                      /* (from power on: the session's pads replace the scripts'; its save RAM a new cartridge's) */
         size_t n;
-        const void *set = native_net_settings(sram, &n);
+        const void *set = native_net_settings(&n);
         if (!native_net_open(&netopt, "", set, n, script_pad, err, sizeof err)) { fprintf(stderr, "netplay: %s\n", err); return 1; }
         if (!native_net_connect()) return 1;
         mdrt_pads_set_adaptor(mdrt_get_pads(m), native_net_four_way() ? MDRT_ADAPTOR_EA4WAY : MDRT_ADAPTOR_NONE);   /* (the session's pads say: pads 3 or 4, 4 Way Play) */
         native_net_stop_at(stop_after);
     }
-    if (lockstep_path || golden || netopt.on) sram = NULL;   /* lockstep, golden: save RAM blank, as the oracle's at power on (netplay: the host's, not written) */
+    if (lockstep_path || golden || netopt.on) sram = NULL;   /* lockstep, golden: save RAM blank, as the oracle's at power on (netplay: a new cartridge's, not written) */
     sram_read(m, sram);                                   /* save RAM: as the window's platform keeps it */
     native_game(m, NULL);
     while (restarting) {                                  /* --restart-at: the game again on a new console */

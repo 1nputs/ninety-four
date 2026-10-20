@@ -73,14 +73,16 @@ by default; the host's port must be reachable, forwarded on its router for UDP);
 instead both connect at once, which most home routers let through without a forwarded port. When
 everyone is in, the game powers on everywhere: the host's players on pads 1 onward, then each
 machine's as it joined; with pads 3 or 4 played, EA's 4 Way Play is in the ports (Players: Three
-or Four). The host's rosters, game rules and save RAM (its own, or a new cartridge's: the host's
-Save RAM on the same page) go to everyone, and nothing is saved from an online game. The host's
-Reset (in the menu) starts the game again for everyone. If anyone leaves, the game is over for
+or Four). The host's rosters and game rules go to everyone, and every game online starts from a
+new cartridge (nothing is saved to anyone's save file). Seasons and records go online in a state:
+anyone's Save state saves one everyone played, and the host's Load state loads one for everyone
+(a state of other rosters than the session's is refused). The host's Reset (in the menu) starts
+the game again for everyone. If anyone leaves, the game is over for
 everyone. Every machine needs this same build and the US/Europe
 cartridge. When you host, allow incoming connections if macOS asks.
 
 Save slots: eight, each with a picture, on the menu's Save and Load pages (states are taken during
-play). Quit in the middle of a game and the next start puts you back where you were.
+play). Quitting saves the Autosave, first on the Load page: the game always starts fresh.
 
 Captures: the last 20 seconds are always kept; F10 (or the menu's Capture page) saves them and
 F11 records until pressed again, as GIFs (exact colours, 30 frames a second, no sound). The

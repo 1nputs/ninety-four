@@ -293,13 +293,15 @@ records, and edited lines), in a file named after its folder (or package) beside
 A saved state remembers its rosters' checksum and plays on only with those rosters: change the
 rosters' files (or extract them again) and their old states will not load. A new version of the game
 can reckon the rosters' checksum another way, and then their states from before will not load either
-(the cartridge's own rosters keep their states). Quick resume is a state too.
+(the cartridge's own rosters keep their states). The Autosave is a state too.
 
 Online (README.md, "Online play") the rosters are the host's: their package (a folder's files packed
 as `--pack-rosters` packs them, or the package as it is) goes to every other machine before the
 game starts, and each builds them from those bytes, so no one else needs a copy and all play the
-same rosters to the byte. The host's save RAM for them goes too (or a new cartridge's, as the host's
-Online play page says); no one's save file is written, during the session or after it.
+same rosters to the byte. The save RAM is a new cartridge's on every machine, and no one's save file
+is written, during the session or after it: records go online in a state, which the host loads for
+everyone (one of the session's rosters: a state of others is refused, as a guest has only the
+host's).
 
 ## The Rosters page
 

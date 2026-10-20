@@ -9,9 +9,12 @@
  * console has (mdrt_get_net): the window's, made on its Online page or from the command line, or a
  * headless run's own. The identity the peers compare: the build (its commit) and the ROM. What is
  * sent, the
- * host's for both (native_net_settings, made where the session is: the window's Start, or the
- * command line): the next game's rules, its roster set (a package: a folder's files packed), and its
- * save RAM; no player's save RAM is written while the session lasts. Each player's buttons are
+ * host's for all (native_net_settings, made where the session is: the window's Start, or the
+ * command line): the next game's rules and its roster set (a package: a folder's files packed).
+ * Every session plays from a new cartridge (save RAM blank), and no player's save RAM is written
+ * while it lasts: seasons and records go online in a state, the host's loaded for everyone (in the
+ * window its Load state; headless --net-load FRAME:FILE), which must be of the session's roster set
+ * (native_state_check). Each player's buttons are
  * their own controls' (the window's players in turn; headless, their pads' scripts). Headless, a
  * run that reaches --frames waits there until every machine has every button up to it: the host
  * then a second more, and says goodbye; a guest until the host's goodbye.
@@ -54,32 +57,26 @@ const char *native_net_identity(const char *setup)
     return identity;
 }
 
-/* ---- the session's settings: the host's, the next game's for both ----------------------------------
- * "N94S", a version byte (1), then little-endian: the rules (a count byte, each rule's value), save
- * RAM (a u16 size, 0 for blank or 0x2000, the bytes), the roster set (a u32 size, 0 for the cartridge's,
- * a package's bytes) */
+/* ---- the session's settings: the host's, the next game's for all ----------------------------------
+ * "N94S", a version byte (2), then little-endian: the rules (a count byte, each rule's value), the
+ * roster set (a u32 size, 0 for the cartridge's, a package's bytes) */
 static uint8_t *settings;
 static uint8_t session_rules[RULE_COUNT];               /* the settings the game plays by (the window's pages show them) */
 static int session_rosters, session_host;
 static atomic_int session_known;
 
-const void *native_net_settings(const char *sram, size_t *size)
+const void *native_net_settings(size_t *size)
 {
-    static uint8_t s[0x2000];
     uint8_t v[RULE_COUNT], *pkg;
     long n = rosters_next_package(&pkg);
     if (n < 0) { fprintf(stderr, "netplay: the roster set: %s: the session plays the cartridge's teams\n", rosters_error()); n = 0; }
-    FILE *f = sram ? fopen(sram, "rb") : NULL;            /* (none: blank, as a new cartridge's) */
-    size_t sn = f && fread(s, 1, sizeof s, f) == sizeof s ? sizeof s : 0;
-    if (f) fclose(f);
     rules_next_get(v);
-    size_t total = 5 + 1 + RULE_COUNT + 2 + sn + 4 + (size_t)n;
+    size_t total = 5 + 1 + RULE_COUNT + 4 + (size_t)n;
     free(settings);
     if (!(settings = malloc(total))) { free(pkg); *size = 0; return NULL; }
     uint8_t *o = settings;
-    memcpy(o, "N94S", 4); o[4] = 1; o += 5;
+    memcpy(o, "N94S", 4); o[4] = 2; o += 5;
     *o++ = RULE_COUNT; memcpy(o, v, RULE_COUNT); o += RULE_COUNT;
-    *o++ = (uint8_t)sn; *o++ = (uint8_t)(sn >> 8); memcpy(o, s, sn); o += sn;
     for (int k = 0; k < 4; k++) *o++ = (uint8_t)((size_t)n >> 8 * k);
     if (n) memcpy(o, pkg, (size_t)n);
     free(pkg);
@@ -90,24 +87,18 @@ const void *native_net_settings(const char *sram, size_t *size)
 /* the settings b (size bytes) the next game's: NULL, or what is wrong */
 static const char *settings_use(mdrt *m, const uint8_t *b, size_t size)
 {
-    if (!b || size < 6 || memcmp(b, "N94S", 4) || b[4] != 1) return "none from this build";
+    if (!b || size < 6 || memcmp(b, "N94S", 4) || b[4] != 2) return "none from this build";
     size_t at = 5, k = b[at++];
-    if (size < at + k + 2) return "cut short";
+    if (size < at + k + 4) return "cut short";
     const uint8_t *v = b + at;
     at += k;
-    size_t sn = (size_t)(b[at] | b[at + 1] << 8);
-    at += 2;
-    if ((sn && sn != 0x2000) || size < at + sn + 4) return "its save RAM cut short";
-    const uint8_t *s = b + at;
-    at += sn;
     size_t n = (size_t)b[at] | (size_t)b[at + 1] << 8 | (size_t)b[at + 2] << 16 | (size_t)b[at + 3] << 24;
     at += 4;
     if (size != at + n) return "its roster set cut short";
     if (rules_next_set(v, (int)k) < 0) return "a rule out of range";
     if (rosters_next_bytes(b + at, n) < 0) return rosters_error();
-    mdrt_sram *r = mdrt_get_sram(m);
-    memset(r->bytes, 0, r->size);
-    if (sn) memcpy(r->bytes, s, sn < r->size ? sn : r->size);
+    mdrt_sram *r = mdrt_get_sram(m);                      /* (a new cartridge's on every machine, as pulseman's blank) */
+    memset(r->bytes, 0xFF, r->size);
     rules_next_get(session_rules);
     session_rosters = n != 0;
     session_host = mdrt_net_is_host(mdrt_get_net(m));
@@ -222,12 +213,45 @@ void native_net_start(mdrt *m)
 
 void native_net_stop_at(long frame) { stop_at = frame; }
 
+static long load_frame = -1;            /* --net-load (the host, headless): from this frame, the state of load_path for everyone */
+static const char *load_path;
+static uint32_t loaded_at;              /* (headless) the frame the session last loaded a state at */
+void native_net_load_at(long frame, const char *path) { load_frame = frame; load_path = path; }
+
+/* (headless, the host) --net-load's state for everyone, once its frame has come */
+static void send_load(mdrt_net *n)
+{
+    if (load_frame < 0 || !headless || !mdrt_net_is_host(n) || (long)mdrt_frame_count(console) < load_frame || mdrt_quiet(console)) return;
+    load_frame = -1;
+    FILE *f = fopen(load_path, "rb");
+    uint8_t *b = NULL;
+    long size = f && !fseek(f, 0, SEEK_END) ? ftell(f) : -1;
+    if (size > 0 && !fseek(f, 0, SEEK_SET) && (b = malloc((size_t)size)) && fread(b, 1, (size_t)size, f) != (size_t)size) { free(b); b = NULL; }
+    if (f) fclose(f);
+    const char *why = !b ? "cannot read it" : !mdrt_state_fits(console, b, (size_t)size) ? "not a state of this build" :
+                      native_state_check(b, (size_t)size, NULL);
+    if (!why && mdrt_net_load(n, b, (size_t)size)) why = "the session would not send it";
+    if (why) fprintf(stderr, "netplay: --net-load %s: %s\n", load_path, why);
+    else fprintf(stderr, "netplay: sending the state %s to everyone at frame %u\n", load_path, (unsigned)mdrt_frame_count(console));
+    free(b);
+}
+
 static void report(mdrt_net *n)
 {
     mdrt_net_stats s;
     mdrt_net_stats_get(n, &s);
-    fprintf(stderr, "netplay: frame %u, %ld rollbacks (%ld frames played again, at most %d), %ld frames given back, %ld desync checks, round trip %d ms, %ld resets\n",
-            (unsigned)s.frame, s.rollbacks, s.replayed, s.most_replayed, s.gave_back, s.checks, s.rtt_ms, s.resets);
+    fprintf(stderr, "netplay: frame %u, %ld rollbacks (%ld frames played again, at most %d), %ld frames given back, %ld desync checks, round trip %d ms, %ld resets, %ld loads\n",
+            (unsigned)s.frame, s.rollbacks, s.replayed, s.most_replayed, s.gave_back, s.checks, s.rtt_ms, s.resets, s.loads);
+}
+
+/* (headless) a state the session loaded, said once (a rollback across it loads it again) */
+static void said_load(mdrt_net *n)
+{
+    mdrt_net_stats s;
+    mdrt_net_stats_get(n, &s);
+    if (!headless || s.loaded_at == loaded_at) return;
+    loaded_at = s.loaded_at;
+    fprintf(stderr, "netplay: a state loaded for everyone at frame %u\n", (unsigned)loaded_at);
 }
 
 static void over(mdrt_net *n)
@@ -244,6 +268,7 @@ static void finish(mdrt_net *n, int resumable)
     int host = mdrt_net_is_host(n);
     for (;;) {
         int r = mdrt_net_frame(n, resumable);
+        said_load(n);
         if (r == MDRT_NET_RESTART) restart_at(native_resume_game_loop);
         if (r == MDRT_NET_RESET) restart_at(native_power_on_again);
         mdrt_net_stats s;
@@ -270,6 +295,7 @@ void native_net_wait(void)
     mdrt_net *n = playing();
     if (!n) return;                                       /* (none, or over: the console plays on alone) */
     int resumable = native_at_game_loop_wait(), r;
+    send_load(n);
     while ((r = mdrt_net_frame(n, resumable)) == MDRT_NET_WAIT) {
         if (mdrt_idle(console)) {                         /* (the window closing: goodbye) */
             mdrt_net_quit(n);
@@ -277,7 +303,8 @@ void native_net_wait(void)
         }
         if (headless) mdrt_udp_wait(udp, 1);              /* (the window waits in mdrt_idle) */
     }
-    if (r == MDRT_NET_RESTART) restart_at(native_resume_game_loop);
+    said_load(n);
+    if (r == MDRT_NET_RESTART) restart_at(native_resume_game_loop);   /* (a rollback, or the host's state for everyone) */
     if (r == MDRT_NET_RESET) restart_at(native_power_on_again);   /* (the host reset the console: powered on again, the game from its start) */
     if (r == MDRT_NET_ENDED || r == MDRT_NET_REFUSED) { over(n); return; }
     if (headless && stop_at >= 0 && (long)mdrt_frame_count(console) >= stop_at && !mdrt_quiet(console)) finish(n, resumable);

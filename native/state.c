@@ -7,10 +7,12 @@
  * game there (restart_at), from wherever it was.
  *
  * In the window: the menu saves a state into pulseman's slot and loads one (the file the request
- * names: mdrt_request_path; states/slotN.state, or quick resume's), F4 held steps back (a state every
+ * names: mdrt_request_path; states/slotN.state, or the Autosave's), F4 held steps back (a state every
  * third frame of play, ten seconds of them). Without a named file, --state FILE. A save asked for
- * outside play is not taken (the platform keeps the slot as it was). Headless: --save-state
- * FRAME:FILE, --load-state FILE
+ * outside play is not taken (the platform keeps the slot as it was). Online the window takes the
+ * session's states itself (one every machine played, the host's loaded for everyone: they are the
+ * console's, as these are), asking native_state_check whether the session may load one. Headless:
+ * --save-state FRAME:FILE, --load-state FILE, --load-at FRAME:FILE (main.c)
  * (tools/golden.py checks that a loaded state goes on bit for bit as the run it was taken from). */
 #include <stddef.h>
 #include <stdio.h>
@@ -180,6 +182,17 @@ int native_load_state_file(const char *path)
 }
 
 void native_save_state_at(long frame, const char *path) { save_frame = frame; save_path = path; }
+
+const char *native_state_check(const void *state, size_t size, void *user)
+{
+    (void)user;
+    size_t n = 0;
+    const uint8_t *rule = mdrt_state_part(state, size, "RULE", &n);
+    uint64_t hash;
+    if (!rule || rules_state_rosters(rule, n, &hash) < 0) return "that state is not one of this game's";
+    if (hash != rosters_hash()) return "that state's rosters are not the session's";   /* (a guest has the host's alone, by their checksum) */
+    return NULL;
+}
 
 void native_states_wait(void)
 {

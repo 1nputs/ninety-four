@@ -92,7 +92,7 @@ static const uint8_t presets[3][RULE_COUNT] = {
 };
 
 /* the page: the roster set (who plays: the cartridge's, or a folder of rosters/), the preset, then the
- * rules (the save RAM a host's online game plays with is the Online play page's: net_save_ram) */
+ * rules */
 enum { P_ROSTERS, P_PRESET, P_RULES };
 mdrt_sdl_option rule_page[P_RULES + RULE_COUNT];
 
@@ -303,6 +303,16 @@ size_t rules_state_save(void *user, uint8_t *out)
         memcpy(out + at + 9, dir, n);
     }
     return at + 9 + n;
+}
+
+int rules_state_rosters(const uint8_t *in, size_t size, uint64_t *hash)
+{
+    if (size < 2 || in[0] < 2 || in[0] > 4 || in[1] > RULE_COUNT) return -1;
+    size_t at = 2u + in[1] + sizeof rule_plusminus;
+    if (in[0] == 2 ? size != at : size < at + 9 || size != at + 9 + in[at + 8]) return -1;
+    *hash = 0;
+    if (in[0] >= 3) for (int k = 0; k < 8; k++) *hash = *hash << 8 | in[at + k];
+    return 0;
 }
 
 int rules_state_load(void *user, const uint8_t *in, size_t size)

@@ -6,10 +6,10 @@ run of the same buttons: the scripts moved later by the input delay (netplay's b
 game delay + 1 frames after they are pressed, a solo run's one). Every frame each machine finally
 played (the last line --hashes wrote for it: a rollback plays frames again) must be the solo
 run's: work RAM, the VDP's state, the Z80's RAM and save RAM, bit for bit. Each must play out its
-frames, its own desync checks agreeing. Only the host is given the game's settings (its roster set,
-rules and save RAM: user records, from a run of records_game_30s.txt), as the solo run is: the
-session sends them to the guests, whose own are none (no roster set, the Classic rules, blank save
-RAM). Each machine is given every pad's script and plays those of the pads the host gives it (in
+frames, its own desync checks agreeing. Only the host is given the game's settings (its roster set
+and rules), as the solo run is: the session sends them to the guests, whose own are none (no
+roster set, the Classic rules). Every machine's save RAM is a new cartridge's, as the solo run's.
+Each machine is given every pad's script and plays those of the pads the host gives it (in
 the order the guests come, the host's first).
 
 Two players: Two - Head to Head from power on (pad 1 picks it on the setup screen, then plays as
@@ -34,6 +34,11 @@ the setup screen), EA's 4 Way Play in the ports (the solo run's --four-way).
   reset    host and join, 30 ms +-10, 5% lost, delay 2: the host resets the console in the game
            (pad 1's RESET at frame 3600: every machine powered on again there, the session going on;
            the solo run's RESET the same frame, the script moved by the delay as the buttons are)
+  load     host and join, 30 ms +-10, 5% lost, delay 2: the host loads a state for everyone from
+           frame 4000 (--net-load: one a solo run of the same buttons saved at frame 3000, with user
+           records in its save RAM, from a run of records_game_30s.txt), every machine at the frame
+           the host's log says; the solo run loads it there (--load-at), so every frame after it is
+           the state's game, save RAM and all
 
     tools/netplay_check.py [NAME...]
 """
@@ -47,7 +52,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-NHL94 = os.path.join(ROOT, 'build', 'nhl94')
+NHL94 = os.environ.get('NHL94') or os.path.join(ROOT, 'build', 'nhl94')
 SCRIPTS = os.path.join(ROOT, 'tools', 'oracle', 'scripts')
 OUT = os.path.join(ROOT, 'out', 'netplay')
 
@@ -62,9 +67,11 @@ SCENARIOS = [
     ('twoone', 6000, [], 'join', 1, '25,15,5,1', None, [2, 1, 1]),
     ('onethree', 6000, [], 'join', 2, '30,10,5,1', None, [1, 3]),
     ('reset', 7000, [], 'join', 2, '30,10,5,1', 4, [1, 1]),
+    ('load', 7000, [], 'join', 2, '30,10,5,1', 5, [1, 1]),
 ]
 NEEDS = {'rosters': 'out/rosters/thirty-two'}
 RESETS = {'reset': 3600}                                  # (the host's pad 1 resets the console at this frame)
+LOADS = {'load': (4000, 3000)}                            # (the host loads from this frame a state the solo run saved at that)
 
 
 def entries(path):
@@ -165,7 +172,7 @@ def scenario(k, s):
     d = os.path.join(OUT, name)
     os.makedirs(d, exist_ok=True)
     for f in os.listdir(d):                               # (the last run's)
-        if f.endswith(('.hashes', '.log', '.srm')):
+        if f.endswith(('.hashes', '.log', '.srm', '.state')):
             os.remove(os.path.join(d, f))
     if seed is None:                                      # (4 Way Play: the lockstep vector's four scripts)
         pads = [entries(os.path.join(SCRIPTS, 'four_way_p%d.txt' % (j + 1))) for j in range(4)]
@@ -182,6 +189,16 @@ def scenario(k, s):
         solo_ins += [flag, os.path.join(d, 'solo%d.txt' % (j + 1))]
     base = [NHL94, '--headless', '--frames', str(frames)] + ins + ['--delay', str(delay), '--net-sim', sim]
     total = sum(layout)
+    limit = frames / 20 + 120
+    state, load = os.path.join(d, 'records.state'), []
+    if name in LOADS:                                     # (the state: a solo run's of the same buttons, with records)
+        start, at = LOADS[name]
+        r = subprocess.run([NHL94, '--headless', '--frames', str(at + 100)] + solo_ins +
+                           ['--sram', fresh(os.path.join(d, 'records.srm'), RECORDS), '--save-state', '%d:%s' % (at, state)] + opts,
+                           cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=limit)
+        if r.returncode != 0 or not os.path.exists(state):
+            return name, 'the state to load was not saved: ' + r.stderr[-200:], []
+        load = ['--net-load', '%d:%s' % (start, state)]
     who = 'abcd'[:len(layout)]
     ports = free_ports(2)
     procs = []
@@ -189,21 +206,19 @@ def scenario(k, s):
         here = ['--here', str(layout[j])] if layout[j] > 1 else []
         if how == 'peer':                                 # (two that both connect: both given the settings, either may host)
             role = ['--peer', '127.0.0.1:%d' % ports[1 - j], '--port', str(ports[j])]
-            mine = opts + ['--sram', fresh(os.path.join(d, w + '.srm'), RECORDS)]
+            mine = opts
         elif j == 0:
             role = ['--host', str(ports[0])] + (['--players', str(total)] if total > 2 else [])
-            mine = opts + ['--sram', fresh(os.path.join(d, w + '.srm'), RECORDS)]
+            mine = opts + load
         else:
             role = ['--join', '127.0.0.1:%d' % ports[0]]
-            mine = ['--sram', fresh(os.path.join(d, w + '.srm'))]
+            mine = []
         err = open(os.path.join(d, w + '.log'), 'w')
         procs.append((subprocess.Popen(base + role + here + mine + ['--hashes', os.path.join(d, w + '.hashes')], cwd=ROOT,
                                        stdout=subprocess.DEVNULL, stderr=err), err, w))
-    limit = frames / 20 + 120
-    srm = fresh(os.path.join(d, 'solo.srm'), RECORDS)
-    solo = subprocess.run([NHL94, '--headless', '--frames', str(frames)] + solo_ins + ['--sram', srm,
-                           '--hashes', os.path.join(d, 'solo.hashes')] + opts + (['--four-way'] if total > 2 else []),
-                          cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=limit)
+    solo_args = [NHL94, '--headless', '--frames', str(frames)] + solo_ins + ['--hashes', os.path.join(d, 'solo.hashes')] + opts + \
+        (['--four-way'] if total > 2 else [])
+    solo = None if load else subprocess.Popen(solo_args, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     bad = []
     for p, err, w in procs:
         try:
@@ -214,8 +229,26 @@ def scenario(k, s):
         err.close()
         if code != 0:
             bad.append('%s failed (%s)' % (w, code))
+    loaded = {}                                           # (each machine's: the frame the session loaded the state at)
+    for w in who:
+        m = re.search(r'a state loaded for everyone at frame (\d+)', open(os.path.join(d, w + '.log')).read())
+        if m:
+            loaded[w] = int(m.group(1))
+    if load:                                              # (the solo run: the state loaded where the session did)
+        if 'a' not in loaded:
+            return name, 'the host loaded no state: ' + '; '.join(bad), []
+        if any(loaded.get(w) != loaded['a'] for w in who):
+            bad.append('the machines loaded the state at frames %s' % loaded)
+        solo = subprocess.Popen(solo_args + ['--load-at', '%d:%s' % (loaded['a'], state)], cwd=ROOT, stdout=subprocess.DEVNULL,
+                                stderr=subprocess.PIPE, text=True)
+    try:
+        solo_err = solo.communicate(timeout=limit)[1]
+    except subprocess.TimeoutExpired:
+        solo.kill()
+        solo.communicate()
+        solo_err = 'a hang'
     if solo.returncode != 0:
-        return name, 'the solo run failed: ' + solo.stderr[-200:], []
+        return name, 'the solo run failed: ' + solo_err[-200:], []
     ref = last_lines(os.path.join(d, 'solo.hashes'))
     report = []
     for w in who:
@@ -224,7 +257,7 @@ def scenario(k, s):
         same = sum(1 for f in range(1, frames + 1) if got.get(f) == ref.get(f))
         first = next((f for f in range(1, frames + 1) if got.get(f) != ref.get(f)), None)
         m = re.search(r'frame (\d+), (\d+) rollbacks \((\d+) frames played again, at most (\d+)\), (\d+) frames given back, '
-                      r'(\d+) desync checks, round trip (-?\d+) ms, (\d+) resets', log)
+                      r'(\d+) desync checks, round trip (-?\d+) ms, (\d+) resets, (\d+) loads', log)
         pm = re.search(r'(hosting|joined), (pads? [0-9]+(?:(?:, | and )[0-9]+)*)', log)
         role = '%s (%s)' % ('host' if pm and pm.group(1) == 'hosting' else 'guest', pm.group(2) if pm else '?')
         if same != frames:
@@ -235,12 +268,15 @@ def scenario(k, s):
             bad.append('%s: only %s desync checks' % (role, m.group(6)))
         if m and name in RESETS and int(m.group(8)) < 1:
             bad.append('%s: the host\'s reset not played' % role)
+        if m and name in LOADS and int(m.group(9)) < 1:
+            bad.append('%s: the host\'s state not loaded' % role)
         if 'desync at' in log or 'lost' in log:
             bad.append('%s: %s' % (role, [l for l in log.splitlines() if 'desync at' in l or 'lost' in l][0]))
         if m:
             report.append('%s %d/%d as the solo run, %s rollbacks (%s frames again, at most %s), %s given back, %s checks, %s ms%s'
                           % (role, same, frames, m.group(2), m.group(3), m.group(4), m.group(5), m.group(6), m.group(7),
-                             ', powered on again %s time(s)' % m.group(8) if name in RESETS else ''))
+                             ', powered on again %s time(s)' % m.group(8) if name in RESETS else
+                             ', the state loaded at frame %s (%s time(s))' % (loaded.get(w), m.group(9)) if name in LOADS else ''))
     return name, '; '.join(bad) if bad else None, report
 
 
