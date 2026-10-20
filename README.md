@@ -153,9 +153,11 @@ used; and nothing is saved from the session: no one's save file is read for it o
 during it or after it while the game plays on alone. While the session lasts every machine's
 League and Game rules pages show the host's choices, greyed (their own come back after it), and
 the host's league stays on the others' League pages until they quit. The window's
-pause, slow motion, fast-forward, rewind, states and reset are not to be had while you play
-together. Every machine needs the same build of the game and the US/Europe cartridge, or it is
-refused.
+pause, slow motion, fast-forward, rewind and states are not to be had while you play together,
+and only the host can reset: the menu's **Reset** (chosen twice) powers every machine's console on
+again at the same frame, the game from its start for everyone and the session going on, the save
+RAM as it is then (the cartridge's battery keeps it). Every machine needs the same build of the
+game and the US/Europe cartridge, or it is refused.
 
 ## Leagues
 

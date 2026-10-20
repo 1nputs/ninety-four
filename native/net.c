@@ -226,8 +226,8 @@ static void report(mdrt_net *n)
 {
     mdrt_net_stats s;
     mdrt_net_stats_get(n, &s);
-    fprintf(stderr, "netplay: frame %u, %ld rollbacks (%ld frames played again, at most %d), %ld frames given back, %ld desync checks, round trip %d ms\n",
-            (unsigned)s.frame, s.rollbacks, s.replayed, s.most_replayed, s.gave_back, s.checks, s.rtt_ms);
+    fprintf(stderr, "netplay: frame %u, %ld rollbacks (%ld frames played again, at most %d), %ld frames given back, %ld desync checks, round trip %d ms, %ld resets\n",
+            (unsigned)s.frame, s.rollbacks, s.replayed, s.most_replayed, s.gave_back, s.checks, s.rtt_ms, s.resets);
 }
 
 static void over(mdrt_net *n)
@@ -245,6 +245,7 @@ static void finish(mdrt_net *n, int resumable)
     for (;;) {
         int r = mdrt_net_frame(n, resumable);
         if (r == MDRT_NET_RESTART) restart_at(native_resume_game_loop);
+        if (r == MDRT_NET_RESET) restart_at(native_power_on_again);
         mdrt_net_stats s;
         mdrt_net_stats_get(n, &s);
         if (r == MDRT_NET_ENDED || r == MDRT_NET_REFUSED) {   /* (the other done first, or gone) */
@@ -277,8 +278,9 @@ void native_net_wait(void)
         if (headless) mdrt_udp_wait(udp, 1);              /* (the window waits in mdrt_idle) */
     }
     if (r == MDRT_NET_RESTART) restart_at(native_resume_game_loop);
+    if (r == MDRT_NET_RESET) restart_at(native_power_on_again);   /* (the host reset the console: powered on again, the game from its start) */
     if (r == MDRT_NET_ENDED || r == MDRT_NET_REFUSED) { over(n); return; }
-    if (headless && stop_at >= 0 && native_frames() >= stop_at && !mdrt_quiet(console)) finish(n, resumable);
+    if (headless && stop_at >= 0 && (long)mdrt_frame_count(console) >= stop_at && !mdrt_quiet(console)) finish(n, resumable);
 }
 
 void native_net_close(void)

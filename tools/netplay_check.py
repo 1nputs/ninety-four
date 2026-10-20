@@ -31,6 +31,9 @@ the setup screen), EA's 4 Way Play in the ports (the solo run's --four-way).
   twoone   three machines: the host's two players and a player at each of two guests, 25 ms +-15,
            5% lost, delay 1
   onethree two machines: the host's one player and a guest's three, 30 ms +-10, 5% lost, delay 2
+  reset    host and join, 30 ms +-10, 5% lost, delay 2: the host resets the console in the game
+           (pad 1's RESET at frame 3600: every machine powered on again there, the session going on;
+           the solo run's RESET the same frame, the script moved by the delay as the buttons are)
 
     tools/netplay_check.py [NAME...]
 """
@@ -58,8 +61,10 @@ SCENARIOS = [
     ('four', 6000, [], 'join', 2, '30,10,5,1', None, [1, 1, 1, 1]),
     ('twoone', 6000, [], 'join', 1, '25,15,5,1', None, [2, 1, 1]),
     ('onethree', 6000, [], 'join', 2, '30,10,5,1', None, [1, 3]),
+    ('reset', 7000, [], 'join', 2, '30,10,5,1', 4, [1, 1]),
 ]
 NEEDS = {'league': 'out/leagues/thirty-two'}
+RESETS = {'reset': 3600}                                  # (the host's pad 1 resets the console at this frame)
 
 
 def entries(path):
@@ -166,6 +171,8 @@ def scenario(k, s):
         pads = [entries(os.path.join(SCRIPTS, 'four_way_p%d.txt' % (j + 1))) for j in range(4)]
     else:
         pads = [pad1(), pad2(seed, frames)]
+    if name in RESETS:
+        pads[0] = sorted(pads[0] + [(RESETS[name], 'RESET')], key=lambda e: e[0])
     ins, solo_ins = [], []
     for j, p in enumerate(pads):                          # (each machine plays its own pads' scripts)
         flag = '--input' if j == 0 else '--input%d' % (j + 1)
@@ -217,7 +224,7 @@ def scenario(k, s):
         same = sum(1 for f in range(1, frames + 1) if got.get(f) == ref.get(f))
         first = next((f for f in range(1, frames + 1) if got.get(f) != ref.get(f)), None)
         m = re.search(r'frame (\d+), (\d+) rollbacks \((\d+) frames played again, at most (\d+)\), (\d+) frames given back, '
-                      r'(\d+) desync checks, round trip (-?\d+) ms', log)
+                      r'(\d+) desync checks, round trip (-?\d+) ms, (\d+) resets', log)
         pm = re.search(r'(hosting|joined), (pads? [0-9]+(?:(?:, | and )[0-9]+)*)', log)
         role = '%s (%s)' % ('host' if pm and pm.group(1) == 'hosting' else 'guest', pm.group(2) if pm else '?')
         if same != frames:
@@ -226,11 +233,14 @@ def scenario(k, s):
             bad.append('%s did not play out: %s' % (role, log.strip().splitlines()[-1] if log.strip() else 'no log'))
         elif int(m.group(6)) < frames // 60 - 3:
             bad.append('%s: only %s desync checks' % (role, m.group(6)))
+        if m and name in RESETS and int(m.group(8)) < 1:
+            bad.append('%s: the host\'s reset not played' % role)
         if 'desync at' in log or 'lost' in log:
             bad.append('%s: %s' % (role, [l for l in log.splitlines() if 'desync at' in l or 'lost' in l][0]))
         if m:
-            report.append('%s %d/%d as the solo run, %s rollbacks (%s frames again, at most %s), %s given back, %s checks, %s ms'
-                          % (role, same, frames, m.group(2), m.group(3), m.group(4), m.group(5), m.group(6), m.group(7)))
+            report.append('%s %d/%d as the solo run, %s rollbacks (%s frames again, at most %s), %s given back, %s checks, %s ms%s'
+                          % (role, same, frames, m.group(2), m.group(3), m.group(4), m.group(5), m.group(6), m.group(7),
+                             ', powered on again %s time(s)' % m.group(8) if name in RESETS else ''))
     return name, '; '.join(bad) if bad else None, report
 
 

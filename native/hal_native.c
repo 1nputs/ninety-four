@@ -143,7 +143,7 @@ static void vblank(int wait)
     mdrt_vblank_end(native_m);
     if (wait && lockstep_vblank_again()) vblank(1);       /* (lockstep: the oracle's vblank code ran into the next one) */
 }
-void hal_wait_vblank(void) { native_net_wait(); native_states_wait(); vblank(1); }   /* (netplay's turn, then a state saved or loaded) */
+void hal_wait_vblank(void) { native_script_reset(); native_net_wait(); native_states_wait(); vblank(1); }   /* (a script's reset, netplay's turn, then a state saved or loaded) */
 
 long native_frames(void) { return frames; }
 long native_handshakes(void) { return handshakes; }

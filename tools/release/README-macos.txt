@@ -74,8 +74,9 @@ instead both connect at once, which most home routers let through without a forw
 everyone is in, the game powers on everywhere: the host's players on pads 1 onward, then each
 machine's as it joined; with pads 3 or 4 played, EA's 4 Way Play is in the ports (Players: Three
 or Four). The host's league, game rules and save RAM (its own, or a new cartridge's: the host's
-Save RAM on the same page) go to everyone, and nothing is saved from an online game. If anyone
-leaves, the game is over for everyone. Every machine needs this same build and the US/Europe
+Save RAM on the same page) go to everyone, and nothing is saved from an online game. The host's
+Reset (in the menu) starts the game again for everyone. If anyone leaves, the game is over for
+everyone. Every machine needs this same build and the US/Europe
 cartridge. When you host, allow incoming connections if macOS asks.
 
 Save slots: eight, each with a picture, on the menu's Save and Load pages (states are taken during

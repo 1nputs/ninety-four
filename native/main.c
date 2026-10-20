@@ -94,6 +94,8 @@ static int boot = 1;                    /* power on, unless --snap */
 static long restart_frame = -1;         /* --restart-at */
 static FILE *hashes;                    /* --hashes: a line a frame at its wait, frames played again included */
 static int restarting;
+static long run_offset;                 /* the game's frames less the console's, from the game's first frame */
+static int run_known;                   /* (run_offset taken, since native_game began) */
 static jmp_buf out;
 
 /* ---- the snapshot --------------------------------------------------------------------------- */
@@ -351,6 +353,7 @@ void native_game(mdrt *m, void *user)
     (void)user;
     native_m = m;
     native_tracking_reset();                              /* (the game may have run before: the window's reset) */
+    run_known = 0;
     native_net_start(m);                                  /* (netplay: from power on, by the host's settings) */
     native_net_power_on(m);
     rules_power_on();                                     /* (this game's rules and league; a state loaded brings its own) */
@@ -425,7 +428,12 @@ static void golden_present(void *user, const uint16_t *px, int w, int h, int pit
 /* --input FILE (--input2 to --input4 for pads 2-4): a pad's buttons from a script
  * ("FRAME:BUTTON+BUTTON,..." as tools/oracle/run.py takes, # lines are comments), held from that
  * frame (the handshakes so far) on. In pad 1's, SAVE, LOAD and REWIND are the window's save and load
- * (its menu) and F4, by the handshakes of this process (SAVE and LOAD once, at the handshake they are given) */
+ * (its menu) and F4, by the handshakes of this process (SAVE and LOAD once, at the handshake they are given),
+ * and RESET (once) the host's reset: in a session the host's buttons say it (MDRT_NET_RESET_BIT, every
+ * machine powered on again at the frame they are for), alone the console powers on again in place at
+ * that frame's wait as netplay's does (native_script_reset). Scripts go by the console's frames, which go
+ * on through such a reset, and so do --frames and the --hashes lines (the game's frames, those before
+ * the reset carried); the game's own count starts again */
 #define REQ(r) ((uint32_t)(r) << 16)
 typedef struct { long frame; uint32_t buttons; } script_entry;
 static struct { script_entry *e; size_t len; } scripts[MDRT_PADS];
@@ -440,6 +448,7 @@ static int read_script(const char *path, int pad)
         { "A", MDRT_PAD_A }, { "B", MDRT_PAD_B }, { "C", MDRT_PAD_C }, { "START", MDRT_PAD_START },
         { "X", MDRT_PAD_X }, { "Y", MDRT_PAD_Y }, { "Z", MDRT_PAD_Z }, { "MODE", MDRT_PAD_MODE },
         { "SAVE", REQ(MDRT_REQUEST_SAVE) }, { "LOAD", REQ(MDRT_REQUEST_LOAD) }, { "REWIND", REQ(MDRT_REQUEST_REWIND) },
+        { "RESET", MDRT_NET_RESET_BIT },
     };
     char line[65536];
     size_t cap = 0;
@@ -462,10 +471,8 @@ static int read_script(const char *path, int pad)
                 name += n + (name[n] == '+');
             }
             script[script_len++].buttons = b;
-            if (b >> 16) {
-                if (pad) { fprintf(stderr, "%s: SAVE, LOAD and REWIND are pad 1's\n", path); fclose(f); return 0; }
-                script_requests = 1;
-            }
+            if (pad && (b >> 16 || b & MDRT_NET_RESET_BIT)) { fprintf(stderr, "%s: SAVE, LOAD, REWIND and RESET are pad 1's\n", path); fclose(f); return 0; }
+            if (b >> 16) script_requests = 1;
         }
     }
     fclose(f);
@@ -482,13 +489,42 @@ static size_t script_at(int pad, long frame)
         if (scripts[pad].e[i].frame <= frame) now = i;
     return now;
 }
+/* a pad's buttons at a frame: RESET only at its own entry's frame (once), not held as buttons are */
+static uint16_t script_buttons(int pad, long frame)
+{
+    size_t i = script_at(pad, frame);
+    if (i == scripts[pad].len) return 0;
+    uint16_t b = (uint16_t)scripts[pad].e[i].buttons;
+    return scripts[pad].e[i].frame == frame ? b : (uint16_t)(b & ~MDRT_NET_RESET_BIT);
+}
+static long script_reset = -1;          /* alone: the frame a script's RESET was given for (the console powers on again at its wait) */
 static void script_source(void *user, uint16_t b[MDRT_PADS])
 {
     long frame = (long)mdrt_frame_count(user);
-    for (int pad = 0; pad < MDRT_PADS; pad++) {
-        size_t i = script_at(pad, frame);
-        b[pad] = i < scripts[pad].len ? (uint16_t)scripts[pad].e[i].buttons : 0;
-    }
+    for (int pad = 0; pad < MDRT_PADS; pad++) b[pad] = script_buttons(pad, frame);
+    if (b[0] & MDRT_NET_RESET_BIT) script_reset = frame + 1;
+    b[0] &= (uint16_t)~MDRT_NET_RESET_BIT;               /* (no pad's button) */
+}
+
+/* the console powered on again in place (mdrt_power_on done: the host's reset, MDRT_NET_RESET, or a
+ * script's RESET alone): the game from its power on as native_game starts it, by the same rules and
+ * league, at the wait of the frame the reset was given for, everything after it as on a new console */
+void native_power_on_again(void)
+{
+    rules_power_on();
+    league_power_on();
+    native_power_on();
+    native_hal_start(native_m, 0);
+    Start();
+}
+void native_script_reset(void)
+{
+    static long done = -1;
+    long f = (long)mdrt_frame_count(native_m);
+    if (script_reset < 0 || f != script_reset || f == done) return;
+    done = f;
+    mdrt_power_on(native_m);
+    restart_at(native_power_on_again);
 }
 /* the requests by this process's handshakes, not the game's frames (a state loaded puts those
  * back) */
@@ -507,8 +543,7 @@ static unsigned script_request(void *user)
 static uint16_t script_pad(int pad, int k)
 {
     (void)k;
-    size_t i = script_at(pad, native_frames());
-    return i < scripts[pad].len ? (uint16_t)scripts[pad].e[i].buttons : 0;
+    return script_buttons(pad, (long)mdrt_frame_count(native_m));   /* (the console's frames: on through a reset) */
 }
 
 /* netplay's local player in the window: the window's player k's controls (pad 1's for the first pad
@@ -542,6 +577,8 @@ static void write_ppm(const char *path)
 
 void native_frame_done(long frame, int wait)
 {
+    if (!run_known) { run_offset = frame - (long)mdrt_frame_count(native_m); run_known = 1; }
+    long run = (long)mdrt_frame_count(native_m) + run_offset;   /* (the game's frames, on through a reset in place: the console's go on, and a rollback puts them back) */
     if (wait) lockstep_check(frame);
     if (golden) golden_wait();
     if (hashes) {
@@ -550,7 +587,7 @@ void native_frame_done(long frame, int wait)
         mdrt_vdp_get_state(mdrt_get_vdp(native_m), &v);
         ram_pack(ram);
         mdrt_sram *s = mdrt_get_sram(native_m);
-        fprintf(hashes, "%ld %016llx %016llx %016llx %016llx %016llx\n", frame, (unsigned long long)fnv(FNV0, ram, 0x10000),
+        fprintf(hashes, "%ld %016llx %016llx %016llx %016llx %016llx\n", run, (unsigned long long)fnv(FNV0, ram, 0x10000),
                 (unsigned long long)fnv(fnv(fnv(fnv(FNV0, v.reg, 24), v.vram, 0x10000), v.cram, sizeof v.cram), v.vsram, sizeof v.vsram),
                 (unsigned long long)fnv(FNV0, z80_ram, 0x2000), (unsigned long long)fnv(FNV0, s->bytes, s->size),
                 (unsigned long long)mdrt_sim_hash(native_m));
@@ -570,7 +607,7 @@ void native_frame_done(long frame, int wait)
         restarting = 1;
         native_quit();
     }
-    if (stop_after >= 0 && frame >= stop_after && restart_frame < 0 && !native_net_on()) {   /* (netplay: net.c ends it; --restart-at: the game started again) */
+    if (stop_after >= 0 && run >= stop_after && restart_frame < 0 && !native_net_on()) {   /* (netplay: net.c ends it; --restart-at: the game started again) */
         if (shot_path) write_ppm(shot_path);
         native_quit();
     }
@@ -743,6 +780,7 @@ int main(int argc, char **argv)
         o.net_identity = native_net_identity("");        /* (the menu's Online page) */
         o.net_settings = window_settings;
         o.net_save_ram = 1;                               /* (the host's Online page: Save RAM, its own or a new cartridge's) */
+        o.net_reset = 1;                                  /* (the host's Reset in a session: the console for everyone, MDRT_NET_RESET) */
         o.options_session = rules_page_session;            /* (the pages in a session: the host's) */
         o.net_pads = 4;                                   /* (up to four players online: 4 Way Play) */
         if (netopt.on) {                                  /* (the window connects, then powers on: by the command line's rules and league) */

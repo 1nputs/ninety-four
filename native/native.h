@@ -15,6 +15,8 @@ void native_game(mdrt *m, void *user);
 /* stop the session (the window closed, the run's frames done, lockstep finished): back out of the game */
 void native_quit(void);
 void native_power_on(void);
+void native_power_on_again(void);                      /* (restart_at it) the game from its power on, on the console mdrt_power_on made new */
+void native_script_reset(void);                        /* at every wait: a script's RESET, alone (main.c) */
 /* after each frame: the frame count, for shots and the stop (main.c); wait: at one of the game's
  * vblank waits (else a vblank lockstep placed in the middle of its work) */
 void native_frame_done(long frame, int wait);

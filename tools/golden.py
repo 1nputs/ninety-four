@@ -257,6 +257,32 @@ def restart(dirname):
         same = sum(1 for k in range(len(a)) if 1500 + k < len(b) and a[k] == b[1500 + k])
         err = None if same == len(a) else '%d of %d frames after it hashed as a fresh power on\'s (frame and the simulation\'s hash too)' % (same, len(a))
     print('%-15s %s' % ('restart', err or 'the game started again: the %d frames after it as a fresh power on\'s' % sum(1 for _ in open(fresh))))
+    return err is not None or reset(dirname, fresh)
+
+
+def reset(dirname, fresh):
+    """pad 1's RESET at frame 1500 (the host's reset in a session, alone): the console powered on
+    again in place (mdrt_power_on) and the game from its start, the 1000 frames after it a fresh
+    power on's, golden lines and work RAM, VDP and Z80 RAM by --hashes; its save RAM kept as a
+    battery keeps it (a fresh run's game writes the same of its own a few hundred frames in)"""
+    script, again = os.path.join(dirname, 'reset.txt'), os.path.join(dirname, 'reset.golden')
+    with open(script, 'w') as f:
+        f.write('1500:RESET\n')
+    err = run('reset', 2500, ['--input', script, '--hashes', again + '.hashes'], again)[1]
+    if not err:
+        a, b = [l.split() for l in open(fresh)], [l.split() for l in open(again)]
+        n = min(len(a), len(b) - 1501)
+        same = sum(1 for k in range(n) if a[k] == b[1501 + k])
+        err = None if same == n and n >= 990 else '%d of %d frames after it as a fresh power on\'s' % (same, n)
+    if not err:
+        a, b = [l.split() for l in open(fresh + '.hashes')], [l.split() for l in open(again + '.hashes')]
+        n = min(len(a), len(b) - 1501)
+        same = sum(1 for k in range(n) if a[k][1:4] == b[1501 + k][1:4])
+        kept = next((k for k in range(n) if a[k][4] == b[1501 + k][4]), n)
+        later = sum(1 for k in range(kept, n) if a[k][4] == b[1501 + k][4])
+        err = None if same == n and later == n - kept else ('%d of %d frames after it hashed as a fresh power on\'s, the save RAM from frame %d %d'
+                                                            % (same, n, kept + 1, later))
+    print('%-15s %s' % ('reset', err or 'powered on again in place: the %d frames after it as a fresh power on\'s (its save RAM kept)' % sum(1 for _ in open(fresh))))
     return err is not None
 
 
