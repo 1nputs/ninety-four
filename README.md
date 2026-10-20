@@ -74,7 +74,7 @@ Esc (or a controller's Back button) opens it; arrows and Enter, or the d-pad, A 
   cartridge: set it, Reset, then choose Players: Three or Four in the game's setup screen).
 - **League**: who plays (below).
 - **Game rules**: how the game plays (below).
-- **Online play**: two players at their own machines (below).
+- **Online play**: two to four machines, any players at each (below).
 - **Options** and **Keys**: pausing when the window loses focus, fast-forward's speed, quick
   resume, the frames a second at the picture's top right, and every key of the pads and the
   controls (pick one and press the new key, with Shift, Ctrl or Alt if you like).
