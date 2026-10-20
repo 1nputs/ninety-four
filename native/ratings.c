@@ -1,4 +1,4 @@
-/* The ratings the League page shows (league.c): a player's overall rating as his card shows it,
+/* The ratings the Rosters page shows (rosters.c): a player's overall rating as his card shows it,
  * and a rating as the roster screen shows it, reckoned from his ratings and the cartridge's weights
  * without the game's RAM (the menu asks on the window's thread while a game plays, and CalcAttrib
  * keeps its sums in RAM). make rulestest checks both against the game's own (CalcAttrib,

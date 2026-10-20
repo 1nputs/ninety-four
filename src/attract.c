@@ -60,11 +60,11 @@ void DrawMatchupBitmaps(void)
     }
     printz(str_DrawMatchupBitmaps_1, sizeof str_DrawMatchupBitmaps_1);
     uint16_t t = g.VisTeam;
-    pal_load_w(0x13, &lg(t)->matchup[1][3], 2);          /* (TeamPalettes: colours 3 and 4 of its second) */
+    pal_load_w(0x13, &rosters_team(t)->matchup[1][3], 2);          /* (TeamPalettes: colours 3 and 4 of its second) */
     DrawTeamBitmap(t, g.teambitmapchars);
     printz(str_DrawMatchupBitmaps_2, sizeof str_DrawMatchupBitmaps_2);
     t = g.HomeTeam;
-    pal_load_w(0x11, &lg(t)->matchup[0][1], 2);          /* (colours 1 and 2 of its first) */
+    pal_load_w(0x11, &rosters_team(t)->matchup[0][1], 2);          /* (colours 1 and 2 of its first) */
     g.palfadenew[0x15] = 0xEEE;
     DrawTeamBitmap(t, 2);
     setteams();
@@ -72,18 +72,18 @@ void DrawMatchupBitmaps(void)
 }
 
 /* attract94.asm:DrawTeamBitmap. Rows d1 * 2 and the next of TeamBitmaps' map (no tiles) at
- * printx / printy from char d4 -> d4. A league with banners of its own draws each from its 22
+ * printx / printy from char d4 -> d4. A roster set with banners of its own draws each from its 22
  * tiles, put into the first 22 chars of the set (the home team's at char 2, as loaded; the
  * visitors' remapped, as LoadSetupTiles loads theirs): one banner of a set shows at a time. */
 uint16_t DrawTeamBitmap(uint16_t team, uint16_t chars)
 {
     uint32_t img = ART(TeamBitmaps), map = img + rd32(rom_ptr(img + 4));
-    if (team < LEAGUE_MAX && league.banner_tiles[team]) {
-        if (chars == 2) DoDMApro(league.banner_tiles[team], 0x16 * 16, (uint16_t)(chars << 5));
-        else remap(league.banner_tiles[team], SetupTilesRemap(), 0x16 * 16, (uint16_t)(chars << 5));
-        return dobitmap(img + rd32(rom_ptr(img)), LG(BannerSlotMap), SYM_NoTiles, 0, 0, 0xB, 2, chars, 0);
+    if (team < ROSTERS_MAX && rosters.banner_tiles[team]) {
+        if (chars == 2) DoDMApro(rosters.banner_tiles[team], 0x16 * 16, (uint16_t)(chars << 5));
+        else remap(rosters.banner_tiles[team], SetupTilesRemap(), 0x16 * 16, (uint16_t)(chars << 5));
+        return dobitmap(img + rd32(rom_ptr(img)), RS(BannerSlotMap), SYM_NoTiles, 0, 0, 0xB, 2, chars, 0);
     }
-    return dobitmap(img + rd32(rom_ptr(img)), map, SYM_NoTiles, 0, (uint16_t)(league_art(team) << 1), rd16(rom_ptr(map)), 2, chars, 0);   /* (its art) */
+    return dobitmap(img + rd32(rom_ptr(img)), map, SYM_NoTiles, 0, (uint16_t)(rosters_art(team) << 1), rd16(rom_ptr(map)), 2, chars, 0);   /* (its art) */
 }
 
 /* attract94.asm:VBlank_SetOptions. The setup screen's vblank: unless dfng, the sprites (when

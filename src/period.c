@@ -236,7 +236,7 @@ void updatePPTeamTime(void)
 /* period94.asm:GetTeamRating. The TeamRatings byte of team $28(a2). */
 uint16_t GetTeamRating(struct Team *tm)
 {
-    return lg(tm->team)->rating;
+    return rosters_team(tm->team)->rating;
 }
 
 /* period94.asm:ShortenMsgTimer. Cap msgtimer at 2, unless a second pad is on and a3 is not the
@@ -251,7 +251,7 @@ void ShortenMsgTimer(struct SortObj *o)
  * char */
 static uint16_t team_logo(uint16_t team, uint16_t chars)
 {
-    uint32_t bmp = lg(team)->logo;
+    uint32_t bmp = rosters_team(team)->logo;
     uint32_t map = bmp + rd32(rom_ptr(bmp + 4));
     logo_colours(team, 4);
     return dobitmap(0, map, bmp + 8, 0, 0, 6, 6, chars, 0);

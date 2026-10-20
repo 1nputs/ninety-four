@@ -5,14 +5,14 @@
 #include <stdint.h>
 #define ROM_SIZE 0x100000u                                /* the retail cartridge: 1 MB */
 extern const uint8_t *rom_cart;          /* the cartridge */
-/* a league's own art (native/league.c), in the cartridge's formats, at the numbers the game reads
+/* a roster set's own art (native/rosters.c), in the cartridge's formats, at the numbers the game reads
  * it by: from the cartridge's end (ROM_SIZE) to rom_limit; NULL, and rom_limit ROM_SIZE, with
- * the cartridge's league or a league whose art is all the cartridge's */
+ * the cartridge's roster set or a roster set whose art is all the cartridge's */
 extern const uint8_t *rom_art;
 extern uint32_t rom_limit;
 int rom_load(const char *path);
 __attribute__((noreturn, cold)) void rom_bad_address(uint32_t addr);
-/* the byte at 68k address addr: the cartridge's, or a league's art past it (below rom_limit:
+/* the byte at 68k address addr: the cartridge's, or a roster set's art past it (below rom_limit:
  * anything else is a stray pointer) */
 static inline const uint8_t *rom_ptr(uint32_t addr)
 {

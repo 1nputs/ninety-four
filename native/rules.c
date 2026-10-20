@@ -1,6 +1,6 @@
-/* Game rules on the native side (src/rules.h): the catalogue the menu's League and Game rules
+/* Game rules on the native side (src/rules.h): the catalogue the menu's Rosters and Game rules
  * pages and the command line work from, the rules of the next game, and the state part that keeps
- * a game's session (its rules, and its league: league.c). */
+ * a game's session (its rules, and its roster set: rosters.c). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -57,9 +57,9 @@ const mdrt_sdl_option rule_options[RULE_COUNT] = {
     [RULE_PUCK_SLIDE] = { "rules.puck_slide", "Puck slowing", 3, slide_names, slide_labels, 25, 200, 5, 0, slide_pct, "%", NULL },
     [RULE_TIRING] = { "rules.tiring", "Tiring", 3, tiring_names, tiring_labels, 0, 200, 5, 0, tiring_pct, "%", NULL },
     [RULE_BENCH_REST] = { "rules.bench_rest", "Bench rest", 3, rest_names, rest_labels, 0, 200, 5, 0, rest_pct, "%", NULL },
-    [RULE_BOX_REST] = { "rules.box_rest", "Rest in the penalty box", 2, off_on, NULL, 0, 0, 0, 0, NULL, NULL, NULL },
-    [RULE_PENALTIES] = { "rules.penalties", "Penalties called", 3, penalty_names, penalty_labels, 0, 100, 5, 0, penalty_pct, "%", NULL },
-    [RULE_STREAKS] = { "rules.streaks", "Hot and cold streaks", 3, streak_names, streak_labels, 0, 200, 5, 0, streak_pct, "%", NULL },
+    [RULE_BOX_REST] = { "rules.box_rest", "Penalty box rest", 2, off_on, NULL, 0, 0, 0, 0, NULL, NULL, NULL },
+    [RULE_PENALTIES] = { "rules.penalties", "Penalties", 3, penalty_names, penalty_labels, 0, 100, 5, 0, penalty_pct, "%", NULL },
+    [RULE_STREAKS] = { "rules.streaks", "Streaks", 3, streak_names, streak_labels, 0, 200, 5, 0, streak_pct, "%", NULL },
     [RULE_VIEW] = { "rules.view", "Rink view", 2, view_names, view_labels, 0, 0, 0, 0, NULL, NULL, NULL },
 };
 
@@ -91,18 +91,18 @@ static const uint8_t presets[3][RULE_COUNT] = {
     },
 };
 
-/* the page: the league (who plays: the cartridge's, or a folder of leagues/), the preset, then the
+/* the page: the roster set (who plays: the cartridge's, or a folder of rosters/), the preset, then the
  * rules (the save RAM a host's online game plays with is the Online play page's: net_save_ram) */
-enum { P_LEAGUE, P_PRESET, P_RULES };
+enum { P_ROSTERS, P_PRESET, P_RULES };
 mdrt_sdl_option rule_page[P_RULES + RULE_COUNT];
 
 static void page_init(void)
 {
     const char *const *names, *const *labels;
     if (rule_page[0].key) return;
-    int n = league_list(&names, &labels);
-    static const mdrt_sdl_browse find = { "Choose a league: its folder, or a package", "Files", "leagues", ".zip", 1 };
-    rule_page[P_LEAGUE] = (mdrt_sdl_option){ "rules.league", "League", n, names, labels, 0, 0, 0, 0, NULL, NULL, &find };
+    int n = rosters_list(&names, &labels);
+    static const mdrt_sdl_browse find = { "Choose rosters: a folder or a package", "Files", "rosters", ".zip", 1 };
+    rule_page[P_ROSTERS] = (mdrt_sdl_option){ "rules.rosters", "Rosters", n, names, labels, 0, 0, 0, 0, NULL, NULL, &find };
     rule_page[P_PRESET] = (mdrt_sdl_option){ "rules.preset", "Preset", 4, preset_names, NULL, 0, 0, 0, 0, NULL, NULL, NULL };
     memcpy(rule_page + P_RULES, rule_options, sizeof rule_options);
 }
@@ -114,18 +114,18 @@ const mdrt_sdl_option *rules_page(int *count)
     return rule_page;
 }
 
-/* the League page (its line, and below it what the league chosen holds) and the Game rules page */
+/* the Rosters page (its line, and below it what the roster set chosen holds) and the Game rules page */
 static mdrt_sdl_page pages[2] = {
-    { "League", "Custom rosters and assets", P_LEAGUE, 1 },
-    { "Game rules", "For every player, all game. Classic: the original", P_PRESET, 1 + RULE_COUNT },
+    { "Rosters", "Teams, players and art", P_ROSTERS, 1 },
+    { "Game rules", "Classic: the original game", P_PRESET, 1 + RULE_COUNT },
 };
 
 const mdrt_sdl_page *rules_pages(int *count)
 {
     static char note[64];
     page_init();
-    if (league_unread()) {                                /* (why: on stderr, and --check-league) */
-        snprintf(note, sizeof note, "Custom rosters and assets. %d will not read", league_unread());
+    if (rosters_unread()) {                                /* (why: on stderr, and --check-rosters) */
+        snprintf(note, sizeof note, "Teams, players and art. %d will not read", rosters_unread());
         pages[0].note = note;
     }
     *count = 2;
@@ -136,7 +136,7 @@ void rules_page_text(int page, const int *values, char *text, size_t size, void 
 {
     (void)user;
     text[0] = 0;
-    if (page == 0) league_about(values[P_LEAGUE], text, size);
+    if (page == 0) rosters_about(values[P_ROSTERS], text, size);
 }
 
 /* a preset chosen sets every rule but the view (a matter of taste); a rule changed, or the rules
@@ -145,7 +145,7 @@ void rules_page_text(int page, const int *values, char *text, size_t size, void 
 int rules_page_changed(int which, int *values, void *user)
 {
     (void)user;
-    if (which == P_LEAGUE) return 0;
+    if (which == P_ROSTERS) return 0;
     if (which == P_PRESET) {
         if (values[P_PRESET] == PRESET_CUSTOM) return 0;
         for (int i = 0; i < RULE_COUNT; i++) if (i != RULE_VIEW) values[P_RULES + i] = presets[values[P_PRESET]][i];
@@ -168,10 +168,10 @@ int rules_page_session(int *values, void *user)
     uint8_t v[RULE_COUNT];
     int sent, host;
     if (!native_net_session(v, &sent, &host)) return 0;
-    int k = host ? values[P_LEAGUE] : sent ? league_session_entry() : 0;   /* (the host: its own choice, which was sent) */
+    int k = host ? values[P_ROSTERS] : sent ? rosters_session_entry() : 0;   /* (the host: its own choice, which was sent) */
     if (k < 0) return 0;                                  /* (not listed yet: asked again) */
-    if (k >= rule_page[P_LEAGUE].count) rule_page[P_LEAGUE].count = k + 1;
-    values[P_LEAGUE] = k;
+    if (k >= rule_page[P_ROSTERS].count) rule_page[P_ROSTERS].count = k + 1;
+    values[P_ROSTERS] = k;
     for (int i = 0; i < RULE_COUNT; i++) values[P_RULES + i] = v[i];
     rules_page_changed(P_RULES, values, user);            /* (the preset they are) */
     return 1;
@@ -180,25 +180,25 @@ int rules_page_session(int *values, void *user)
 void rules_page_use(const int *values, void *user)
 {
     char dir[600];
-    league_next(league_list_dir(values[P_LEAGUE], dir, sizeof dir));   /* (NULL: the cartridge's) */
+    rosters_next(rosters_list_dir(values[P_ROSTERS], dir, sizeof dir));   /* (NULL: the cartridge's) */
     rules_next(values + P_RULES, user);
 }
 
-/* the League line's Files: a league the player found (its folder, or a package), made one of the
- * list's; what the line says of the league chosen */
+/* the Rosters line's Files: a roster set the player found (its folder, or a package), made one of the
+ * list's; what the line says of the roster set chosen */
 int rules_page_pick(int which, const char *path, char *why, size_t why_size, void *user)
 {
     (void)user;
-    if (which != P_LEAGUE) { snprintf(why, why_size, "not a league"); return -1; }
-    int k = league_add(path, why, why_size);
-    if (k >= 0 && k >= rule_page[P_LEAGUE].count) rule_page[P_LEAGUE].count = k + 1;
+    if (which != P_ROSTERS) { snprintf(why, why_size, "not a roster set"); return -1; }
+    int k = rosters_add(path, why, why_size);
+    if (k >= 0 && k >= rule_page[P_ROSTERS].count) rule_page[P_ROSTERS].count = k + 1;
     return k;
 }
 
 void rules_page_detail(int which, int value, char *text, size_t size, void *user)
 {
     (void)user;
-    if (which == P_LEAGUE) league_files(value, text, size);
+    if (which == P_ROSTERS) rosters_files(value, text, size);
     else text[0] = 0;
 }
 
@@ -282,18 +282,18 @@ const char *rules_arg(const char *arg)
 
 /* the state's part, the game's session: a version, the rules' count, each rule's value (a state
  * from a build with fewer rules leaves the rest Classic; one with more is not this build's), the
- * stats the rules keep beside the RAM (rule_plusminus), then (from version 3) the league: its
+ * stats the rules keep beside the RAM (rule_plusminus), then (from version 3) the roster set: its
  * checksum (8 bytes, 0 the cartridge's) and folder (a length byte, the name; none in a netplay
- * session, whose states stay in memory and whose hash the peers compare). The league's tables
- * are in the ROM the state's RAM points into, so a state loads with its own league or not at all.
+ * session, whose states stay in memory and whose hash the peers compare). The roster set's tables
+ * are in the ROM the state's RAM points into, so a state loads with its own roster set or not at all.
  * Version 4's values are the rules' numbers; before it, each rule's choice on the page. */
 size_t rules_state_save(void *user, uint8_t *out)
 {
     (void)user;
-    const char *dir = native_net_on() ? "" : league_dir();   /* (netplay: the folder is the player's own, not the game's: the checksum says) */
+    const char *dir = native_net_on() ? "" : rosters_dir();   /* (netplay: the folder is the player's own, not the game's: the checksum says) */
     size_t n = strlen(dir) > 255 ? 255 : strlen(dir), at = 2 + RULE_COUNT + sizeof rule_plusminus;
     if (out) {
-        uint64_t h = league_hash();
+        uint64_t h = rosters_hash();
         out[0] = 4;
         out[1] = RULE_COUNT;
         memcpy(out + 2, rules, RULE_COUNT);
@@ -325,7 +325,7 @@ int rules_state_load(void *user, const uint8_t *in, size_t size)
         if (x < 0) { fprintf(stderr, "the state: a rule out of range\n"); return -1; }
         v[i] = (uint8_t)x;
     }
-    if (league_use(dir, h) < 0) { fprintf(stderr, "the state: %s\n", league_error()); return -1; }
+    if (rosters_use(dir, h) < 0) { fprintf(stderr, "the state: %s\n", rosters_error()); return -1; }
     memcpy(rules, v, sizeof rules);
     memcpy(rule_plusminus, in + 2 + in[1], sizeof rule_plusminus);
     return 0;

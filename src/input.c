@@ -326,7 +326,7 @@ void SetLCmode2(struct Team *tm)
         g.printy -= 1;
     }
     g.printx += 2;
-    print_p(lg_text(&lg(tm->team)->abbr));                /* the team's abbreviation */
+    print_p(roster_text(&rosters_team(tm->team)->abbr));                /* the team's abbreviation */
 }
 
 /* input94.asm:setlccords. Set printx / printy to the coordinates of the line change box of

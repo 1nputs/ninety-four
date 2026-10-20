@@ -44,8 +44,8 @@ void GameSetUp(void)
     g.setupprevline = 0;
     PrintOptionNames();
     if (g.demoflag == 0) {                                /* after a demo: random teams */
-        g.Opt1Team = randomd0(league.teams);
-        g.Opt2Team = randomd0(league.teams);
+        g.Opt1Team = randomd0(rosters.teams);
+        g.Opt2Team = randomd0(rosters.teams);
     }
     ST_W(g.demoflag);
     if (g.OptPlayMode != 4) {
@@ -245,8 +245,8 @@ void ChangeOption(uint16_t line, int16_t d2)
     unsigned opt = line / 2;                              /* (line: the option's byte offset) */
     uint32_t limits = g.FourWayPlay ? SYM_OptionLimits4Way : SYM_OptionLimits;
     uint16_t lo = 0, hi = rd16(rom_ptr(limits + line)), v = g.options[opt];
-    if (line == 4 || line == 6) hi = league.teams;        /* (the league's; the cartridge's table says 28) */
-    if ((int16_t)g.OptPlayMode >= 2 && g.OptPlayMode != 4 && line == 4) hi = league.playoff_teams;
+    if (line == 4 || line == 6) hi = rosters.teams;        /* (the roster set's; the cartridge's table says 28) */
+    if ((int16_t)g.OptPlayMode >= 2 && g.OptPlayMode != 4 && line == 4) hi = rosters.playoff_teams;
     if (line == 8 && rules[RULE_PERIOD_LENGTHS]) hi = 7;  /* (rules: more period lengths) */
     if (line == 2) {                                      /* Players */
         if (g.OptPlayMode == 4) {
@@ -343,7 +343,7 @@ void PrintScrollMarks(void)
 }
 
 /* optsetup94.asm:PrintOptTeamName. A blank value, then team d3 of option d7 (its city; the full
- * names of the two New York teams). A league of its own says which names (its option_name): the
+ * names of the two New York teams). A roster set of its own says which names (its option_name): the
  * cartridge's code knows its New York teams by number. */
 void PrintOptTeamName(uint16_t line)
 {
@@ -351,9 +351,9 @@ void PrintOptTeamName(uint16_t line)
     print(SYM_BlankValueTxt);
     g.printx = x;
     uint16_t team = option(line);
-    const struct LgTeam *T = lg(team);
-    struct Text a1 = lg_text(&T->city);
-    if (T->option_name.s[1] != 0) a1 = lg_text(&T->option_name);   /* (a league's own) */
+    const struct RosterTeam *T = rosters_team(team);
+    struct Text a1 = roster_text(&T->city);
+    if (T->option_name.s[1] != 0) a1 = roster_text(&T->option_name);   /* (a roster set's own) */
     else if (team == 0xE) a1 = (struct Text){ NULL, SYM_RangersTxt };
     else if (team == 0xD) a1 = (struct Text){ NULL, SYM_IslandersTxt };
     print_p(a1);
@@ -618,7 +618,7 @@ void DrawTeamLogo(void)
     g.printy = 6;
     int home = (g.setupcardflags & CARD(2)) != 0;
     uint16_t chars = home ? g.homepicchars : g.vispicchars, team = g.logoteam;
-    uint32_t bmp = lg(team)->logo;
+    uint32_t bmp = rosters_team(team)->logo;
     uint16_t keep[4];                                     /* (colours $11-$14 kept) */
     for (int i = 0; i < 4; i++) keep[i] = g.palfadenew[0x11 + i];
     logo_colours(team, home ? 2 : 4);

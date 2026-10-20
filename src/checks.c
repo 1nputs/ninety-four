@@ -1208,7 +1208,7 @@ found:
 int SelectPenaltyShotSkater(void)
 {
     struct Team *a0 = team_struct(g.BA_Team != 0);
-    const struct LgTeam *T = lg(a0->team);
+    const struct RosterTeam *T = rosters_team(a0->team);
     int16_t d6 = -1, d5 = -1;
     for (uint16_t d1 = 0; d1 < T->players; ) {
         const uint8_t *r = T->player[d1].rating;

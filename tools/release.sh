@@ -1,7 +1,7 @@
 #!/bin/sh
 # The release's downloads, in out/release/vVERSION (make release VERSION=0.3.2):
 #   ninety-four-VERSION-linux-x86_64.tar.gz   nhl94 for x86-64 Linux (GCC: glibc 2.34 or newer and
-#                                             the system's SDL2), its README, LEAGUES.md, licenses/
+#                                             the system's SDL2), its README, ROSTERS.md, licenses/
 #   ninety-four-VERSION-windows-x86_64.zip    nhl94.exe for 64-bit Windows (MinGW-w64 GCC), SDL2.dll
 #                                             beside it, the same with SDL2's licence
 #   ninety-four-VERSION-macos-universal.zip   ninety-four.app for macOS 11 or newer, Apple Silicon and
@@ -103,7 +103,7 @@ folder() {   # $1: the README's system (linux, windows, macos), $2: the folder
     d=$OUT/$2
     mkdir -p "$d/licenses"
     sed "s/@VERSION@/$VERSION/g" "tools/release/README-$1.txt" > "$d/README.txt"
-    cp docs/LEAGUES.md "$d/LEAGUES.md"
+    cp docs/ROSTERS.md "$d/ROSTERS.md"
     cp LICENSE "$d/licenses/ninety-four-MIT.txt"
     cp ext/pulseman/LICENSE "$d/licenses/pulseman-MIT.txt"
     cp ext/pulseman/third_party/nuked-opn2/LICENSE "$d/licenses/Nuked-OPN2-LGPL-2.1.txt"

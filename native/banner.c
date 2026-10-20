@@ -1,4 +1,4 @@
-/* Team name banners for leagues (league.c): the cartridge's two sets, 88 x 16 pixels a team
+/* Team name banners for roster sets (rosters.c): the cartridge's two sets, 88 x 16 pixels a team
  * (Teamblocksmap: the playoff tree's and the game's top bar; TeamBitmaps: the setup screen's),
  * and new ones for a team whose name the cartridge has no banner for, drawn in the cartridge's
  * own letters: its art team's banner, the name cleared off its two colour bands, the new name in

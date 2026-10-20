@@ -1,8 +1,8 @@
-/* The league (league.h): the cartridge's until another is built. */
+/* The roster set (rosters.h): the cartridge's until another is built. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "league.h"
+#include "rosters.h"
 #include "rom.h"
 #include "symbols_gen.h"
 
@@ -27,55 +27,55 @@
                    SYM_TeamBitmaps }, \
                  { { 14, 3 }, { 16, 16 } } }              /* (title94.asm's HiScoreScreen places) */
 
-struct league league = RETAIL;                           /* (the cartridge's from the start) */
-const struct league league_cartridge = RETAIL;
+struct rosters rosters = RETAIL;                           /* (the cartridge's from the start) */
+const struct rosters rosters_cartridge = RETAIL;
 
-void league_retail(void) { league = league_cartridge; league_read(); }
+void rosters_retail(void) { rosters = rosters_cartridge; rosters_read(); }
 
-uint32_t league_crowd_record(uint16_t team)
+uint32_t rosters_crowd_record(uint16_t team)
 {
     if (team < SYM_NumTeams) return SYM_CrowdRecBase + (uint32_t)team * SYM_CrowdRecBytes;
-    return LEAGUE_SRAM_CROWD + (uint32_t)(team - SYM_NumTeams) * SYM_CrowdRecBytes;
+    return ROSTERS_SRAM_CROWD + (uint32_t)(team - SYM_NumTeams) * SYM_CrowdRecBytes;
 }
 
-/* ---- the teams, natively (league.h) ------------------------------------------------------------ */
+/* ---- the teams, natively (rosters.h) ------------------------------------------------------------ */
 
-struct LgTeam lg_team[LEAGUE_MAX];
-uint8_t lg_seats[32][16];
+struct RosterTeam roster_team[ROSTERS_MAX];
+uint8_t roster_seats[32][16];
 
 static uint16_t be16(uint32_t a) { const uint8_t *p = rom_ptr(a); return (uint16_t)(p[0] << 8 | p[1]); }
 static uint32_t be32(uint32_t a) { return (uint32_t)be16(a) << 16 | be16(a + 2); }
 
-void league_bad_team(uint16_t team)
+void rosters_bad_team(uint16_t team)
 {
-    fprintf(stderr, "league: team %u is past the league's %d\n", team, LEAGUE_MAX);
+    fprintf(stderr, "roster set: team %u is past the roster set's %d\n", team, ROSTERS_MAX);
     abort();
 }
 
 /* the String at a (as it is: its length word, bytes and pad), on past it */
-static void read_text(uint32_t *a, struct LgText *t)
+static void read_text(uint32_t *a, struct RosterText *t)
 {
     uint16_t n = be16(*a);
-    if (n > LG_TEXT) { fprintf(stderr, "league: a String of %u bytes at $%06X\n", n, *a); abort(); }
+    if (n > RS_TEXT) { fprintf(stderr, "roster set: a String of %u bytes at $%06X\n", n, *a); abort(); }
     t->at = *a;
     memcpy(t->s, rom_ptr(*a), n);
     *a += n;
 }
 
-/* the tables from the cartridge's formats, at the league's addresses (league.table: the
- * cartridge's, or a league built past it) */
-void league_read(void)
+/* the tables from the cartridge's formats, at the roster set's addresses (rosters.table: the
+ * cartridge's, or a roster set built past it) */
+void rosters_read(void)
 {
-    memset(lg_team, 0, sizeof lg_team);
-    for (uint16_t t = 0; t < league.teams && t < LEAGUE_MAX; t++) {
-        struct LgTeam *T = &lg_team[t];
-        uint32_t b = be32(LG(TeamList) + 4u * t);
+    memset(roster_team, 0, sizeof roster_team);
+    for (uint16_t t = 0; t < rosters.teams && t < ROSTERS_MAX; t++) {
+        struct RosterTeam *T = &roster_team[t];
+        uint32_t b = be32(RS(TeamList) + 4u * t);
         T->data = b;
         for (int k = 0; k < 16; k++) {
             T->colours[0][k] = be16(b + be16(b + 2) + 2u * k);
             T->colours[1][k] = be16(b + be16(b + 2) + 32 + 2u * k);
-            T->matchup[0][k] = be16(LG(TeamPalettes) + 64u * t + 2u * k);
-            T->matchup[1][k] = be16(LG(TeamPalettes) + 64u * t + 32 + 2u * k);
+            T->matchup[0][k] = be16(RS(TeamPalettes) + 64u * t + 2u * k);
+            T->matchup[1][k] = be16(RS(TeamPalettes) + 64u * t + 32 + 2u * k);
         }
         const uint8_t *sr = rom_ptr(b + be16(b + 8));
         T->offense = sr[0] >> 4; T->defense = sr[0] & 15;
@@ -88,8 +88,8 @@ void league_read(void)
         memcpy(T->lines, rom_ptr(b + be16(b + 6)), sizeof T->lines);
         uint32_t p = b + be16(b);
         for (; be16(p) != 2; T->players++) {
-            if (T->players == LG_ROSTER) { fprintf(stderr, "league: team %u has more than %d players\n", t, LG_ROSTER); abort(); }
-            struct LgPlayer *P = &T->player[T->players];
+            if (T->players == RS_ROSTER) { fprintf(stderr, "roster set: team %u has more than %d players\n", t, RS_ROSTER); abort(); }
+            struct RosterPlayer *P = &T->player[T->players];
             read_text(&p, &P->name);
             const uint8_t *a = rom_ptr(p);
             P->number = a[0];
@@ -101,20 +101,20 @@ void league_read(void)
         read_text(&p, &T->abbr);
         read_text(&p, &T->nickname);
         read_text(&p, &T->arena);
-        T->rating = *rom_ptr(LG(TeamRatings) + t);
-        memcpy(T->songs, rom_ptr(LG(TeamSongs) + 6u * t), 6);
-        T->records = be16(LG(PlayerRecordOffsets) + 2u * t);
-        T->pictures_at = be32(LG(FeaturedPictures) + 4u * t);
+        T->rating = *rom_ptr(RS(TeamRatings) + t);
+        memcpy(T->songs, rom_ptr(RS(TeamSongs) + 6u * t), 6);
+        T->records = be16(RS(PlayerRecordOffsets) + 2u * t);
+        T->pictures_at = be32(RS(FeaturedPictures) + 4u * t);
         for (uint32_t a = T->pictures_at; be32(a) != 0; a += 6) {
-            if (T->pictures == LG_PICTURES) { fprintf(stderr, "league: team %u has more than %d pictures\n", t, LG_PICTURES); abort(); }
+            if (T->pictures == RS_PICTURES) { fprintf(stderr, "roster set: team %u has more than %d pictures\n", t, RS_PICTURES); abort(); }
             T->picture[T->pictures].pic = be32(a);
             T->picture[T->pictures++].slot = be16(a + 4);
         }
-        if (LG(OptionTeamNames)) { uint32_t a = be32(LG(OptionTeamNames) + 4u * t); read_text(&a, &T->option_name); }
-        T->logo = be32(LG(TeamLogoBitmaps) + 4u * t);
-        T->ice = be32(LG(TeamGfxList) + 4u * t);
-        for (int k = 0; k < 16; k++) T->logo_colours[k] = be16(LG(TeamLogoPalettes) + 32u * t + 2u * k);
+        if (RS(OptionTeamNames)) { uint32_t a = be32(RS(OptionTeamNames) + 4u * t); read_text(&a, &T->option_name); }
+        T->logo = be32(RS(TeamLogoBitmaps) + 4u * t);
+        T->ice = be32(RS(TeamGfxList) + 4u * t);
+        for (int k = 0; k < 16; k++) T->logo_colours[k] = be16(RS(TeamLogoPalettes) + 32u * t + 2u * k);
     }
-    memset(lg_seats, 0, sizeof lg_seats);
-    memcpy(lg_seats, rom_ptr(LG(playoffseats)), 16u * league.playoff_rows);
+    memset(roster_seats, 0, sizeof roster_seats);
+    memcpy(roster_seats, rom_ptr(RS(playoffseats)), 16u * rosters.playoff_rows);
 }

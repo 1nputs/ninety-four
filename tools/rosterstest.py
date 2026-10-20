@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Leagues (native/league.c), from the outside: make leaguetest.
+"""Rosters (native/rosters.c), from the outside: make rosterstest.
 
-  1. nhl94 --export-league writes the cartridge's league (out/leagues/cartridge), and
-     build/leaguetest builds it again: its tables must be the cartridge's as the game reads them
+  1. nhl94 --export-rosters writes the cartridge's roster set (out/rosters/cartridge), and
+     build/rosterstest builds it again: its tables must be the cartridge's as the game reads them
      off the cartridge, field for field, and its art the cartridge's.
-  2. A 32-team league made from it (out/leagues/thirty-two: four teams of the 1970s added before
+  2. A 32-team roster set made from it (out/rosters/thirty-two: four teams of the 1970s added before
      the All-Stars, two of them with no lines or colours, so they are made and borrowed, and two
      players of one wearing the same number) must build, its records apart in save RAM, every
      playoff team in a draw.
-  3. Broken leagues must be refused, each saying what is wrong and where.
+  3. Broken roster sets must be refused, each saying what is wrong and where.
   4. Each hack ROM on the community's 32-team template beside the repository (../roms, or HACKS=)
-     is extracted (nhl94 --extract-rom: read, never run) to out/leagues/hacks, must build to its
+     is extracted (nhl94 --extract-rom: read, never run) to out/rosters/hacks, must build to its
      teams and art, and plays a game.
-  5. The 32-team league and the hacks' as packages (--pack-league: zips building the same league;
+  5. The 32-team roster set and the hacks' as packages (--pack-rosters: zips building the same roster set;
      the 32-team one's checked again from its zip), and damaged packages refused.
   6. The ratings' columns named as the game's roster screen names them, and a hack's ratings as its
      authors' own sheets beside it say (when it has them: the 2025 edition does).
@@ -31,9 +31,9 @@ import zlib
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NHL94 = os.path.join(ROOT, 'build', 'nhl94')
 ROM = os.path.join(ROOT, 'NHL 94 (UE) [!].gen')
-CARTRIDGE = os.path.join(ROOT, 'out', 'leagues', 'cartridge')
-THIRTY_TWO = os.path.join(ROOT, 'out', 'leagues', 'thirty-two')
-HACKS = os.path.join(ROOT, 'out', 'leagues', 'hacks')
+CARTRIDGE = os.path.join(ROOT, 'out', 'rosters', 'cartridge')
+THIRTY_TWO = os.path.join(ROOT, 'out', 'rosters', 'thirty-two')
+HACKS = os.path.join(ROOT, 'out', 'rosters', 'hacks')
 
 # the teams added: (abbreviation, city, nickname, arena, conference, art, the team whose players
 # they take, whether they keep its lines and colours)
@@ -56,18 +56,18 @@ def write(path, rows):
 
 
 def export(dst=CARTRIDGE):
-    r = subprocess.run([NHL94, '--rom', ROM, '--export-league', dst], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    r = subprocess.run([NHL94, '--rom', ROM, '--export-rosters', dst], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if r.returncode:
-        sys.exit('--export-league failed: ' + r.stderr.strip())
+        sys.exit('--export-rosters failed: ' + r.stderr.strip())
 
 
 def thirty_two(src=CARTRIDGE, dst=THIRTY_TWO):
-    """the cartridge's league with ADDED before the All-Stars, no playoff draws given (made)"""
+    """the cartridge's roster set with ADDED before the All-Stars, no playoff draws given (made)"""
     if os.path.exists(dst):
         shutil.rmtree(dst)
     shutil.copytree(src, dst)
     os.remove(os.path.join(dst, 'playoffs.csv'))
-    with open(os.path.join(dst, 'league.ini'), 'w') as f:
+    with open(os.path.join(dst, 'rosters.ini'), 'w') as f:
         f.write('name = Thirty-two teams\nplayoff_teams = 30\n')
     teams = read(os.path.join(dst, 'teams.csv'))
     head, rows = teams[0], teams[1:]
@@ -136,7 +136,7 @@ def png_poke(path, x, y, index):
     open(path, 'wb').write(bytes(d[:8]) + out)
 
 
-# the art the 32-team league draws its own: HOU a logo in plain RGB (a corner transparent, red,
+# the art the 32-team roster set draws its own: HOU a logo in plain RGB (a corner transparent, red,
 # white), KC a photo in colours (a ramp of greys: the shades by brightness), BOS its logo with one
 # pixel changed, the players' sprites with one pixel changed
 def own_art(dst):
@@ -182,7 +182,7 @@ def png_peek(path, x, y):
         o += 12 + n
 
 
-# broken leagues: (name, the change to the cartridge's files, what the refusal must say)
+# broken roster sets: (name, the change to the cartridge's files, what the refusal must say)
 def edit(name, fn):
     def apply(d):
         p = os.path.join(d, name)
@@ -241,7 +241,7 @@ def hack_roms():
 
 
 def extract_hacks():
-    """each hack on the 32-team template extracted to out/leagues/hacks/NAME (those that are not, said
+    """each hack on the 32-team template extracted to out/rosters/hacks/NAME (those that are not, said
     and left out): [(path, folder)]"""
     out = []
     for path in hack_roms():
@@ -255,24 +255,24 @@ def extract_hacks():
             continue
         out.append((path, d))
     if not out:
-        print('  no hack ROMs on the 32-team template (../roms, or HACKS=path%s...): their leagues not tried' % os.pathsep)
+        print('  no hack ROMs on the 32-team template (../roms, or HACKS=path%s...): their roster sets not tried' % os.pathsep)
     return out
 
 
 def pack(hacks):
-    """the 32-team league and each hack's as packages (nhl94 --pack-league: the package must build the
-    folder's league, checked by nhl94), and damaged packages refused. True when all is well"""
+    """the 32-team roster set and each hack's as packages (nhl94 --pack-rosters: the package must build the
+    folder's roster set, checked by nhl94), and damaged packages refused. True when all is well"""
     ok = True
     for d in [THIRTY_TWO] + [h[1] for h in hacks]:
-        r = subprocess.run([NHL94, '--rom', ROM, '--pack-league', d, d + '.zip'], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        print('  ' + (r.stdout.strip().replace(ROOT + '/', '') if r.returncode == 0 else 'FAIL --pack-league %s: %s' % (d, r.stderr.strip())))
+        r = subprocess.run([NHL94, '--rom', ROM, '--pack-rosters', d, d + '.zip'], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        print('  ' + (r.stdout.strip().replace(ROOT + '/', '') if r.returncode == 0 else 'FAIL --pack-rosters %s: %s' % (d, r.stderr.strip())))
         ok &= r.returncode == 0
     z = open(THIRTY_TWO + '.zip', 'rb').read()
-    broken = os.path.join(ROOT, 'out', 'leagues', 'broken.zip')
+    broken = os.path.join(ROOT, 'out', 'rosters', 'broken.zip')
     for what, data, says in [('cut short', z[:len(z) // 2], 'not a zip archive'),
                              ('a file damaged', z[:200] + bytes([z[200] ^ 0x55]) + z[201:], 'damaged')]:
         open(broken, 'wb').write(data)
-        r = subprocess.run([NHL94, '--rom', ROM, '--check-league', broken], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        r = subprocess.run([NHL94, '--rom', ROM, '--check-rosters', broken], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         refused = r.returncode != 0 and says in r.stderr
         print('  a package %s: %s' % (what, 'refused' if refused else 'FAIL: ' + (r.stderr or r.stdout).strip()))
         ok &= refused
@@ -280,7 +280,7 @@ def pack(hacks):
     return ok
 
 
-# the ratings' columns as the game's roster screen names them (native/league.c)
+# the ratings' columns as the game's roster screen names them (native/rosters.c)
 SKATER_COLS = ['weight', 'agility', 'speed', 'off_awareness', 'def_awareness', 'shot_power', 'checking', 'handed_fighting',
                'stick_handling', 'shot_accuracy', 'endurance', 'shoot_or_pass', 'pass_accuracy', 'aggressiveness']
 GOALIE_COLS = ['weight', 'agility', 'speed', 'off_awareness', 'def_awareness', 'puck_control', 'unused1', 'glove_hand',
@@ -337,14 +337,14 @@ def authors_sheets(hacks):
 
 
 def play_hacks(hacks):
-    """a game with each hack's league (golden's full_game script, 16000 frames): it must play to the
+    """a game with each hack's roster set (golden's full_game script, 16000 frames): it must play to the
     end. True when one does not"""
     bad = False
     for path, d in hacks:
-        sram = os.path.join(ROOT, 'out', 'leaguetest-game.srm')
+        sram = os.path.join(ROOT, 'out', 'rosterstest-game.srm')
         if os.path.exists(sram):
             os.remove(sram)
-        r = subprocess.run([NHL94, '--rom', ROM, '--headless', '--frames', '16000', '--league', d, '--sram', sram,
+        r = subprocess.run([NHL94, '--rom', ROM, '--headless', '--frames', '16000', '--rosters', d, '--sram', sram,
                             '--input', os.path.join(ROOT, 'tools', 'oracle', 'scripts', 'full_game_30s.txt')],
                            cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         print('  %s: a game of 16000 frames %s' % (os.path.relpath(d, ROOT), 'played' if r.returncode == 0 else 'FAILED: ' + r.stderr.strip()[-300:]))
@@ -360,21 +360,21 @@ def main():
     hacks = extract_hacks()
     packages = pack(hacks)
     args = [os.path.relpath(d, ROOT) for d in (CARTRIDGE, THIRTY_TWO, THIRTY_TWO + '.zip')]
-    listing = os.path.join(ROOT, 'out', 'leagues', 'listing')        # (a folder with leagues/ as the window's)
+    listing = os.path.join(ROOT, 'out', 'rosters', 'listing')        # (a folder with rosters/ as the window's)
     if os.path.exists(listing):
         shutil.rmtree(listing)
-    shutil.copytree(THIRTY_TWO, os.path.join(listing, 'leagues', 'thirty-two'))
+    shutil.copytree(THIRTY_TWO, os.path.join(listing, 'rosters', 'thirty-two'))
     for z in [THIRTY_TWO + '.zip'] + [h[1] + '.zip' for h in hacks]:     # (packages, as the window lists them)
         if os.path.exists(z):
-            shutil.copy(z, os.path.join(listing, 'leagues', 'packed-' + os.path.basename(z)))
-    os.makedirs(os.path.join(listing, 'leagues', 'broken'))              # (one that will not read: left out, and said)
-    open(os.path.join(listing, 'leagues', 'broken', 'teams.csv'), 'w').write('team\n')
+            shutil.copy(z, os.path.join(listing, 'rosters', 'packed-' + os.path.basename(z)))
+    os.makedirs(os.path.join(listing, 'rosters', 'broken'))              # (one that will not read: left out, and said)
+    open(os.path.join(listing, 'rosters', 'broken', 'teams.csv'), 'w').write('team\n')
     args += ['--listed', os.path.relpath(listing, ROOT), 'thirty-two']
     for path, d in hacks:
         args += ['--hack', path, os.path.relpath(d, ROOT)]
-    r = subprocess.run([os.path.join(ROOT, 'build', 'leaguetest'), ROM] + args, cwd=ROOT)
+    r = subprocess.run([os.path.join(ROOT, 'build', 'rosterstest'), ROM] + args, cwd=ROOT)
     bad = play_hacks(hacks) | (r.returncode != 0) | (not packages) | (not headers()) | (not authors_sheets(hacks))
-    base = os.path.join(ROOT, 'out', 'leagues', 'broken')
+    base = os.path.join(ROOT, 'out', 'rosters', 'broken')
     refused = 0
     for name, change, says in BROKEN:
         d = os.path.join(base, name.replace(' ', '-'))
@@ -382,12 +382,12 @@ def main():
             shutil.rmtree(d)
         shutil.copytree(CARTRIDGE, d)
         change(d)
-        r = subprocess.run([NHL94, '--rom', ROM, '--check-league', d], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        r = subprocess.run([NHL94, '--rom', ROM, '--check-rosters', d], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         ok = r.returncode != 0 and says in r.stderr
         refused += ok
         if not ok:
             print('FAIL %s: %s' % (name, (r.stderr or r.stdout).strip() or 'built'))
-    print('leaguetest: %d of %d broken leagues refused, saying what is wrong' % (refused, len(BROKEN)))
+    print('rosterstest: %d of %d broken roster sets refused, saying what is wrong' % (refused, len(BROKEN)))
     shutil.rmtree(base)
     sys.exit(1 if bad or refused != len(BROKEN) else 0)
 

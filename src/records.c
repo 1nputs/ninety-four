@@ -86,13 +86,13 @@ void NameEntryScreen(void)
     DecompressGraphicsWithCallback(ART(BigFontMap) + 8, d4, rom_find(SYM_NameEntryScreen, SYM_NameLetterGrid, bigfont, 8));
     PRINTZ(str_NameEntryScreen_3);                        /* the team's city, centred on x $1F */
     uint16_t team = g.nameentryvis ? g.VisTeam : g.HomeTeam;
-    struct Text city = lg_text(&lg(team)->city);
+    struct Text city = roster_text(&rosters_team(team)->city);
     g.printx -= (uint16_t)((uint16_t)(text_len(city) - 2) >> 1);
     print_p(city);
     PRINTZ(str_NameEntryScreen_4);
     Framer(8, 8);
     PRINTZ(str_NameEntryScreen_5);                        /* its logo */
-    uint32_t bmp = lg(team)->logo;
+    uint32_t bmp = rosters_team(team)->logo;
     logo_colours(team, 4);
     dobitmap(0, bmp + rd32(rom_ptr(bmp + 4)), bmp + 8, 0, 0, 6, 6, g.homepicchars, 0);
     PRINTZ(str_NameEntryScreen_6);
@@ -449,8 +449,8 @@ void WriteNameRecord(void)
     uint8_t *r = g.ThreeStars;
     uint8_t user = (uint8_t)g.namelogsel;
     uint32_t at;
-    for (int t = 0; t < (int)league.teams; t++) {         /* the player records (the cartridge's: $2D8 from 0) */
-        at = (uint32_t)lg((uint16_t)t)->records << 2;
+    for (int t = 0; t < (int)rosters.teams; t++) {         /* the player records (the cartridge's: $2D8 from 0) */
+        at = (uint32_t)rosters_team((uint16_t)t)->records << 2;
         for (int n = 0; n < 0x1A; n++, at += 4) {
             int changed = 0;
             ReadSRAM(at, 4, ram_addr(g.ThreeStars));
@@ -459,8 +459,8 @@ void WriteNameRecord(void)
             if (changed) WriteSRAM(at, 4, ram_addr(g.ThreeStars));
         }
     }
-    for (int n = 0; n < (int)league.teams; n++) {         /* the crowd records */
-        at = league_crowd_record((uint16_t)n);
+    for (int n = 0; n < (int)rosters.teams; n++) {         /* the crowd records */
+        at = rosters_crowd_record((uint16_t)n);
         int changed = 0;
         ReadSRAM(at, 0x10, ram_addr(g.ThreeStars));
         for (int b = 1; b <= 0xB; b += 2) if (r[b] == user) { r[b] = 0; changed = 1; }

@@ -1,4 +1,4 @@
-/* Team art as pictures (league.c): each team's logo, banners and centre ice, and the players'
+/* Team art as pictures (rosters.c): each team's logo, banners and centre ice, and the players'
  * photos, read out of a ROM (the cartridge, or a hack: romsrc.c) as palette indexes, written as
  * PNGs (pulseman's mdrt/png.h) with the colours they show in, and made again in the game's own
  * formats from PNGs a player may have changed:
@@ -150,8 +150,8 @@ static void tiles_of(const uint8_t *px, int pw, int cx, int cy, uint8_t out[32])
 
 int art_logo(const struct romsrc *s, int t, uint8_t px[ART_LOGO * ART_LOGO], uint16_t pal[16])
 {
-    if (art_logo_at(s, rs32(s, s->table[LG_TeamLogoBitmaps] + 4u * (uint32_t)t), px) < 0) return -1;
-    for (int k = 0; k < 16; k++) pal[k] = rs16(s, s->table[LG_TeamLogoPalettes] + 32u * (uint32_t)t + 2u * (uint32_t)k);
+    if (art_logo_at(s, rs32(s, s->table[RS_TeamLogoBitmaps] + 4u * (uint32_t)t), px) < 0) return -1;
+    for (int k = 0; k < 16; k++) pal[k] = rs16(s, s->table[RS_TeamLogoPalettes] + 32u * (uint32_t)t + 2u * (uint32_t)k);
     return 0;
 }
 
@@ -278,7 +278,7 @@ int art_ice(const struct romsrc *s, int t, uint8_t *px, int *w, int *h, uint16_t
 {
     static uint8_t ice[24 * 32];
     if (rink_of(s, &rink) < 0) return -1;
-    uint32_t gfx = rs32(s, s->table[LG_TeamGfxList] + 4u * (uint32_t)t);
+    uint32_t gfx = rs32(s, s->table[RS_TeamGfxList] + 4u * (uint32_t)t);
     if (art_tiles(s, gfx + 8, ice, 24) != 24) return -1;
     *w = rink.cw * 8;
     *h = rink.ch * 8;
@@ -289,7 +289,7 @@ int art_ice(const struct romsrc *s, int t, uint8_t *px, int *w, int *h, uint16_t
             px[y * *w + x] = (uint8_t)(ch >= rink.count - 24 ? cell_pixel(ice, 24, rink.count - 24, word, x % 8, y % 8)
                                                             : cell_pixel(rink.tiles, rink.count, 0, word, x % 8, y % 8));
         }
-    uint32_t b = rs32(s, s->table[LG_TeamList] + 4u * (uint32_t)t);   /* (its line in a game: the home team's colours) */
+    uint32_t b = rs32(s, s->table[RS_TeamList] + 4u * (uint32_t)t);   /* (its line in a game: the home team's colours) */
     for (int k = 0; k < 16; k++) pal[k] = rink.line == 2 ? rs16(s, b + rs16(s, b + 2) + 2u * (uint32_t)k) : rs16(s, rink.pal + 32u * (uint32_t)rink.line + 2u * (uint32_t)k);
     return 0;
 }
@@ -329,9 +329,9 @@ int art_ice_make(const struct romsrc *s, const uint8_t *px, int w, int h, uint8_
  * colour (line 1); their colours in pal */
 int art_banners(const struct romsrc *s, int t, uint8_t px[ART_BANNER_H * ART_BANNER_W], uint16_t pal[ART_BANNER_COLOURS])
 {
-    static uint8_t tiles[2048 * 32];               /* (a league's: the cartridge's 501, 22 more a team) */
+    static uint8_t tiles[2048 * 32];               /* (a roster set's: the cartridge's 501, 22 more a team) */
     for (int set = 0; set < 2; set++) {
-        uint32_t base = set ? s->bitmaps : s->table[LG_Teamblocksmap], map = base + rs32(s, base + 4), pp = base + rs32(s, base);
+        uint32_t base = set ? s->bitmaps : s->table[RS_Teamblocksmap], map = base + rs32(s, base + 4), pp = base + rs32(s, base);
         int n = art_tiles(s, base + 8, tiles, 2048);
         if (n < 0 || rs16(s, map) != 11 || map + 4 + 2u * 22 * (uint32_t)(t + 1) > s->size) return -1;   /* (the game reads a team's rows whatever height the map says) */
         for (int y = 0; y < 16; y++)
@@ -342,7 +342,7 @@ int art_banners(const struct romsrc *s, int t, uint8_t px[ART_BANNER_H * ART_BAN
         if (set) for (int k = 0; k < 16; k++) pal[ART_BANNER_SETUP + k] = rs16(s, pp + 32 + 2u * (uint32_t)k);   /* (line 1) */
         else for (int k = 0; k < 64; k++) pal[k] = rs16(s, pp + 2u * (uint32_t)k);
     }
-    uint32_t tp = s->table[LG_TeamPalettes] + 64u * (uint32_t)t;   /* (the setup screen's colours 1 to 4: the team's, DrawTeamBitmap's) */
+    uint32_t tp = s->table[RS_TeamPalettes] + 64u * (uint32_t)t;   /* (the setup screen's colours 1 to 4: the team's, DrawTeamBitmap's) */
     pal[ART_BANNER_SETUP + 1] = rs16(s, tp + 2);
     pal[ART_BANNER_SETUP + 2] = rs16(s, tp + 4);
     pal[ART_BANNER_SETUP + 3] = rs16(s, tp + 0x26);       /* (as the visitors: 1 and 2 shown as 3 and 4) */
@@ -468,7 +468,7 @@ int art_own_palette(const char *path, const mdrt_png *p, uint16_t pal[16], uint8
     return 0;
 }
 
-/* ---- the art every team shares (league.h's ART_ assets) ------------------------------------------ */
+/* ---- the art every team shares (rosters.h's ART_ assets) ------------------------------------------ */
 
 /* how each is made: a picture (palette offset or none, map offset, tiles: the title screens,
  * setup screens, fonts, the rinks, whose header is followed by their tiles), sprites (palette,
@@ -796,8 +796,8 @@ static uint32_t logo_size(const struct romsrc *s, uint32_t a)
     return max_u32(end, map + 4 + 2 * 6 * 6) - a;
 }
 
-/* a team's banners (Teamblocksmap, TeamBitmaps, a league's own): to the end of their tiles and
- * map (their colours are elsewhere: a league's own point back at the cartridge's) */
+/* a team's banners (Teamblocksmap, TeamBitmaps, a roster set's own): to the end of their tiles and
+ * map (their colours are elsewhere: a roster set's own point back at the cartridge's) */
 static uint32_t banners_size(const struct romsrc *s, uint32_t a)
 {
     uint32_t end, map = a + rs32(s, a + 4);
@@ -832,25 +832,25 @@ void art_map_make(void)
     romsrc_game(&s);
     npieces = overlaps = 0;
     for (int i = 0; i < SHARED; i++) {
-        uint32_t a = league.asset[shared[i].art];
+        uint32_t a = rosters.asset[shared[i].art];
         piece(a, art_shared_size(&s, i, a), PIECE_SHARED, shared[i].art);
     }
-    piece(league.asset[ART_TeamBitmaps], banners_size(&s, league.asset[ART_TeamBitmaps]), PIECE_BANNERS, ART_TeamBitmaps);
+    piece(rosters.asset[ART_TeamBitmaps], banners_size(&s, rosters.asset[ART_TeamBitmaps]), PIECE_BANNERS, ART_TeamBitmaps);
     piece(SYM_Teamblocksmap, banners_size(&s, SYM_Teamblocksmap), PIECE_BANNERS, 0);   /* (setupTeamBlocksMap: the cartridge's always) */
-    piece(league.table[LG_Teamblocksmap], banners_size(&s, league.table[LG_Teamblocksmap]), PIECE_BANNERS, 0);
+    piece(rosters.table[RS_Teamblocksmap], banners_size(&s, rosters.table[RS_Teamblocksmap]), PIECE_BANNERS, 0);
     for (int k = 0; k < 8; k++) {                         /* the arena animations' sprites (RunArenaAnim: the cartridge's ArenaAnims) */
         uint32_t a = rs32(&s, SYM_ArenaAnims + 8u * (uint32_t)k + 4);
         piece(a, sprites_size(&s, a), PIECE_ARENA, k);
     }
-    uint32_t slots = league.table[LG_BannerSlotMap];
+    uint32_t slots = rosters.table[RS_BannerSlotMap];
     if (slots) piece(slots, 4 + 2u * rs16(&s, slots) * rs16(&s, slots + 2), PIECE_BANNER_SLOTS, 0);
-    for (int t = 0; t < league.teams && t < LEAGUE_MAX; t++) {
-        const struct LgTeam *T = &lg_team[t];
+    for (int t = 0; t < rosters.teams && t < ROSTERS_MAX; t++) {
+        const struct RosterTeam *T = &roster_team[t];
         piece(T->logo, logo_size(&s, T->logo), PIECE_LOGO, t);
         uint32_t end;
         if (tiles_at(&s, T->ice + 8, NULL, 24, &end) == 24) piece(T->ice, end - T->ice, PIECE_ICE, t);
         for (int k = 0; k < T->pictures; k++) piece(T->picture[k].pic, photo_size(&s, T->picture[k].pic), PIECE_PHOTO, t);
-        piece(league.banner_tiles[t], 22 * 32, PIECE_TEAM_BANNERS, t);
+        piece(rosters.banner_tiles[t], 22 * 32, PIECE_TEAM_BANNERS, t);
     }
     qsort(pieces, (size_t)npieces, sizeof pieces[0], by_at);
     int n = 0;                                            /* (a piece inside the one before: left out, counted; across its end:

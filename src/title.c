@@ -21,7 +21,7 @@ void ChooseSong(void)
         n = 0xFFFF;
     } else {
         g.sflags8 &= (uint8_t)~0x40;
-        n = lg(g.HmTeam)->songs[g.SongIndex];
+        n = rosters_team(g.HmTeam)->songs[g.SongIndex];
         if (n == 0) n = rom_ptr(SYM_RandomSongs)[randomd0(8) & 7];
     }
     g.SongNum = n;
@@ -240,7 +240,7 @@ void PSandSOpassdir(struct SortObj *o)
  * d4 - $18 -> d4 = the char after them. */
 uint16_t LoadHomeTeamGfx(uint16_t start)
 {
-    uint32_t gfx = lg(g.HomeTeam)->ice + 8;
+    uint32_t gfx = rosters_team(g.HomeTeam)->ice + 8;
     return DecompressGraphicsPlain(gfx, (uint16_t)(start - 0x18));
 }
 
@@ -390,11 +390,11 @@ void HiScoreScreen(void)
     forceblack();
     memset(g.palfadenew, 0, sizeof g.palfadenew);
     setVram_0();
-    uint8_t at[2][sizeof str_HiScoreScreen_1];            /* (str_HiScoreScreen_1 and _2 at the league's places) */
+    uint8_t at[2][sizeof str_HiScoreScreen_1];            /* (str_HiScoreScreen_1 and _2 at the roster set's places) */
     for (int k = 0; k < 2; k++) {
         memcpy(at[k], k ? str_HiScoreScreen_2 : str_HiScoreScreen_1, sizeof at[k]);
-        at[k][3] = league.hiscore_at[k][0];
-        at[k][4] = league.hiscore_at[k][1];
+        at[k][3] = rosters.hiscore_at[k][0];
+        at[k][4] = rosters.hiscore_at[k][1];
     }
     printz(at[0], sizeof at[0]);
     struct Picture p = picture(ART(PlayoffSprite) + 0x12E0);
@@ -660,7 +660,7 @@ void WriteLineData(void)
 uint16_t GetLeagueCrowdRecord(void)
 {
     uint16_t best = 0, team = 0;
-    for (int16_t t = (int16_t)(league.teams - 1); t >= 0; t--) {
+    for (int16_t t = (int16_t)(rosters.teams - 1); t >= 0; t--) {
         ReadCrowdRecord((uint32_t)t, ram_addr(g.ThreeStars));
         uint16_t db = g.ThreeStars[8];
         if (db == 0) db = 0x50;

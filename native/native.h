@@ -6,7 +6,7 @@
 #include "mdrt/mdrt.h"
 #include "mdrt/platform_sdl2.h"
 #include "mdrt/net_udp.h"
-#include "league.h"
+#include "rosters.h"
 
 extern mdrt *native_m;                  /* the console */
 
@@ -61,11 +61,11 @@ void native_net_stop_at(long frame);                    /* headless: the session
 void native_net_wait(void);                             /* at each of the game's waits, before the handshake */
 int native_net_on(void);                                /* in a session (headless: from before power on) */
 /* the session's settings (the host's, sent to the guest before power on): the next game's rules,
- * its league as a package, and its save RAM (sram: the file, NULL or missing: blank). Made by the
+ * its roster set as a package, and its save RAM (sram: the file, NULL or missing: blank). Made by the
  * player who may host (the window's Start, or the command line), applied by both at power on */
 const void *native_net_settings(const char *sram, size_t *size);
-void native_net_power_on(mdrt *m);                      /* in a session: its settings the next game's (before the rules and league power on) */
-/* the session's rules (RULE_COUNT of them) into v, whether its league is one sent and whether this
+void native_net_power_on(mdrt *m);                      /* in a session: its settings the next game's (before the rules and roster set power on) */
+/* the session's rules (RULE_COUNT of them) into v, whether its roster set is one sent and whether this
  * player hosts it: 1, or 0 when the game has no session's settings (yet) */
 int native_net_session(uint8_t *v, int *sent, int *host);
 mdrt_net *native_net(void);                             /* the command line's session, and its link */
@@ -80,7 +80,7 @@ void rules_next_get(uint8_t *v);                         /* the next game's rule
 int rules_next_set(const uint8_t *v, int count);         /* count of them (the rest Classic): 0, or -1 when one is out of range */
 /* the menu's page: a preset, then the rules (its options_use and options_changed) */
 const mdrt_sdl_option *rules_page(int *count);
-/* the menu's pages of them: League (who plays, and what the league chosen holds), Game rules */
+/* the menu's pages of them: Rosters (who plays, and what the roster set chosen holds), Game rules */
 const mdrt_sdl_page *rules_pages(int *count);
 void rules_page_text(int page, const int *values, char *text, size_t size, void *user);
 int rules_page_pick(int which, const char *path, char *why, size_t why_size, void *user);
@@ -94,49 +94,49 @@ void rules_power_on(void);
 size_t rules_state_save(void *user, uint8_t *out);
 int rules_state_load(void *user, const uint8_t *in, size_t size);
 
-/* leagues (league.c; src/league.h): a folder of text files (teams.csv, players.csv ...), made the
+/* roster sets (rosters.c; src/rosters.h): a folder of text files (teams.csv, players.csv ...), made the
  * game's tables at power on (its art past the cartridge); the cartridge's own when none */
-const char *league_error(void);         /* why the last call failed */
-void league_next(const char *dir);      /* the next game's (NULL or "": the cartridge's) */
-/* the next game's league as a package's bytes (*out malloc'd: the caller's; a folder's files
+const char *rosters_error(void);         /* why the last call failed */
+void rosters_next(const char *dir);      /* the next game's (NULL or "": the cartridge's) */
+/* the next game's roster set as a package's bytes (*out malloc'd: the caller's; a folder's files
  * packed, a package's as they are): their size, 0 (*out NULL) for the cartridge's, -1 */
-long league_next_package(uint8_t **out);
-int league_next_bytes(const uint8_t *b, size_t n);   /* the next game's built from a package's bytes (0: the cartridge's): 0, -1 */
-/* the league a host sent (kept for the run), one of the League page's: its index (listed when it
+long rosters_next_package(uint8_t **out);
+int rosters_next_bytes(const uint8_t *b, size_t n);   /* the next game's built from a package's bytes (0: the cartridge's): 0, -1 */
+/* the roster set a host sent (kept for the run), one of the Rosters page's: its index (listed when it
  * is not, read again for another), -1 when none was sent (or it is being read: ask again) */
-int league_session_entry(void);
-int league_next_is_cartridge(void);
-void league_power_on(void);             /* (a league that will not build: the cartridge's, and why on stderr) */
-uint64_t league_hash(void);             /* this game's league: its checksum (0 the cartridge's) */
-const char *league_dir(void);           /* its folder ("" the cartridge's) */
-const char *league_name(void);
-int league_use(const char *dir, uint64_t hash);   /* a state's league (dir's, when its checksum is hash): 0, -1 */
-int league_check(const char *dir, int describe);   /* it builds (described on stdout): 0, -1 */
-int league_export(const char *dir);     /* the cartridge's league as a folder: 0, -1 */
-/* dir's league as a package (zip_path: a zip of its files, to send or keep): 0, -1 */
-int league_pack(const char *dir, const char *zip_path);
-/* where a ROM keeps its league (romsrc.c): the cartridge, or a hack on the community's 32-team
+int rosters_session_entry(void);
+int rosters_next_is_cartridge(void);
+void rosters_power_on(void);             /* (a roster set that will not build: the cartridge's, and why on stderr) */
+uint64_t rosters_hash(void);             /* this game's roster set: its checksum (0 the cartridge's) */
+const char *rosters_dir(void);           /* its folder ("" the cartridge's) */
+const char *rosters_name(void);
+int rosters_use(const char *dir, uint64_t hash);   /* a state's roster set (dir's, when its checksum is hash): 0, -1 */
+int rosters_check(const char *dir, int describe);   /* it builds (described on stdout): 0, -1 */
+int rosters_export(const char *dir);     /* the cartridge's roster set as a folder: 0, -1 */
+/* dir's roster set as a package (zip_path: a zip of its files, to send or keep): 0, -1 */
+int rosters_pack(const char *dir, const char *zip_path);
+/* where a ROM keeps its roster set (romsrc.c): the cartridge, or a hack on the community's 32-team
  * template, whose tables its code points at where the cartridge's points at its own */
 struct romsrc {
     const uint8_t *b;
     uint32_t size;
     int hack;                           /* 0: the cartridge */
-    uint32_t table[LG_TABLES];          /* (league.h's tables; BannerSlotMap none) */
+    uint32_t table[RS_TABLES];          /* (rosters.h's tables; BannerSlotMap none) */
     int teams, playoff_teams, rows;
     uint32_t bitmaps, rink, rink_tiles, photos;   /* TeamBitmaps, Rinktilelist, Rinktiles, PicturePalette */
-    uint32_t asset[ART_ASSETS];         /* the shared art's addresses (league.h's ART_) */
-    uint8_t hiscore_at[2][2];           /* HiScoreScreen's pictures' places (league.h) */
+    uint32_t asset[ART_ASSETS];         /* the shared art's addresses (rosters.h's ART_) */
+    uint8_t hiscore_at[2][2];           /* HiScoreScreen's pictures' places (rosters.h) */
 };
 void romsrc_cartridge(struct romsrc *s, const uint8_t *cart);
-void romsrc_game(struct romsrc *s);     /* what the game reads by number now: the cartridge, the league in play's art */
+void romsrc_game(struct romsrc *s);     /* what the game reads by number now: the cartridge, the roster set in play's art */
 /* rom (size bytes), a hack read against the cartridge cart: 0, else -1 and why */
 int romsrc_hack(struct romsrc *s, const uint8_t *rom, uint32_t size, const uint8_t *cart, char *why, size_t why_size);
 int romsrc_block_ok(const struct romsrc *s, int t);    /* team t's block reads as the game reads it */
 uint8_t rs8(const struct romsrc *s, uint32_t a);        /* (0 past its end) */
 uint16_t rs16(const struct romsrc *s, uint32_t a);
 uint32_t rs32(const struct romsrc *s, uint32_t a);
-/* s's league written as a folder named name (league_export: the cartridge's): 0, -1 */
-int league_extract(const struct romsrc *s, const char *dir, const char *name);
+/* s's roster set written as a folder named name (rosters_export: the cartridge's): 0, -1 */
+int rosters_extract(const struct romsrc *s, const char *dir, const char *name);
 
 /* team art as pictures (art.c): logos, banners, centre ice and photos out of a ROM as palette
  * indexes, PNGs of them, and the game's formats again from PNGs */
@@ -167,7 +167,7 @@ int art_load(const char *path, mdrt_png *p, int w, int h);
 int art_load_bytes(const char *name, const uint8_t *b, size_t n, mdrt_png *p, int w, int h);
 int art_indexes(const char *path, const mdrt_png *p, int x0, int y0, int w, int h, const uint16_t *pal, int n, int base, uint8_t *out);
 int art_own_palette(const char *path, const mdrt_png *p, uint16_t pal[16], uint8_t *out);
-/* the art every team shares (art.c: league.h's ART_ assets): their names, sizes in a ROM, views
+/* the art every team shares (art.c: rosters.h's ART_ assets): their names, sizes in a ROM, views
  * (a picture, sprites' tiles as a sheet, a photo) and the assets again from changed views */
 struct art_view { int w, h, n, own; uint8_t *px; uint16_t pal[64]; };   /* (own: a picture with colours of its own) */
 int art_shared(void);                                   /* how many */
@@ -181,42 +181,42 @@ int art_view_same(const struct art_view *a, const struct art_view *b);
 void art_view_free(struct art_view *v);
 size_t art_shared_make(const struct romsrc *s, int i, uint32_t a, const struct art_view *v, uint8_t **out);
 size_t art_shared_copy(const struct romsrc *s, int i, uint32_t a, uint8_t **out);
-/* the art map: every piece of art the game can read by number in the league in play (the
- * cartridge's and the league's own), what it is and how long: for a renderer that draws other
+/* the art map: every piece of art the game can read by number in the roster set in play (the
+ * cartridge's and the roster set's own), what it is and how long: for a renderer that draws other
  * art in a piece's place (texture packs), and for --art-check (every byte the VDP takes by DMA
  * from the game's data in a piece) */
 enum { PIECE_SHARED, PIECE_LOGO, PIECE_ICE, PIECE_PHOTO, PIECE_BANNERS, PIECE_BANNER_SLOTS, PIECE_TEAM_BANNERS,
-       PIECE_ARENA, PIECES };                           /* (a team's own block tiles: in its league's Teamblocksmap) */
+       PIECE_ARENA, PIECES };                           /* (a team's own block tiles: in its roster set's Teamblocksmap) */
 /* which: the ART_ of a shared one, a team's team, an arena animation's number (ArenaAnims), else 0 */
 struct art_piece { uint32_t at, size; uint8_t kind, which; };
-void art_map_make(void);                                  /* (league.c: when a league is put in play) */
+void art_map_make(void);                                  /* (rosters.c: when a roster set is put in play) */
 const struct art_piece *art_map(int *n);                  /* sorted by at, none overlapping another */
 const struct art_piece *art_piece_at(uint32_t number);    /* the piece number is in, or NULL */
 const char *art_piece_name(const struct art_piece *p, char *out, size_t size);
 int art_map_overlaps(void);                               /* pieces inside another, left out (a piece whose
                                                              length, reckoned, ran into the next ends where it begins) */
 void art_map_report(void);                                /* (those, on stdout) */
-/* the leagues/ folder's leagues for the menu (the cartridge's first): the count */
-int league_list(const char *const **names, const char *const **labels);
-/* what the League page says of league i of the list (0 the cartridge's): lines, a tab before each
+/* the rosters/ folder's roster sets for the menu (the cartridge's first): the count */
+int rosters_list(const char *const **names, const char *const **labels);
+/* what the Rosters page says of roster set i of the list (0 the cartridge's): lines, a tab before each
  * one's right */
-void league_about(int i, char *text, size_t size);
-int league_unread(void);                /* the leagues in leagues/ the list left out (why: on stderr) */
-/* list entry i's folder or package (NULL: the cartridge's) into out; its files as the League page
- * says them ("leagues/x.zip, 1652 KB"); a league the player found at path made an entry of the
+void rosters_about(int i, char *text, size_t size);
+int rosters_unread(void);                /* the roster sets in rosters/ the list left out (why: on stderr) */
+/* list entry i's folder or package (NULL: the cartridge's) into out; its files as the Rosters page
+ * says them ("rosters/x.zip, 1652 KB"); a roster set the player found at path made an entry of the
  * list: its index (an entry already, by any name: that one's), or -1 and why */
-const char *league_list_dir(int i, char *out, size_t size);
-void league_files(int i, char *text, size_t size);
-int league_add(const char *path, char *why, size_t why_size);
+const char *rosters_list_dir(int i, char *out, size_t size);
+void rosters_files(int i, char *text, size_t size);
+int rosters_add(const char *path, char *why, size_t why_size);
 /* a player's overall rating as his card shows it, from his 14 ratings and number (ratings.c);
  * *sum (NULL: not wanted) the sum it comes from, past 99 */
 int rating_overall(const uint8_t *cart, const uint8_t nib[14], int number, int goalie, int *sum);
 /* a rating as the roster screen shows it: the column's mask's bits (PAttribColumns' high word) */
 int rating_column(const uint8_t *cart, const uint8_t nib[14], int number, unsigned bits);
-const char *league_sram(const char *base);   /* the next game's save RAM file (base: the cartridge's) */
+const char *rosters_sram(const char *base);   /* the next game's save RAM file (base: the cartridge's) */
 
 /* team name banners (banner.c): the cartridge's two sets (Teamblocksmap, TeamBitmaps), 88 x 16
- * pixels a team, and new ones drawn in their letters for a league's teams */
+ * pixels a team, and new ones drawn in their letters for a roster set's teams */
 enum { BANNER_BLOCKS, BANNER_BITMAPS, BANNER_SETS };
 int banner_prepare(const uint8_t *cart);                 /* its sets and letters: 0, -1 */
 int banner_check(const char *text, char *why, size_t n); /* a name a banner can show: 0, else -1 and why */
@@ -224,7 +224,7 @@ int banner_check(const char *text, char *why, size_t n); /* a name a banner can 
 void banner_pixels(int set, int art, const char *text, uint8_t px[16][88]);
 void banner_tiles(const uint8_t px[16][88], uint8_t out[22 * 32]);   /* its 22 tiles, row by row */
 const uint8_t *banner_set(int set, int *count, uint32_t *map);       /* a set's tiles (unpacked) and map */
-int banner_selfcheck(int *letters, int *same);           /* -> the banners checked (league_test) */
+int banner_selfcheck(int *letters, int *same);           /* -> the banners checked (rosters_test) */
 
 /* lockstep against the oracle (lockstep.c) */
 int lockstep_load(const char *path, mdrt *m);

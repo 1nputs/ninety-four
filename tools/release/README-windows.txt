@@ -27,8 +27,8 @@ Alt+Enter          full screen
 The menu (Esc, or a controller's Back button) has the ROM, a reset, save slots, the video (a
 pixel-art upscaler: Scale2x, Scale3x, MMPX or xBR; sharp, integer or fit scaling; square pixels or
 4:3; the colours' levels; dithering blended as a television blended it; a picture tube's scanlines
-and mask; full screen; vsync), captures, the sound (volume, the FM sound core and chip), the
-players, the league, the game rules, online play, options and every key: pick one and press the
+and mask; full screen; vsync), captures, the sound (volume, the FM core and chip), the
+players, the rosters, the game rules, online play, options and every key: pick one and press the
 new key.
 
 Game rules (the menu's Game rules page, for every player and the whole game; Classic, the default,
@@ -39,33 +39,33 @@ how many penalties are called, hot and cold streaks, a wide rink view, and prese
 Simulation, Arcade). The amounts are numbers underneath: settings.ini takes any in a rule's range
 (rules.skating = 115), and so does --rule skating=115.
 
-Leagues (the menu's League page): the cartridge's teams, or a league of your own of up to 32 teams,
-with its players, ratings, lines, colours, logos, banners, centre ice, photos and even the title
-screens and rinks, as CSV files and PNGs in a "leagues" folder beside the program (or anywhere:
+Rosters (the menu's Rosters page): the cartridge's teams, or rosters of your own of up to 32 teams,
+with their players, ratings, lines, colours, logos, banners, centre ice, photos and even the title
+screens and rinks, as CSV files and PNGs in a "rosters" folder beside the program (or anywhere:
 the page's Files line finds one). To start one, or take one from a community hack made on the
 32-team template, or pack one into a single zip to send:
 
-    nhl94.exe --export-league leagues/my-league
-    nhl94.exe --extract-rom "HACK.bin" leagues/2026
-    nhl94.exe --check-league leagues/my-league
-    nhl94.exe --pack-league leagues/my-league my-league.zip
+    nhl94.exe --export-rosters rosters/my-rosters
+    nhl94.exe --extract-rom "HACK.bin" rosters/2026
+    nhl94.exe --check-rosters rosters/my-rosters
+    nhl94.exe --pack-rosters rosters/my-rosters my-rosters.zip
 
 (each with --rom FILE, unless the ROM is beside the program as "NHL 94 (UE) [!].gen"). The page
-says what the chosen league holds: its files, its teams and its best players and teams by the
-game's own ratings. Everything about the files is in LEAGUES.md.
+says what the chosen rosters hold: their files, their teams and their best players and teams by the
+game's own ratings. Everything about the files is in ROSTERS.md.
 
 Four players: in the menu, Players, set Controllers to EA 4 Way Play, Reset, then choose Players:
 Three or Four in the game's setup screen. The Players page also gives each player a controller,
 moves a controller's buttons, adds turbo and sets the stick's dead zone.
 
 Online play (the menu's Online play page): two to four machines, over the internet or a LAN, with
-rollback, so no one waits. Set Your name and Players here (how many play at this machine). One
-machine hosts (Play as: host, and Players in all) and the others join its address and port (7000
+rollback, so no one waits. Set Name and Players here (how many play at this machine). One
+machine hosts (Role: host, and Total players) and the others join its address and port (7000
 by default; the host's port must be reachable, forwarded on its router for UDP); two machines can
 instead both connect at once, which most home routers let through without a forwarded port. When
 everyone is in, the game powers on everywhere: the host's players on pads 1 onward, then each
 machine's as it joined; with pads 3 or 4 played, EA's 4 Way Play is in the ports (Players: Three
-or Four). The host's league, game rules and save RAM (its own, or a new cartridge's: the host's
+or Four). The host's rosters, game rules and save RAM (its own, or a new cartridge's: the host's
 Save RAM on the same page) go to everyone, and nothing is saved from an online game. The host's
 Reset (in the menu) starts the game again for everyone. If anyone leaves, the game is over for
 everyone. Every machine needs this same build and the US/Europe

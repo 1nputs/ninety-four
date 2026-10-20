@@ -201,7 +201,7 @@ void BuildHotColdLists(void)
 void SortHotColdStarters(struct Team *tm)
 {
     const uint8_t *hc = tm->hotcold[0];                   /* (the table, row after row) */
-    const uint8_t *a0 = lg(tm->team)->lines[0];           /* the starters */
+    const uint8_t *a0 = rosters_team(tm->team)->lines[0];           /* the starters */
     uint8_t *a1 = g.TempBuffer;
     for (int i = 0; i < 6; i++) {
         uint8_t d1 = (uint8_t)(*a0++ - 1);

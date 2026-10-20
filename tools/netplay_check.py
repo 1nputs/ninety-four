@@ -6,9 +6,9 @@ run of the same buttons: the scripts moved later by the input delay (netplay's b
 game delay + 1 frames after they are pressed, a solo run's one). Every frame each machine finally
 played (the last line --hashes wrote for it: a rollback plays frames again) must be the solo
 run's: work RAM, the VDP's state, the Z80's RAM and save RAM, bit for bit. Each must play out its
-frames, its own desync checks agreeing. Only the host is given the game's settings (its league,
+frames, its own desync checks agreeing. Only the host is given the game's settings (its roster set,
 rules and save RAM: user records, from a run of records_game_30s.txt), as the solo run is: the
-session sends them to the guests, whose own are none (no league, the Classic rules, blank save
+session sends them to the guests, whose own are none (no roster set, the Classic rules, blank save
 RAM). Each machine is given every pad's script and plays those of the pads the host gives it (in
 the order the guests come, the host's first).
 
@@ -19,8 +19,8 @@ the setup screen), EA's 4 Way Play in the ports (the solo run's --four-way).
 
   h2h      two machines that both connect (--peer), 40 ms each way +-10, 5% lost, 1% twice, input
            delay 2: power on to the second period (both given the settings: either may host)
-  league   host and join, 25 ms +-25, 10% lost, delay 1: the host's 32-team league
-           (out/leagues/thirty-two, from make golden) by the Arcade preset, power on to the first
+  roster set   host and join, 25 ms +-25, 10% lost, delay 1: the host's 32-team roster set
+           (out/rosters/thirty-two, from make golden) by the Arcade preset, power on to the first
            intermission
   delay0   host and join, 15 ms +-5, 2% lost, delay 0 (a rollback for nearly every change of
            buttons): the whole game, to the setup screen again
@@ -55,7 +55,7 @@ OUT = os.path.join(ROOT, 'out', 'netplay')
 # %, %), pad 2's seed (None: the four 4 Way Play scripts), the players at each machine (the host's first)
 SCENARIOS = [
     ('h2h', 6000, [], 'peer', 2, '40,10,5,1', 1, [1, 1]),
-    ('league', 7000, ['--league', 'out/leagues/thirty-two', '--rule', 'preset=arcade'], 'join', 1, '25,25,10,1', 2, [1, 1]),
+    ('rosters', 7000, ['--rosters', 'out/rosters/thirty-two', '--rule', 'preset=arcade'], 'join', 1, '25,25,10,1', 2, [1, 1]),
     ('delay0', 16000, [], 'join', 0, '15,5,2,0', 3, [1, 1]),
     ('twotwo', 6000, [], 'join', 2, '30,10,5,1', None, [2, 2]),
     ('four', 6000, [], 'join', 2, '30,10,5,1', None, [1, 1, 1, 1]),
@@ -63,7 +63,7 @@ SCENARIOS = [
     ('onethree', 6000, [], 'join', 2, '30,10,5,1', None, [1, 3]),
     ('reset', 7000, [], 'join', 2, '30,10,5,1', 4, [1, 1]),
 ]
-NEEDS = {'league': 'out/leagues/thirty-two'}
+NEEDS = {'rosters': 'out/rosters/thirty-two'}
 RESETS = {'reset': 3600}                                  # (the host's pad 1 resets the console at this frame)
 
 
@@ -109,7 +109,7 @@ def pad2(seed, last):
 
 def last_lines(path):
     """the last line of each frame: work RAM, VDP, Z80 RAM, save RAM (not the simulation's hash
-    after them: a solo run's rules part names its league's folder, a session's does not)"""
+    after them: a solo run's rules part names its roster set's folder, a session's does not)"""
     lines = {}
     with open(path) as f:
         for line in f:

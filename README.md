@@ -55,7 +55,7 @@ Game controllers work too (the first two are players 1 and 2).
 Esc (or a controller's Back button) opens it; arrows and Enter, or the d-pad, A and B, work it.
 
 - **Game ROM**: your cartridge dump, in a file browser.
-- **Reset**, and **Save a state** / **Load a state**: eight slots, each with a picture of the
+- **Reset**, and **Save state** / **Load state**: eight slots, each with a picture of the
   moment, in `states/` beside the game. States are taken during play (not in the menus or a
   pause). Quit in the middle of a game and the next start puts you back where you were (quick
   resume, an option).
@@ -68,15 +68,15 @@ Esc (or a controller's Back button) opens it; arrows and Enter, or the d-pad, A 
 - **Capture**: the last 20 seconds are always kept; F10 (or this page) saves them, and F11
   records until you press it again. They go to `videos/` as GIFs (exact colours, 30 frames a
   second, no sound). The page sets how long the replay is and a GIF's size.
-- **Sound**: volume, and the FM sound core and chip (hear the difference as you play).
+- **Sound**: volume, and the FM core and chip (hear the difference as you play).
 - **Players**: which controller each player has, a controller's buttons (press the new one),
   turbo A / B / C, the stick's dead zone, and EA's **4 Way Play** for four players (as on the
   cartridge: set it, Reset, then choose Players: Three or Four in the game's setup screen).
-- **League**: who plays (below).
+- **Rosters**: who plays (below).
 - **Game rules**: how the game plays (below).
 - **Online play**: two to four machines, any players at each (below).
-- **Options** and **Keys**: pausing when the window loses focus, fast-forward's speed, quick
-  resume, the frames a second at the picture's top right, and every key of the pads and the
+- **Options** and **Keys**: pause in background, fast-forward speed, quick resume, the FPS
+  counter, and every key of the pads and the
   controls (pick one and press the new key, with Shift, Ctrl or Alt if you like).
 
 All of it is kept in `settings.ini`, in the folder you run the game from, beside its saves; you
@@ -130,11 +130,11 @@ lengths are `on` / `off` and `classic` / `more`; the rink view is `classic` / `w
 Two to four machines, over the internet or a LAN, with rollback: each game plays its own players'
 buttons at once and guesses the others', and when theirs arrive different it plays the last few
 frames again with them before drawing the next, so no one waits. The menu's **Online play** page:
-your name; host, join a host, or (two machines) both connecting at once (most home routers let
+**Name**; **Role**: host, join, or (two machines) both connect at once (most home routers let
 that through without a forwarded port); the address and the port; this machine's LAN address;
 the input delay (frames between pressing and the game seeing it, 2 by default: more means fewer
 rollbacks over a long way); **Players here** (how many play at this machine: its players 1, 2 and
-3); and, for the host, **Players in all** and **Save RAM** (below). The host waits until they are all in, then the game
+3); and, for the host, **Total players** and **Save RAM** (below). The host waits until they are all in, then the game
 powers on everywhere: the host's players on pads 1 onward, then each machine's as it joined. Two
 machines with a player each, choose Players: Two - Head to Head (or Two - Teammates) on the setup
 screen; four machines with one each, two with two, three with two and one and one, one and three:
@@ -143,57 +143,58 @@ If anyone leaves, the game is over for everyone, each told who left. From the co
 `--host [PORT]`, `--join ADDR[:PORT]`, `--peer ADDR[:PORT]` (two machines both connecting,
 `--port` your own), `--delay N`, `--name NAME`, `--here N`, `--players N` (the host's).
 
-The game is the host's: its League and Game rules pages' choices go to every other machine
-before the game starts, a league as its package (the NHL 2026 edition's, every photo included, is
-about 1.7 MB), so no one else needs a copy of it, and with them the save RAM the game plays with:
+The game is the host's: its Rosters and Game rules pages' choices go to every other machine
+before the game starts, rosters as their package (the NHL 2026 edition's, every photo included, is
+about 1.7 MB), so no one else needs a copy of them, and with them the save RAM the game plays with:
 the host's own (its records and edited lines: the Online play page's **Save RAM**, yours) or a
 new cartridge's (default lines, no records). Every machine must play the same save RAM, or the
 games would differ at once (the cartridge reads all of it at power on), so a guest's own is not
 used; and nothing is saved from the session: no one's save file is read for it or written by it,
 during it or after it while the game plays on alone. While the session lasts every machine's
-League and Game rules pages show the host's choices, greyed (their own come back after it), and
-the host's league stays on the others' League pages until they quit. The window's
+Rosters and Game rules pages show the host's choices, greyed (their own come back after it), and
+the host's rosters stay on the others' Rosters pages until they quit. The window's
 pause, slow motion, fast-forward, rewind and states are not to be had while you play together,
 and only the host can reset: the menu's **Reset** (chosen twice) powers every machine's console on
 again at the same frame, the game from its start for everyone and the session going on, the save
 RAM as it is then (the cartridge's battery keeps it). Every machine needs the same build of the
 game and the US/Europe cartridge, or it is refused.
 
-## Leagues
+## Rosters
 
-Play the cartridge's 26 teams (and its two All-Star teams), or a league of your own of up to 32:
+Play the cartridge's 26 teams (and its two All-Star teams), or rosters of your own of up to 32:
 teams, players, ratings, lines, colours, logos, banners, centre ice, player photos, and even the
-title screens, rinks, sprites and fonts every team shares. A league is a folder of text files a
-spreadsheet opens and PNGs any paint program edits, in `leagues/` beside the game, or the same
+title screens, rinks, sprites and fonts every team shares. Rosters are a folder of text files a
+spreadsheet opens and PNGs any paint program edits, in `rosters/` beside the game, or the same
 packed in one zip.
 
 ```
-./build/nhl94 --export-league leagues/my-league          # the cartridge's league, to change as you like
-./build/nhl94 --extract-rom "HACK.bin" leagues/2026      # a hack's league (read as data, never run)
-./build/nhl94 --check-league leagues/my-league           # what holds, or what is wrong and on which line
-./build/nhl94 --pack-league leagues/my-league my.zip     # one file to keep or send, played as it is
+./build/nhl94 --export-rosters rosters/my-rosters          # the cartridge's rosters, to change as you like
+./build/nhl94 --extract-rom "HACK.bin" rosters/2026      # a hack's rosters (read as data, never run)
+./build/nhl94 --check-rosters rosters/my-rosters           # what holds, or what is wrong and on which line
+./build/nhl94 --pack-rosters rosters/my-rosters my.zip     # one file to keep or send, played as it is
 ```
 
 (Each needs the cartridge too: `--rom FILE`, or your dump in the folder as `NHL 94 (UE) [!].gen`.)
 
-Choose one on the menu's **League** page and Reset: those in `leagues/` are listed, and its
+Choose one on the menu's **Rosters** page and Reset: those in `rosters/` are listed, and its
 **Files** line finds one anywhere else (a folder, or a package). The page says what the chosen
-league holds: where its files are, how many teams it has (and how many play for the cup), and
-sixteen pages of it to step through with left and right: its best skaters, goalies and teams, its
-fastest skaters, hardest shots, sharpest shooters, passers, stickhandlers and hitters (rated as the
-game's cards and roster screen rate them), its heaviest and lightest players, the teams' power
-play, penalty killing, home and road bonuses, and the league in numbers. Each league keeps its own records, and a saved state plays on with the league it was saved
-in. The cartridge's own league, exported and built again, plays the original frame for frame.
+rosters hold: where their files are, how many teams they have (and how many play for the cup), and
+sixteen pages of them to step through with left and right: their best skaters, goalies and teams,
+their fastest skaters, hardest shots, sharpest shooters, passers, stickhandlers and hitters (rated
+as the game's cards and roster screen rate them), their heaviest and lightest players, the teams'
+power play, penalty killing, home and road bonuses, and the rosters in numbers. Each set of rosters
+keeps its own records, and a saved state plays on with the rosters it was saved in. The
+cartridge's own rosters, exported and built again, play the original frame for frame.
 
 Community hacks made on the 32-team template (NHL 94 2025, NHL 2026 94 Edition, the 30th
 Anniversary Championship Teams and the like) extract whole: teams, players, ratings, lines,
 playoff draws, colours and jerseys, and all their art. Their code is not taken, so what a hack
 changed there (its own gameplay, extra menu lines, its texts) is not either. A known issue: NHL 94
 2025 rates its players on a wider scale of its own, which plays here as the cartridge's best at most
-([docs/LEAGUES.md](docs/LEAGUES.md#known-issue-nhl-94-2025s-ratings-play-as-the-cartridges-6-at-most)).
+([docs/ROSTERS.md](docs/ROSTERS.md#known-issue-nhl-94-2025s-ratings-play-as-the-cartridges-6-at-most)).
 
-**Everything about leagues, file by file and column by column, is in
-[docs/LEAGUES.md](docs/LEAGUES.md):** the folder's layout, every CSV column and its range, the
+**Everything about rosters, file by file and column by column, is in
+[docs/ROSTERS.md](docs/ROSTERS.md):** the folder's layout, every CSV column and its range, the
 art's sizes and colours, what is and is not taken from a hack, packages, records and states.
 
 ## Build
@@ -261,15 +262,15 @@ tell us what it said.
   records real play. `make test` replays 10,276 recorded routine calls. `make lockstep` runs 18
   whole sessions against the oracle, checking work RAM and VDP at every vblank. `make
   golden-check` compares the native build's own output with a recorded build, bit for bit (20
-  runs, about 227,000 frames, the rules' and leagues' own among them), plus save-state round
+  runs, about 227,000 frames, the rules' and rosters' own among them), plus save-state round
   trips. `make golden-cross` builds the game and pulseman with Clang and checks the same runs
   against it: the game plays bit for bit the same whatever compiles it, as netplay between
   builds needs; `make golden-ubsan` checks them with the undefined behaviour sanitizer. `make
   netplay-check` plays seven sessions from power on (headless, over the loopback through a
-  simulated network: delay, jitter, loss, duplicates; the host's league, rules and save RAM
+  simulated network: delay, jitter, loss, duplicates; the host's rosters, rules and save RAM
   sent; input delay 0; two to four machines, 4 Way Play: two each, one each on four, two and
-  one and one, one and three), every machine's every frame as a solo run of the same buttons. `make rulestest` checks the game rules on the game's own routines (and the League page's
-  ratings against the cards' for every player). `make leaguetest` checks the leagues: the
+  one and one, one and three), every machine's every frame as a solo run of the same buttons. `make rulestest` checks the game rules on the game's own routines (and the Rosters page's
+  ratings against the cards' for every player). `make rosterstest` checks the rosters: the
   cartridge's exported and built again, its tables and art the cartridge's; a 32-team one; 22 broken ones refused; and
   with hack ROMs in `../roms` (or `HACKS=`), each extracted, built to its teams, colours and art
   as the hack has them, played and packed. pulseman is checked on the oracle's vectors (`make
@@ -277,11 +278,11 @@ tell us what it said.
 - **Done.** The harness, the game-play core, video and sound, the frame drivers, native running,
   lockstep, the whole front end (it boots from power on), a cleanup, golden runs, native save
   states and rewind. Then the game rules (`src/rules.h`: numbers, Classic the original's, kept in
-  states) and leagues (`src/league.h`'s tables; `native/league.c` reads and builds them,
-  `native/romsrc.c` reads hacks, `native/art.c` the pictures, `docs/LEAGUES.md` the format), the
-  League and Game rules pages. Rollback netplay (`native/net.c`: pulseman's `mdrt/netplay.h`,
+  states) and rosters (`src/rosters.h`'s tables; `native/rosters.c` reads and builds them,
+  `native/romsrc.c` reads hacks, `native/art.c` the pictures, `docs/ROSTERS.md` the format), the
+  Rosters and Game rules pages. Rollback netplay (`native/net.c`: pulseman's `mdrt/netplay.h`,
   resuming at the game loop's wait as a state does; the window's Online play page, or `--host`,
-  `--join`, `--peer`; the host's league, rules and save RAM sent; two to four machines, any
+  `--join`, `--peer`; the host's rosters, rules and save RAM sent; two to four machines, any
   players at each, up to four). In pulseman: the console's state as a value, a client-owned clock
   with line-by-line drawing and an H-interrupt hook, a bus map, FM cores and models chosen at run
   time, a trace recorder, PNG and zip, the client's option pages, and vsync.
@@ -293,9 +294,9 @@ tell us what it said.
   the machine's own formats (Strings, the sprite table, the DMA list, records) are host bytes
   (`ram_bytes`). The console's big-endian view is made on demand (`src/mem.h`, `src/ram.c`'s map,
   `ram_pack`/`ram_unpack` for the checks and states); what still goes by 68000 address is listed
-  at the top of `src/mem.h`. The league is native tables too (`src/league.h`'s `lg_team`: read
-  off the cartridge for its own league, made from a league's folder for another); its art stays in
-  the cartridge's formats, read by number (the cartridge's, or a league's own past it), and the art
+  at the top of `src/mem.h`. The rosters are native tables too (`src/rosters.h`'s `roster_team`: read
+  off the cartridge for its own rosters, made from the rosters' folder for another); its art stays in
+  the cartridge's formats, read by number (the cartridge's, or the rosters' own past it), and the art
   map (`native/art.c`) says what every number is: `--art-map` prints it, and every golden run checks
   that each byte the VDP takes by DMA is in a piece of it (`--art-check`), for texture packs later.
 - **Deferred by the owner.** WebAssembly (the game's code compiles for it now; a browser platform
@@ -337,17 +338,17 @@ From the least ambitious to the most.
 - [x] Pixel-art upscalers: Scale2x, Scale3x, MMPX 2x and 4x, xBR 2x, 3x and 4x
 - [x] Screenshot key (PNG)
 - [x] Fast-forward, slow motion, frame step
-- [x] Pause when the window loses focus
+- [x] Pause in background
 - [x] Controller remapping, player slots, turbo, dead zones
 - [x] Capture: the replay (the last 20 seconds) and recordings, as GIFs
 - [x] Save slots with thumbnails; quick resume on quit and start (states during play)
 - [x] Game rules, the host's for every player (Classic: the original): period lengths, overtime, the weight bug fix, the second assist fix, plus/minus and checks, skating, burst, shots, puck, energy, penalties, streaks, presets, the rink view
 - [x] The rules as numbers: any value in a rule's range in `settings.ini` or `--rule`, named choices on the page
-- [x] Leagues of your own, up to 32 teams: teams, players, lines, colours and pictures in files, name banners drawn for new teams
-- [x] Leagues extracted from hacks on the 32-team template (teams, players, ratings, lines, draws, colours and all their art)
-- [x] League packages: a league in one zip, to keep or send, played as it is
-- [x] League art as PNGs to draw over: logos, banners, centre ice, photos, and the art every team shares (title screens, rinks, sprites, fonts ...)
-- [x] A League page: choose the league, and see its files, teams, best players and teams
+- [x] Rosters of your own, up to 32 teams: teams, players, lines, colours and pictures in files, name banners drawn for new teams
+- [x] Rosters extracted from hacks on the 32-team template (teams, players, ratings, lines, draws, colours and all their art)
+- [x] Rosters packages: rosters in one zip, to keep or send, played as it is
+- [x] Rosters art as PNGs to draw over: logos, banners, centre ice, photos, and the art every team shares (title screens, rinks, sprites, fonts ...)
+- [x] A Rosters page: choose the rosters, and see its files, teams, best players and teams
 - [x] Vsync: no tearing
 - [ ] Skip the EA screen, boot straight into a game
 - [x] Colour options; scanlines, CRT mask, composite dither blending
@@ -366,7 +367,7 @@ From the least ambitious to the most.
 - [ ] Lua scripting: overlays, stats, bots
 - [ ] Python bindings: headless training environments, automated tests
 - [ ] Replays and spectating
-- [x] Rollback netplay online: two to four machines, up to four players (4 Way Play), the host's league, rules and save RAM sent to the others
+- [x] Rollback netplay online: two to four machines, up to four players (4 Way Play), the host's rosters, rules and save RAM sent to the others
 - [ ] The next game on the same method and runtime
 
 ## Greets

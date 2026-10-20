@@ -6,7 +6,7 @@
 #include "mem.h"
 #include "rom.h"
 #include "rules.h"
-#include "league.h"
+#include "rosters.h"
 
 /* A byte access to a word flag (btst #n,(x).w) tests bit n of the HIGH byte: bit n+8 of the word. */
 #define HI(n) (1u << ((n) + 8))
@@ -59,10 +59,10 @@ static inline void wr32(uint8_t *p, uint32_t v) { p[0] = (uint8_t)(v >> 24); p[1
 /* palfadenew, the 64 colours the palette fades to: n of them from the cartridge's (big-endian
  * words) at colour c */
 static inline void pal_load(unsigned c, const uint8_t *src, unsigned n) { for (unsigned i = 0; i < n; i++) g.palfadenew[c + i] = rd16(src + 2 * i); }
-static inline void pal_load_w(unsigned c, const uint16_t *src, unsigned n) { for (unsigned i = 0; i < n; i++) g.palfadenew[c + i] = src[i]; }   /* (colours as words: the league's) */
+static inline void pal_load_w(unsigned c, const uint16_t *src, unsigned n) { for (unsigned i = 0; i < n; i++) g.palfadenew[c + i] = src[i]; }   /* (colours as words: the roster set's) */
 /* team's logo colours where dobitmap's palbits puts a picture's (2: palette 1, 4: palette 2; the
  * cartridge passes TeamLogoPalettes + team x 32 less one or two palettes, so that one is its) */
-static inline void logo_colours(uint16_t team, unsigned palbits) { pal_load_w(palbits == 4 ? 0x20 : 0x10, lg(team)->logo_colours, 16); }
+static inline void logo_colours(uint16_t team, unsigned palbits) { pal_load_w(palbits == 4 ? 0x20 : 0x10, rosters_team(team)->logo_colours, 16); }
 
 /* a 16.16 position as the 68k reads it with move.l (the high word unsigned while it is shifted: a
  * negative's shift is undefined in C) */
@@ -155,9 +155,9 @@ static inline uint8_t text_next(struct Text *t) { return t->host ? *t->host++ : 
 static inline uint16_t text_word(struct Text *t) { uint16_t hi = text_next(t); return (uint16_t)(hi << 8 | text_next(t)); }
 static inline uint8_t text_byte(struct Text t, uint32_t k) { return t.host ? t.host[k] : m8(t.at + k); }   /* (byte k of it) */
 static inline uint16_t text_len(struct Text t) { return (uint16_t)(text_byte(t, 0) << 8 | text_byte(t, 1)); }
-/* a String of the league's tables (league.h): its bytes, and in the cartridge's league its
+/* a String of the roster set's tables (rosters.h): its bytes, and in the cartridge's roster set its
  * address (what the 68000's registers held) */
-static inline struct Text lg_text(const struct LgText *t) { return (struct Text){ t->s, t->at }; }
+static inline struct Text roster_text(const struct RosterText *t) { return (struct Text){ t->s, t->at }; }
 /* the printers, appstring and CopyString on a Text (print and the rest take a 68000 address) */
 struct Text print_p(struct Text s);
 struct Text printsmall_p(struct Text s);
@@ -685,7 +685,7 @@ void ShowThreeStars(void);
 void CalcStarScores(uint16_t d2);                       /* d2 = extra ice time a goalie needs */
 int16_t CalcTeamStarScores(struct Team *tm, struct Team *other, uint8_t **out, uint16_t mintime);   /* a2, a3, a4, d5 -> d3 */
 uint16_t TakeTopStarScore(struct Team **tm);            /* -> d0, a2 */
-const struct LgText *GetPlayerNamePointer(uint16_t player, struct Team *tm);   /* d0, a2 -> a0 */
+const struct RosterText *GetPlayerNamePointer(uint16_t player, struct Team *tm);   /* d0, a2 -> a0 */
 uint8_t *ConvertByteToDigits(uint16_t bcd, uint8_t *dst);          /* d0, a1 -> a1 */
 uint32_t FinalizeTextBuffer(uint8_t *end);              /* a1 -> a1 = mesarea */
 uint32_t FormatPlayerName(uint16_t player, struct Team *tm);    /* d0, a2 -> a1 */
@@ -713,7 +713,7 @@ void PushBits(uint8_t *bits, uint16_t v, uint16_t range);         /* a3, d0, d1 
 void WritePassBits(uint8_t *bits);                            /* a3 */
 void ResolveGames(void);
 void EncodePW(void);
-uint32_t FormatLastName(const struct LgText *name, uint8_t *out);   /* a0, a1 -> a1 = mesarea */
+uint32_t FormatLastName(const struct RosterText *name, uint8_t *out);   /* a0, a1 -> a1 = mesarea */
 uint32_t FormatPlayerNameShort(uint16_t player, struct Team *tm);    /* d0, a2 -> a1 */
 uint32_t FormatPlayerNameLast(uint16_t player, struct Team *tm);     /* d0, a2 -> a1 */
 

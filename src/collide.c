@@ -1543,7 +1543,7 @@ void setplayer(uint16_t roster, struct SortObj *o)
         o->SPA = 0;
     }
     tm->pdst[idx / 2] = 0xFFFF;
-    const struct LgTeam *T = lg(tm->team);                /* (its bonuses: the team's ScoreOdds bytes) */
+    const struct RosterTeam *T = rosters_team(tm->team);                /* (its bonuses: the team's ScoreOdds bytes) */
     g.PPBonus = g.PKBonus = g.ThirdPBonus = g.HmAwBonus = 0;
     if (o->position != 0) {
         if (g.sflags2 & HI(sf2pwrplay)) {
@@ -1574,7 +1574,7 @@ void setplayer(uint16_t roster, struct SortObj *o)
             }
         }
     }
-    const struct LgPlayer *P = &T->player[(uint16_t)(idx >> 1)];
+    const struct RosterPlayer *P = &T->player[(uint16_t)(idx >> 1)];
     const uint8_t *r = P->rating;
     o->rostnum = P->number;
     o->weight = (uint8_t)(r[LR_WEIGHT] << 3);
@@ -1608,7 +1608,7 @@ void setplayer(uint16_t roster, struct SortObj *o)
     o->spodds = ClampNibble((uint8_t)(d3 + g.ThirdPBonus + g.ThirdPBonus));
     g.TempWord2 = 0xE; d3 = AttributeCalc(r[LR_PASS_ACCURACY], o);
     o->passacc = ClampNibble((uint8_t)(d3 + g.PPBonus + g.HmAwBonus));
-    o->aggress = lg_attr(P, 7);                           /* (pass accuracy and aggressiveness, a moment) */
+    o->aggress = roster_attr(P, 7);                           /* (pass accuracy and aggressiveness, a moment) */
     g.TempWord2 = 0xF; d3 = AttributeCalc(o->aggress & 0xF, o);
     o->aggress = d3 & 0xF;
 }

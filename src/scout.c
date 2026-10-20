@@ -238,7 +238,7 @@ void DrawMatchupBitmap(uint32_t pal, uint32_t map, uint32_t tiles, uint16_t char
 /* scout94.asm:GetTeamLogo. d3 = team -> a0 = its logo bitmap, d3 = team x 4. */
 uint32_t GetTeamLogo(uint16_t *d3)
 {
-    uint32_t logo = lg(*d3)->logo;
+    uint32_t logo = rosters_team(*d3)->logo;
     *d3 = (uint16_t)(*d3 << 2);
     return logo;
 }
@@ -321,7 +321,7 @@ void GetMatchupPlayers(void)
  * of the first of its line sets. */
 uint16_t GetMatchupPlayer(struct Team *tm)
 {
-    const uint8_t *lines = lg(tm->team)->lines[0];
+    const uint8_t *lines = rosters_team(tm->team)->lines[0];
     int16_t slot = (int8_t)rom_ptr(SYM_MatchupLineSlots)[g.matchup];
     g.matchupslot = (uint16_t)slot;
     return (uint16_t)((int8_t)lines[slot] - 1);
@@ -358,10 +358,10 @@ void PrintAdvantageMarks(void)
  * team's nickname, or 'Home' / 'Visitors' when it has none (the all-star teams). */
 struct Text GetTeamNickname(struct Team *tm)
 {
-    struct Text a1 = lg_text(&lg(tm->team)->nickname);
+    struct Text a1 = roster_text(&rosters_team(tm->team)->nickname);
     if (text_len(a1) == 2) a1 = (struct Text){ NULL, tm == team_struct(0) ? SYM_HomeTxt : SYM_VisitorsTxt };
     return a1;
 }
 
 /* scout94.asm:GetTeamArena. The text player's '^' and ';' -> a1 = the team's arena. */
-struct Text GetTeamArena(struct Team *tm) { return lg_text(&lg(tm->team)->arena); }
+struct Text GetTeamArena(struct Team *tm) { return roster_text(&rosters_team(tm->team)->arena); }

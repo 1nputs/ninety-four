@@ -10,14 +10,14 @@
  *              [--lockstep FILE | --golden FILE] [--record DIR] [--fm-core nuked|ymfm]
  *              [--fm-model ym2612|ym3438] [--watch ADDR,...] [--restart-at FRAME]
  *              [--four-way] [--input2 FILE] [--input3 FILE] [--input4 FILE]
- *              [--rule NAME=VALUE ...] [--league DIR] [--check-league DIR] [--export-league DIR]
- *              [--extract-rom HACK DIR] [--pack-league DIR FILE.zip] [--art-check | --art-map]
+ *              [--rule NAME=VALUE ...] [--rosters DIR] [--check-rosters DIR] [--export-rosters DIR]
+ *              [--extract-rom HACK DIR] [--pack-rosters DIR FILE.zip] [--art-check | --art-map]
  *              [--hashes FILE] [--host [PORT] | --join ADDR[:PORT] | --peer ADDR[:PORT]] [--port PORT]
  *              [--delay N] [--name NAME] [--here N] [--players N] [--net-sim MS,MS,%,%]
  *
  * --art-check (headless) counts every byte the VDP takes by DMA from the game's data and those in
  * no piece of the art map (art.c: every piece of art the game reads by number, the cartridge's
- * and the league's own), and says so at the end (tools/golden.py makes every run check it);
+ * and the roster set's own), and says so at the end (tools/golden.py makes every run check it);
  * --art-map prints the map too, a piece a line.
  * --headless runs without a window or pacing (as fast as it goes): with --frames it stops, --shot
  * writes the last picture, --wav the sound, --input plays pad 1 from a script (tools/oracle/scripts)
@@ -40,14 +40,14 @@
  * (headless) starts the game again at that frame on a new console, as the menu's reset does
  * (tools/golden.py checks that it goes as a fresh run), --frames then counting the new game's. --four-way puts EA's 4 Way Play in the
  * ports (the game finds it at power on: four players); --input2 to --input4 script pads 2-4. --watch prints work RAM words (hex addresses,
- * e.g. FFC472) at frame 1 and whenever they change. --rule and --league (headless; the window
- * takes them from its menu's Game rules and League pages) set the game's rules (rules.c) and its
- * league, a folder of teams (league.c: DIR, or a folder of leagues/), whose save RAM is its own
- * (out/nhl94-NAME.srm, in the window). --export-league DIR writes the cartridge's league into DIR, to change;
+ * e.g. FFC472) at frame 1 and whenever they change. --rule and --rosters (headless; the window
+ * takes them from its menu's Game rules and Rosters pages) set the game's rules (rules.c) and its
+ * roster set, a folder of teams (rosters.c: DIR, or a folder of rosters/), whose save RAM is its own
+ * (out/nhl94-NAME.srm, in the window). --export-rosters DIR writes the cartridge's roster set into DIR, to change;
  * --extract-rom HACK DIR a hack's, one made on the community's 32-team template (read as data,
- * never run); --check-league DIR builds one and says what is wrong with it, or what it holds;
- * --pack-league DIR FILE.zip makes a folder a package (its files in a zip: to send, or to keep
- * in leagues/, which plays it as it is). --host, --join and --peer play online (net.c: two
+ * never run); --check-rosters DIR builds one and says what is wrong with it, or what it holds;
+ * --pack-rosters DIR FILE.zip makes a folder a package (its files in a zip: to send, or to keep
+ * in rosters/, which plays it as it is). --host, --join and --peer play online (net.c: two
  * players from power on, the host pad 1; in the window it connects first; headless, each plays
  * its pad's script and the run ends at --frames once both have every button), --delay the input
  * delay, --here N the players at this machine, --players N a host's players in all (up to four
@@ -234,9 +234,9 @@ static const char *rom_check(const uint8_t *b, size_t n, void *user)
 
 static void rom_use(const uint8_t *b, size_t n, void *user) { (void)n; (void)user; rom_cart = b; rom_art = NULL; rom_limit = ROM_SIZE; }
 
-/* the save RAM's file for the game about to start: the league's own (the window's sram_file) */
+/* the save RAM's file for the game about to start: the roster set's own (the window's sram_file) */
 static const char *sram_base;
-static const char *sram_for(void *user) { (void)user; return league_sram(sram_base); }
+static const char *sram_for(void *user) { (void)user; return rosters_sram(sram_base); }
 
 /* headless: a console's save RAM from its file (none: blank) and back to it when the game wrote it */
 static void sram_read(mdrt *m, const char *path)
@@ -249,13 +249,13 @@ static void sram_write(mdrt *m, const char *path)
     FILE *f = path && mdrt_get_sram(m)->dirty ? fopen(path, "wb") : NULL;
     if (f) { fwrite(mdrt_get_sram(m)->bytes, 1, 0x2000, f); fclose(f); }
 }
-/* the window's Start on its Online page: the menu's rules and league (options_use has had them),
- * the league's save RAM (or, the Online page's Save RAM says, a new cartridge's: none) */
+/* the window's Start on its Online page: the menu's rules and roster set (options_use has had them),
+ * the roster set's save RAM (or, the Online page's Save RAM says, a new cartridge's: none) */
 static const void *window_settings(size_t *size, int fresh, void *user) { return native_net_settings(fresh ? NULL : sram_for(user), size); }
 
-/* --extract-rom HACK DIR: a hack's league (one made on the 32-team template) written as a folder,
+/* --extract-rom HACK DIR: a hack's roster set (one made on the 32-team template) written as a folder,
  * read from it as data (romsrc.c): 0, -1 */
-static int extract_league(const char *path, const char *dir)
+static int extract_rosters(const char *path, const char *dir)
 {
     FILE *f = fopen(path, "rb");
     static uint8_t buf[0x400001];
@@ -270,27 +270,27 @@ static int extract_league(const char *path, const char *dir)
     dot = strrchr(base, '.');
     snprintf(name, sizeof name, "%.*s", dot && dot > base ? (int)(dot - base) : (int)strlen(base), base);
     printf("%s: %d teams, %d for the cup, %d playoff draws\n", name, s.teams, s.playoff_teams, s.rows);
-    if (league_extract(&s, dir, name) < 0) { fprintf(stderr, "--extract-rom %s: %s\n", path, league_error()); return -1; }
-    printf("its league is in %s: its files are yours to change (README.md, \"Leagues\")\n", dir);
+    if (rosters_extract(&s, dir, name) < 0) { fprintf(stderr, "--extract-rom %s: %s\n", path, rosters_error()); return -1; }
+    printf("its roster set is in %s: its files are yours to change (README.md, \"Rosters\")\n", dir);
     return 0;
 }
 
-/* --league DIR: the folder (or package, NAME.zip), or one of leagues/ */
-static const char *league_folder(const char *arg)
+/* --rosters DIR: the folder (or package, NAME.zip), or one of rosters/ */
+static const char *rosters_folder(const char *arg)
 {
     static char dir[600];
     char probe[700];
     FILE *f;
     size_t n = strlen(arg);
-    if (n > 4 && !strcmp(arg + n - 4, ".zip")) {          /* (a package: the file, or one of leagues/) */
+    if (n > 4 && !strcmp(arg + n - 4, ".zip")) {          /* (a package: the file, or one of rosters/) */
         if ((f = fopen(arg, "rb"))) { fclose(f); return arg; }
-        snprintf(dir, sizeof dir, "leagues/%s", arg);
+        snprintf(dir, sizeof dir, "rosters/%s", arg);
         if ((f = fopen(dir, "rb"))) { fclose(f); return dir; }
         return arg;
     }
     snprintf(probe, sizeof probe, "%s/teams.csv", arg);
     if ((f = fopen(probe, "rb"))) { fclose(f); return arg; }
-    snprintf(dir, sizeof dir, "leagues/%s", arg);
+    snprintf(dir, sizeof dir, "rosters/%s", arg);
     snprintf(probe, sizeof probe, "%s/teams.csv", dir);
     if ((f = fopen(probe, "rb"))) { fclose(f); return dir; }
     return arg;
@@ -356,8 +356,8 @@ void native_game(mdrt *m, void *user)
     run_known = 0;
     native_net_start(m);                                  /* (netplay: from power on, by the host's settings) */
     native_net_power_on(m);
-    rules_power_on();                                     /* (this game's rules and league; a state loaded brings its own) */
-    league_power_on();
+    rules_power_on();                                     /* (this game's rules and roster set; a state loaded brings its own) */
+    rosters_power_on();
     if (setjmp(out)) { lockstep_report(); record(m, -1); return; }
     if (!load_state_path) record(m, MDRT_TRACE_SOUND);    /* (from the first frame: the chips' every write) */
     if (boot) { record(m, MDRT_TRACE_VDP); record(m, MDRT_TRACE_PADS); }
@@ -508,11 +508,11 @@ static void script_source(void *user, uint16_t b[MDRT_PADS])
 
 /* the console powered on again in place (mdrt_power_on done: the host's reset, MDRT_NET_RESET, or a
  * script's RESET alone): the game from its power on as native_game starts it, by the same rules and
- * league, at the wait of the frame the reset was given for, everything after it as on a new console */
+ * roster set, at the wait of the frame the reset was given for, everything after it as on a new console */
 void native_power_on_again(void)
 {
     rules_power_on();
-    league_power_on();
+    rosters_power_on();
     native_power_on();
     native_hal_start(native_m, 0);
     Start();
@@ -655,7 +655,7 @@ static void make_parent(const char *path)
 int main(int argc, char **argv)
 {
     mdrt_sdl_home("ninety-four");                         /* (macOS: the app from the Finder keeps its files in Application Support) */
-    const char *rom = "NHL 94 (UE) [!].gen", *rom_given = NULL, *sram = "out/nhl94.srm", *league_arg = NULL;
+    const char *rom = "NHL 94 (UE) [!].gen", *rom_given = NULL, *sram = "out/nhl94.srm", *rosters_arg = NULL;
     const char *export_dir = NULL, *check_dir = NULL, *extract_rom = NULL, *extract_dir = NULL, *pack_dir = NULL, *pack_zip = NULL;
     int sram_given = 0;
     int scale = 0, aspect = 0, headless = 0;
@@ -675,11 +675,11 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--frames") && i + 1 < argc) stop_after = atol(argv[++i]);
         else if (!strcmp(argv[i], "--shot") && i + 1 < argc) shot_path = argv[++i];
         else if (!strcmp(argv[i], "--sram") && i + 1 < argc) { sram = argv[++i]; sram_given = 1; }
-        else if (!strcmp(argv[i], "--league") && i + 1 < argc) league_arg = league_folder(argv[++i]);
-        else if (!strcmp(argv[i], "--export-league") && i + 1 < argc) export_dir = argv[++i];
-        else if (!strcmp(argv[i], "--check-league") && i + 1 < argc) check_dir = league_folder(argv[++i]);
+        else if (!strcmp(argv[i], "--rosters") && i + 1 < argc) rosters_arg = rosters_folder(argv[++i]);
+        else if (!strcmp(argv[i], "--export-rosters") && i + 1 < argc) export_dir = argv[++i];
+        else if (!strcmp(argv[i], "--check-rosters") && i + 1 < argc) check_dir = rosters_folder(argv[++i]);
         else if (!strcmp(argv[i], "--extract-rom") && i + 2 < argc) { extract_rom = argv[++i]; extract_dir = argv[++i]; }
-        else if (!strcmp(argv[i], "--pack-league") && i + 2 < argc) { pack_dir = league_folder(argv[++i]); pack_zip = argv[++i]; }
+        else if (!strcmp(argv[i], "--pack-rosters") && i + 2 < argc) { pack_dir = rosters_folder(argv[++i]); pack_zip = argv[++i]; }
         else if (!strcmp(argv[i], "--shots") && i + 1 < argc) shots_dir = argv[++i];
         else if (!strcmp(argv[i], "--every") && i + 1 < argc) shots_every = atol(argv[++i]);
         else if (!strcmp(argv[i], "--wav") && i + 1 < argc) wav_path = argv[++i];
@@ -716,8 +716,8 @@ int main(int argc, char **argv)
                             "       [--state FILE] [--load-state FILE] [--save-state FRAME:FILE] [--lockstep FILE | --golden FILE]\n"
                             "       [--record DIR] [--fm-core nuked|ymfm] [--fm-model ym2612|ym3438] [--watch ADDR,...]\n"
                             "       [--restart-at FRAME] [--four-way] [--input2 FILE] [--input3 FILE] [--input4 FILE]\n"
-                            "       [--rule NAME=VALUE ...] (the game rules: native/rules.c) [--league DIR] (league.c)\n"
-                            "       [--check-league DIR] [--export-league DIR] [--extract-rom HACK DIR] [--pack-league DIR FILE.zip]\n"
+                            "       [--rule NAME=VALUE ...] (the game rules: native/rules.c) [--rosters DIR] (rosters.c)\n"
+                            "       [--check-rosters DIR] [--export-rosters DIR] [--extract-rom HACK DIR] [--pack-rosters DIR FILE.zip]\n"
                             "       [--art-check | --art-map] (the art map: art.c) [--hashes FILE]\n"
                             "       %s (netplay: net.c)\n", argv[0], MDRT_NET_USAGE);
             return 2;
@@ -725,21 +725,21 @@ int main(int argc, char **argv)
     }
     if ((headless || export_dir || check_dir || extract_rom || pack_dir) && !rom_load(rom)) { fprintf(stderr, "cannot load the ROM %s\n", rom); return 1; }   /* (the window: pulseman's menu) */
     if (export_dir || check_dir || extract_rom || pack_dir) {   /* (and nothing else) */
-        if (pack_dir && league_pack(pack_dir, pack_zip) < 0) { fprintf(stderr, "--pack-league %s: %s\n", pack_dir, league_error()); return 1; }
-        if (extract_rom && extract_league(extract_rom, extract_dir) < 0) return 1;
-        if (export_dir && league_export(export_dir) < 0) { fprintf(stderr, "--export-league %s: %s\n", export_dir, league_error()); return 1; }
-        if (export_dir) printf("the cartridge's league is in %s: its files are yours to change (README.md, \"Leagues\")\n", export_dir);
-        if (check_dir && league_check(check_dir, 1) < 0) { fprintf(stderr, "%s: %s\n", check_dir, league_error()); return 1; }
+        if (pack_dir && rosters_pack(pack_dir, pack_zip) < 0) { fprintf(stderr, "--pack-rosters %s: %s\n", pack_dir, rosters_error()); return 1; }
+        if (extract_rom && extract_rosters(extract_rom, extract_dir) < 0) return 1;
+        if (export_dir && rosters_export(export_dir) < 0) { fprintf(stderr, "--export-rosters %s: %s\n", export_dir, rosters_error()); return 1; }
+        if (export_dir) printf("the cartridge's roster set is in %s: its files are yours to change (README.md, \"Rosters\")\n", export_dir);
+        if (check_dir && rosters_check(check_dir, 1) < 0) { fprintf(stderr, "%s: %s\n", check_dir, rosters_error()); return 1; }
         return 0;
     }
-    if (league_arg) {
-        if (!headless && !netopt.on) fprintf(stderr, "--league: the window plays the league its menu's League page names\n");
-        else if (league_check(league_arg, 0) < 0) {
-            fprintf(stderr, "--league %s: %s\n", league_arg, league_error());
+    if (rosters_arg) {
+        if (!headless && !netopt.on) fprintf(stderr, "--rosters: the window plays the roster set its menu's Rosters page names\n");
+        else if (rosters_check(rosters_arg, 0) < 0) {
+            fprintf(stderr, "--rosters %s: %s\n", rosters_arg, rosters_error());
             return 1;
         }
-        league_next(league_arg);
-        if (!sram_given) sram = league_sram(sram);
+        rosters_next(rosters_arg);
+        if (!sram_given) sram = rosters_sram(sram);
     }
     if (headless && !sram_given) sram = NULL;             /* (headless: a player's save RAM only when --sram names it) */
     if (sram) make_parent(sram);                          /* (a copy run outside the repository has no out/) */
@@ -753,7 +753,7 @@ int main(int argc, char **argv)
     }
     if (snap && load_state_path) { fprintf(stderr, "--snap or --load-state, not both\n"); return 2; }
     if (lockstep_path && !rules_classic()) { fprintf(stderr, "--lockstep: the original is played by the Classic rules only\n"); return 2; }
-    if (lockstep_path && !league_next_is_cartridge()) { fprintf(stderr, "--lockstep: the original is played by the cartridge's teams only\n"); return 2; }
+    if (lockstep_path && !rosters_next_is_cartridge()) { fprintf(stderr, "--lockstep: the original is played by the cartridge's teams only\n"); return 2; }
     if (netopt.on && (snap || load_state_path || lockstep_path || restart_frame >= 0 || script_requests)) {
         fprintf(stderr, "netplay: from power on, without --snap, --load-state, --lockstep, --restart-at or a script's requests\n");
         return 2;
@@ -783,7 +783,7 @@ int main(int argc, char **argv)
         o.net_reset = 1;                                  /* (the host's Reset in a session: the console for everyone, MDRT_NET_RESET) */
         o.options_session = rules_page_session;            /* (the pages in a session: the host's) */
         o.net_pads = 4;                                   /* (up to four players online: 4 Way Play) */
-        if (netopt.on) {                                  /* (the window connects, then powers on: by the command line's rules and league) */
+        if (netopt.on) {                                  /* (the window connects, then powers on: by the command line's rules and roster set) */
             size_t n;
             const void *set = native_net_settings(sram_for(NULL), &n);
             if (!native_net_open(&netopt, "", set, n, window_pad, err, sizeof err)) { fprintf(stderr, "netplay: %s\n", err); return 1; }

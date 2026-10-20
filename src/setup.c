@@ -105,7 +105,7 @@ uint16_t ReloadCrowdTiles(void) { return DecompressGraphicsPlain(ART(CrowdFrameL
 void setplayercolors(void)
 {
     for (int away = 0; away < 2; away++) {
-        pal_load_w(0x20 + 0x10 * away, lg(team_struct(away)->team)->colours[away], 0x10);
+        pal_load_w(0x20 + 0x10 * away, rosters_team(team_struct(away)->team)->colours[away], 0x10);
     }
 }
 
@@ -210,12 +210,12 @@ uint8_t *CopyTeamBlockMapData(uint32_t map, uint16_t team, uint16_t vram, uint8_
 }
 
 /* a team's block for setupTeamBlocksMap: its row of the cartridge's (CopyTeamBlockMapData), or a
- * banner of the league's own, its 22 tiles straight from the league to vram (native/banner.c) */
+ * banner of the roster set's own, its 22 tiles straight from the roster set to vram (native/banner.c) */
 static uint8_t *CopyTeamBlock(uint32_t map, uint16_t team, uint16_t vram, uint8_t *dst)
 {
-    if (team >= LEAGUE_MAX || !league.block_tiles[team]) return CopyTeamBlockMapData(map, league_block(team), vram, dst);
-    uint32_t own = LG(Teamblocksmap) + rd32(rom_ptr(LG(Teamblocksmap) + 4)) + 4 + (uint32_t)league_block(team) * 0x2C;
-    DoDMApro(league.block_tiles[team], 0x16 * 16, vram);
+    if (team >= ROSTERS_MAX || !rosters.block_tiles[team]) return CopyTeamBlockMapData(map, rosters_block(team), vram, dst);
+    uint32_t own = RS(Teamblocksmap) + rd32(rom_ptr(RS(Teamblocksmap) + 4)) + 4 + (uint32_t)rosters_block(team) * 0x2C;
+    DoDMApro(rosters.block_tiles[team], 0x16 * 16, vram);
     for (int i = 0; i < 0x16; i++, dst += 2) wr16(dst, (uint16_t)((rd16(rom_ptr(own + 2u * (uint32_t)i)) & 0xF800) | ((vram >> 5) + i) | 0x8000));
     return dst;
 }
@@ -229,7 +229,7 @@ uint16_t setupTeamBlocksMap(uint16_t chars)
     uint8_t *buf = g.TeamBlockMap;
     DecompressGraphicsPlain(SYM_Teamblocksmap + 8, (uint16_t)(chars + 0x2C));
     uint32_t map = SYM_Teamblocksmap + rd32(rom_ptr(SYM_Teamblocksmap + 4));
-    buf = CopyTeamBlock(map, g.HomeTeam, (uint16_t)(g.basetileoffset << 5), buf);   /* (the league's: its art's, or its own) */
+    buf = CopyTeamBlock(map, g.HomeTeam, (uint16_t)(g.basetileoffset << 5), buf);   /* (the roster set's: its art's, or its own) */
     CopyTeamBlock(map, g.VisTeam, (uint16_t)((g.basetileoffset + 0x16) << 5), buf);
     return (uint16_t)(g.basetileoffset + 0x2C);
 }
@@ -328,7 +328,7 @@ void setupice(void)
 void InitTeamStructure(uint16_t team, struct Team *tm)
 {
     tm->team = team;
-    tm->data = lg(team)->data;
+    tm->data = rosters_team(team)->data;
     InitTeamLines(tm);
 }
 
@@ -336,7 +336,7 @@ void InitTeamStructure(uint16_t team, struct Team *tm)
  * layout by OptLine); the line editor's "Set Original lines". */
 void InitTeamLines(struct Team *tm)
 {
-    const uint8_t *src = lg(tm->team)->lines[0];
+    const uint8_t *src = rosters_team(tm->team)->lines[0];
     uint8_t *dst = tm->lines[0];                          /* (the 7 line sets, row after row) */
     if (g.OptLine != 0) {
         memcpy(dst, src, 8);
@@ -621,8 +621,8 @@ void DrawTeamBlocks(uint16_t row)
 {
     uint8_t user = (uint8_t)(g.potree[g.potreeteam] << 1);
     if (user == (uint8_t)row) g.printa = 0x6000;
-    uint32_t map = LG(Teamblocksmap) + rd32(rom_ptr(LG(Teamblocksmap) + 4));
-    dobitmap(0, map, SYM_NoTiles, 0, (uint16_t)(league_block((uint16_t)(row >> 1)) << 1), rd16(rom_ptr(map)), 2, 2, 0);   /* (its art's, or its own) */
+    uint32_t map = RS(Teamblocksmap) + rd32(rom_ptr(RS(Teamblocksmap) + 4));
+    dobitmap(0, map, SYM_NoTiles, 0, (uint16_t)(rosters_block((uint16_t)(row >> 1)) << 1), rd16(rom_ptr(map)), 2, 2, 0);   /* (its art's, or its own) */
 }
 
 /* setup94.asm:VBlank_Playoff. The playoff screen's vblank: unless dfng, the sprites (and the tree's
@@ -734,10 +734,10 @@ void UpdateScoutingDisplay(void)
         goto put;
     }
 city:                                                     /* the team's city (the String at word 4 of its data) */
-    str = lg_text(&lg(tm->team)->city);
+    str = roster_text(&rosters_team(tm->team)->city);
     goto append;
 roster:                                                   /* player d1's name in team a1's roster */
-    str = lg_text(&lg(tm->team)->player[d1].name);
+    str = roster_text(&rosters_team(tm->team)->player[d1].name);
 append:
     g.PlayerScrollCtr++;
     d0 = (int16_t)(d0 + text_len(str) - 1);

@@ -11,7 +11,7 @@
 #   make runtime-selfcheck  pulseman's tests on the native game's own traces (nhl94 --record)
 #   make relaytest      the Z80 relay port against the sound traces
 #   make rulestest      the game rules on the game's routines (test/rules_test.c)
-#   make leaguetest     leagues: the cartridge's exported and built again, a 32-team one, broken ones,
+#   make rosterstest     roster sets: the cartridge's exported and built again, a 32-team one, broken ones,
 #                       hacks on the 32-team template (../roms or HACKS=) extracted
 #   make oracle         the hooked oracle core (build/nhl_oracle.so)
 #   make gen            regenerate the committed headers from ref/ and the asm rebuild
@@ -38,14 +38,14 @@ build/rulestest: $(SRC) $(HDR) test/rules_test.c test/hal_null.c native/ratings.
 rulestest: build/rulestest
 	./build/rulestest
 
-# leagues: the cartridge's exported and built again (byte for byte), a 32-team one, broken ones
-# (tools/leaguetest.py; the ROM as for make nhl94)
-build/leaguetest: native/league.c native/banner.c native/romsrc.c native/art.c native/ratings.c src/league.c src/rom.c src/league.h src/rom.h native/native.h test/league_test.c mdrt
+# roster sets: the cartridge's exported and built again (byte for byte), a 32-team one, broken ones
+# (tools/rosterstest.py; the ROM as for make nhl94)
+build/rosterstest: native/rosters.c native/banner.c native/romsrc.c native/art.c native/ratings.c src/rosters.c src/rom.c src/rosters.h src/rom.h native/native.h test/rosters_test.c mdrt
 	@mkdir -p build
-	$(CC) $(CFLAGS) -Isrc -Inative -I$(MDRT)/include -o $@ native/league.c native/banner.c native/romsrc.c native/art.c native/ratings.c src/league.c src/rom.c \
-	    test/league_test.c $(MDRT)/$(MDRTB)/libmdrt.a -lm $(CXXLIB)
-leaguetest: build/leaguetest build/nhl94$(EXE)
-	$(PY) tools/leaguetest.py
+	$(CC) $(CFLAGS) -Isrc -Inative -I$(MDRT)/include -o $@ native/rosters.c native/banner.c native/romsrc.c native/art.c native/ratings.c src/rosters.c src/rom.c \
+	    test/rosters_test.c $(MDRT)/$(MDRTB)/libmdrt.a -lm $(CXXLIB)
+rosterstest: build/rosterstest build/nhl94$(EXE)
+	$(PY) tools/rosterstest.py
 
 test: build/captest
 	@test -n "$(CAPS)" || { echo "no captures in out/captures: tools/hybrid/capture_all.sh records them"; exit 1; }
@@ -53,12 +53,12 @@ test: build/captest
 	@#  a typed member's address, &g.teams[0], is native)
 	@grep -nE '\bram_ptr\(|&g([^.[:alnum:]_]|$$)' $(filter-out src/ram.h src/ram.c src/mem.h,$(wildcard src/*.c src/*.h)); \
 	    case $$? in 1) ;; 0) echo "raw RAM access outside src/mem.h (above)"; exit 1;; *) exit 1;; esac
-	@# (the league's teams through src/league.h's tables: no team data read by its address, no table
+	@# (the roster set's teams through src/rosters.h's tables: no team data read by its address, no table
 	@#  of the cartridge's formats but the banners', which are art)
-	@awk '/(^|[^A-Za-z0-9_])LG\((TeamList|TeamPalettes|TeamSongs|TeamRatings|FeaturedPictures|playoffseats|PlayerRecordOffsets|OptionTeamNames|TeamLogoBitmaps|TeamLogoPalettes|TeamGfxList)\)/ || \
-	      (/[.>]data([^A-Za-z0-9_]|$$)/ && !/->data = lg\(/) { print FILENAME ":" FNR ": " $$0; bad = 1 } END { exit bad }' \
-	    $(filter-out src/league.c src/league.h,$(wildcard src/*.c src/*.h)); \
-	    case $$? in 0) ;; 1) echo "a team's data read outside the league's tables (above)"; exit 1;; *) exit 1;; esac
+	@awk '/(^|[^A-Za-z0-9_])RS\((TeamList|TeamPalettes|TeamSongs|TeamRatings|FeaturedPictures|playoffseats|PlayerRecordOffsets|OptionTeamNames|TeamLogoBitmaps|TeamLogoPalettes|TeamGfxList)\)/ || \
+	      (/[.>]data([^A-Za-z0-9_]|$$)/ && !/->data = rosters_team\(/) { print FILENAME ":" FNR ": " $$0; bad = 1 } END { exit bad }' \
+	    $(filter-out src/rosters.c src/rosters.h,$(wildcard src/*.c src/*.h)); \
+	    case $$? in 0) ;; 1) echo "a team's data read outside the roster set's tables (above)"; exit 1;; *) exit 1;; esac
 	./build/captest $(CAPS)
 
 # the native game: build/nhl94, on pulseman (MDRT: the git submodule ext/pulseman, or another
@@ -198,5 +198,5 @@ gen:
 
 clean:
 	rm -rf build/captest build/oracle_shim.o build/nhl94 build/obj build/cross build/relaytest
-.PHONY: rulestest leaguetest test oracle clean nhl94 relaytest mdrt vectors lockstep runtime-check runtime-selfcheck golden golden-check \
+.PHONY: rulestest rosterstest test oracle clean nhl94 relaytest mdrt vectors lockstep runtime-check runtime-selfcheck golden golden-check \
 	golden-cross golden-ubsan netplay-check gen release FORCE

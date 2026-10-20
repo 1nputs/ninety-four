@@ -10,7 +10,7 @@
  * headless run's own. The identity the peers compare: the build (its commit) and the ROM. What is
  * sent, the
  * host's for both (native_net_settings, made where the session is: the window's Start, or the
- * command line): the next game's rules, its league (a package: a folder's files packed), and its
+ * command line): the next game's rules, its roster set (a package: a folder's files packed), and its
  * save RAM; no player's save RAM is written while the session lasts. Each player's buttons are
  * their own controls' (the window's players in turn; headless, their pads' scripts). Headless, a
  * run that reaches --frames waits there until every machine has every button up to it: the host
@@ -56,19 +56,19 @@ const char *native_net_identity(const char *setup)
 
 /* ---- the session's settings: the host's, the next game's for both ----------------------------------
  * "N94S", a version byte (1), then little-endian: the rules (a count byte, each rule's value), save
- * RAM (a u16 size, 0 for blank or 0x2000, the bytes), the league (a u32 size, 0 for the cartridge's,
+ * RAM (a u16 size, 0 for blank or 0x2000, the bytes), the roster set (a u32 size, 0 for the cartridge's,
  * a package's bytes) */
 static uint8_t *settings;
 static uint8_t session_rules[RULE_COUNT];               /* the settings the game plays by (the window's pages show them) */
-static int session_league, session_host;
+static int session_rosters, session_host;
 static atomic_int session_known;
 
 const void *native_net_settings(const char *sram, size_t *size)
 {
     static uint8_t s[0x2000];
     uint8_t v[RULE_COUNT], *pkg;
-    long n = league_next_package(&pkg);
-    if (n < 0) { fprintf(stderr, "netplay: the league: %s: the session plays the cartridge's teams\n", league_error()); n = 0; }
+    long n = rosters_next_package(&pkg);
+    if (n < 0) { fprintf(stderr, "netplay: the roster set: %s: the session plays the cartridge's teams\n", rosters_error()); n = 0; }
     FILE *f = sram ? fopen(sram, "rb") : NULL;            /* (none: blank, as a new cartridge's) */
     size_t sn = f && fread(s, 1, sizeof s, f) == sizeof s ? sizeof s : 0;
     if (f) fclose(f);
@@ -102,14 +102,14 @@ static const char *settings_use(mdrt *m, const uint8_t *b, size_t size)
     at += sn;
     size_t n = (size_t)b[at] | (size_t)b[at + 1] << 8 | (size_t)b[at + 2] << 16 | (size_t)b[at + 3] << 24;
     at += 4;
-    if (size != at + n) return "its league cut short";
+    if (size != at + n) return "its roster set cut short";
     if (rules_next_set(v, (int)k) < 0) return "a rule out of range";
-    if (league_next_bytes(b + at, n) < 0) return league_error();
+    if (rosters_next_bytes(b + at, n) < 0) return rosters_error();
     mdrt_sram *r = mdrt_get_sram(m);
     memset(r->bytes, 0, r->size);
     if (sn) memcpy(r->bytes, s, sn < r->size ? sn : r->size);
     rules_next_get(session_rules);
-    session_league = n != 0;
+    session_rosters = n != 0;
     session_host = mdrt_net_is_host(mdrt_get_net(m));
     atomic_store(&session_known, 1);
     return NULL;
@@ -119,7 +119,7 @@ int native_net_session(uint8_t *v, int *sent, int *host)
 {
     if (!atomic_load(&session_known)) return 0;
     memcpy(v, session_rules, RULE_COUNT);
-    *sent = session_league;
+    *sent = session_rosters;
     *host = session_host;
     return 1;
 }
@@ -151,7 +151,7 @@ int native_net_open(const mdrt_net_options *o, const char *setup, const void *se
     local_fn = input;
     net = mdrt_net_new(&c);
     if (!net) {
-        snprintf(err, errsize, c.settings_size > MDRT_NET_MAX_SETTINGS ? "the game's settings are too big to send (its league)" : "a bad configuration");
+        snprintf(err, errsize, c.settings_size > MDRT_NET_MAX_SETTINGS ? "the game's settings are too big to send (its roster set)" : "a bad configuration");
         mdrt_udp_close(udp);
         udp = NULL;
         return 0;

@@ -290,7 +290,7 @@ static void play_rules(void)
     classic_rules();
 }
 
-/* the League page's overall ratings (native/ratings.c, reckoned without the game's RAM) as the
+/* the Rosters page's overall ratings (native/ratings.c, reckoned without the game's RAM) as the
  * cards show them (CalcAttrib with the overall weights, no streak, x 100 / its divisor,
  * AttribAdjust): every player of the cartridge */
 static void overall_ratings(void)
@@ -301,10 +301,10 @@ static void overall_ratings(void)
         struct Team *tm = team_struct(0);
         memset(tm->hotcold, 0, sizeof tm->hotcold);               /* (no streaks) */
         tm->team = (uint16_t)t;                           /* (as InitTeamStructure makes it) */
-        tm->data = lg((uint16_t)t)->data;
+        tm->data = rosters_team((uint16_t)t)->data;
         uint16_t count = GetPlayerCount(tm), goalies = GetGoalieCount(tm);
         for (uint16_t p = 0; p < count; p++) {
-            const struct LgPlayer *P = &lg((uint16_t)t)->player[p];   /* his number, then his 14 ratings */
+            const struct RosterPlayer *P = &rosters_team((uint16_t)t)->player[p];   /* his number, then his 14 ratings */
             const uint8_t *nib = P->rating;
             int goalie = p < goalies, number = (P->number >> 4) * 10 + (P->number & 15);
             uint16_t div, v = CalcAttrib(p, tm, rd32(rom_ptr(goalie ? SYM_GAttribOverallMask : SYM_PAttribOverallMask)), &div);
@@ -317,7 +317,7 @@ static void overall_ratings(void)
     CHECK(players > 600 && same == players);
 }
 
-/* the League page's other ratings (native/ratings.c's rating_column) as the roster screen shows
+/* the Rosters page's other ratings (native/ratings.c's rating_column) as the roster screen shows
  * them (GetNameandAttrib: CalcAttrib with the column's mask, no streak; AttribRating's x 100 / its
  * divisor, AttribAdjust; AttribWeight's pounds): every player of the cartridge, every column of
  * PAttribColumns (skaters) or GAttribColumns (goalies) those show, the overall ratings aside */
@@ -328,10 +328,10 @@ static void column_ratings(void)
         memset(&g, 0, sizeof g);
         struct Team *tm = team_struct(0);                 /* (no streaks) */
         tm->team = (uint16_t)t;
-        tm->data = lg((uint16_t)t)->data;
+        tm->data = rosters_team((uint16_t)t)->data;
         uint16_t count = GetPlayerCount(tm), goalies = GetGoalieCount(tm);
         for (uint16_t p = 0; p < count; p++) {
-            const struct LgPlayer *P = &lg((uint16_t)t)->player[p];
+            const struct RosterPlayer *P = &rosters_team((uint16_t)t)->player[p];
             int goalie = p < goalies, number = (P->number >> 4) * 10 + (P->number & 15), cols = 0;
             uint32_t overall = rd32(rom_ptr(goalie ? SYM_GAttribOverallMask : SYM_PAttribOverallMask));
             for (uint32_t a = goalie ? SYM_GAttribColumns : SYM_PAttribColumns; (int16_t)rd16(rom_ptr(a)) >= 0; a += rd16(rom_ptr(a)) + 4u) {
@@ -357,7 +357,7 @@ int main(void)
 {
     const char *rom = getenv("NHL94_ROM");
     if (!rom_load(rom ? rom : "NHL 94 (UE) [!].gen")) { fprintf(stderr, "cannot load ROM (set NHL94_ROM)\n"); return 2; }
-    league_retail();                                      /* (the league's tables, the cartridge's) */
+    rosters_retail();                                      /* (the roster set's tables, the cartridge's) */
     periods();
     overtime();
     weights();
