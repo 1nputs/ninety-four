@@ -28,8 +28,12 @@
 #               and SDL2-*/License.txt
 #   LIPO=FILE   LLVM's llvm-lipo, which makes the two macOS games one (found on the PATH or in
 #               /usr/lib/llvm-*/bin)
-# The app is signed as Zig's linker signs a program for Apple Silicon (ad hoc), not by a
-# registered developer: the macOS README says how to open it the first time.
+#   RCODESIGN=FILE  rcodesign, which signs the app (out/rcodesign/bin/rcodesign: cargo install
+#               --locked --version 0.29.0 --root out/rcodesign apple-codesign)
+# The app is signed ad hoc as a whole, not by a registered developer: its program, framework and
+# Info.plist sealed under its bundle identifier, which macOS's privacy settings (Local Network: the
+# online page's joining) go by. Zig's linker signs only the Apple Silicon program, as "nhl94", the
+# Info.plist outside it. The macOS README says how to open the app the first time.
 set -eu
 cd "$(dirname "$0")/.."
 VERSION=${1:-}
@@ -55,6 +59,8 @@ MACSDL=$(ls -d "$(cd "${MACSDL:-out/macos}" && pwd)"/SDL2-* 2> /dev/null | tail 
 for f in "$MACSDL/SDL2.framework/Versions/A/SDL2" "$MACSDL/License.txt"; do need "$f" MACSDL; done
 LIPO=${LIPO:-$(command -v llvm-lipo || ls /usr/lib/llvm-*/bin/llvm-lipo 2> /dev/null | tail -n 1)}
 need "${LIPO:-llvm-lipo}" LIPO
+need "${RCODESIGN:-out/rcodesign/bin/rcodesign}" RCODESIGN
+RCODESIGN=$(abs "${RCODESIGN:-out/rcodesign/bin/rcodesign}")
 [ -z "$(git status --porcelain --untracked-files=no)" ] || { echo "the tree has changes: commit them first (a build's identity is its commit)"; exit 1; }
 [ ! -e "$OUT" ] || { echo "$OUT is there already: move it away first"; exit 1; }
 if [ -n "${NOTES:-}" ] && [ ! -f "$NOTES" ]; then echo "no $NOTES (NOTES)"; exit 1; fi
@@ -123,6 +129,15 @@ cp build/mac/nhl94 "$APP/MacOS/nhl94"
 sed "s/@VERSION@/$VERSION/g" tools/release/Info.plist > "$APP/Info.plist"
 cp -a "$MACSDL/SDL2.framework" "$APP/Frameworks/"
 cp "$MACSDL/License.txt" "$OUT/ninety-four-macos/licenses/SDL2-zlib.txt"
+# the app signed as a whole (ad hoc): both programs under the bundle's identifier, its Info.plist
+# and framework sealed; a signature that is not that stops the release
+"$RCODESIGN" sign "$OUT/ninety-four-macos/ninety-four.app" > /dev/null 2>&1 || { echo "rcodesign could not sign the app"; exit 1; }
+BUNDLE=$(sed -n '/<key>CFBundleIdentifier<\/key>/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' "$APP/Info.plist")
+SIG=$("$RCODESIGN" print-signature-info "$APP/MacOS/nhl94" 2> /dev/null || true)
+PLIST=$(sha256sum "$APP/Info.plist" | cut -c1-64)
+if [ -z "$BUNDLE" ] || [ "$(echo "$SIG" | grep -c "identifier: $BUNDLE\$")" != 2 ] || [ "$(echo "$SIG" | grep -c "Info (1): $PLIST")" != 2 ]; then
+    echo "the app's signature is not its bundle's ($BUNDLE): rcodesign print-signature-info $APP/MacOS/nhl94"; exit 1
+fi
 for b in "$OUT/ninety-four-linux-x86_64/nhl94" "$OUT/ninety-four-windows-x86_64/nhl94.exe" "$APP/MacOS/nhl94"; do
     if grep -a -q -e "$PWD" -e "${HOME:-/nonexistent}/" "$b"; then echo "$b holds a path of this machine"; exit 1; fi
 done

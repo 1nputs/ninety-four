@@ -247,7 +247,8 @@ If a compiler newer than these warns about something, `make WERROR= nhl94` build
 tell us what it said.
 
 `make release VERSION=X` makes the downloads for all three from clean at the commit checked out
-(`tools/release.sh`, which says what it needs: MinGW-w64, Zig, SDL2's macOS framework, llvm-lipo):
+(`tools/release.sh`, which says what it needs: MinGW-w64, Zig, SDL2's macOS framework, llvm-lipo,
+rcodesign):
 `ninety-four-X-linux-x86_64.tar.gz`, `ninety-four-X-windows-x86_64.zip` and
 `ninety-four-X-macos-universal.zip`, a `ninety-four.app` for macOS 11 or newer.
 
@@ -409,6 +410,8 @@ Big, big greets to everyone whose work this stands on:
   [SpritesMind](https://gendev.spritesmind.net) forum (Nemesis's YM2612 and VDP research).
 - **[Zig](https://ziglang.org)**, whose bundled Clang checks the game and pulseman against a
   second compiler.
+- **[apple-codesign](https://github.com/indygreg/apple-platform-rs)** (rcodesign), which signs the
+  macOS app from Linux.
 
 ## License
 

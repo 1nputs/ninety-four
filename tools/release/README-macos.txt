@@ -10,10 +10,10 @@ macOS 15 and newer, try to open it once, then in System Settings, Privacy & Secu
 Anyway. (Or in Terminal: xattr -dr com.apple.quarantine ninety-four.app)
 
 Online play on your own network: the first time you join a game, macOS asks whether ninety-four may
-find and connect to devices on your local network; allow it. A new version may count as a new app
-and be asked about again. If the question was missed or refused, joining gets no answer (the
-connecting page says so): turn ninety-four on in System Settings, Privacy & Security, Local
-Network, or off and on again.
+find and connect to devices on your local network; allow it. A new version counts as a new app and
+is asked about again. If the question was missed or refused, joining says "Cannot send: No route to
+host": turn ninety-four on in System Settings, Privacy & Security, Local Network (or off and on
+again), and if it still says so, restart the Mac.
 
 Keys        Player 1     Player 2
 D-pad       arrows       I J K L
