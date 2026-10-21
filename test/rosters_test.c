@@ -459,6 +459,17 @@ static void about(const char *dir)
     CHECK(rosters_add("nowhere", why, sizeof why) < 0 && strstr(why, "teams.csv"), "a folder that is no roster set: %s", why);
     CHECK(rosters_add("../thirty-two", why, sizeof why) == found, "a roster set found twice");
     printf("  a roster set found elsewhere: entry %d, %s; \"nowhere\": %s\n", found, files, why);
+    /* one beside the game (Files gives a path in the game's folder as a bare name): played from
+     * there, not looked for in rosters/ */
+    int beside = rosters_add("beside.zip", why, sizeof why);
+    const char *at = beside > 0 ? rosters_list_dir(beside, place, sizeof place) : NULL;
+    rosters_next(at);
+    rosters_power_on();
+    CHECK(beside > 0 && !strcmp(rosters_name(), "Thirty-two teams"), "a roster set beside the game: entry %d, %s, played as %s (%s)",
+          beside, at ? at : "none", rosters_name(), why);
+    printf("  a roster set beside the game: entry %d, %s, played as %s\n", beside, at ? at : "none", rosters_name());
+    rosters_next(NULL);
+    rosters_power_on();
     if (chdir(here) != 0) CHECK(0, "cannot go back to %s", here);
 }
 

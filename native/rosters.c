@@ -1842,20 +1842,22 @@ int rosters_session_entry(void)
 
 int rosters_add(const char *path, char *why, size_t why_size)
 {
-    char place[1100], other[1100], dir[600];
+    char place[1100], other[1100], dir[600], name[sizeof list_name[0] + 2];
     struct folder *L;
     real_place(path, place, sizeof place);
     for (int i = 1; i < list_n; i++) {                    /* (listed already, by whatever name) */
         real_place(rosters_list_dir(i, dir, sizeof dir), other, sizeof other);
         if (!strcmp(place, other)) return i;
     }
-    if (strlen(path) >= sizeof list_name[0]) { snprintf(why, why_size, "the path is too long"); return -1; }
+    int bare = !strpbrk(path, "/\\") && !(path[0] && path[1] == ':');   /* (one in the game's folder, as Files gives it: not one of rosters/) */
+    snprintf(name, sizeof name, "%s%s", bare ? "./" : "", path);
+    if (strlen(name) >= sizeof list_name[0]) { snprintf(why, why_size, "the path is too long"); return -1; }
     if (list_n >= LIST_MAX) { snprintf(why, why_size, "the list has room for %d roster sets", LIST_MAX - 1); return -1; }
     if (atomic_flag_test_and_set(&reading)) { snprintf(why, why_size, "the game is reading its roster set: try again"); return -1; }
     int r = read_rosters(path, &L, 0);
     if (r == 0) {
-        snprintf(list_name[list_n], sizeof list_name[0], "%s", path);
-        listed(list_n++, L, path);
+        memcpy(list_name[list_n], name, strlen(name) + 1);   /* (its length checked above) */
+        listed(list_n++, L, name);
         free_lg(L);
     } else snprintf(why, why_size, "%s", err);
     src_close();

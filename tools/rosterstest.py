@@ -367,6 +367,8 @@ def main():
     for z in [THIRTY_TWO + '.zip'] + [h[1] + '.zip' for h in hacks]:     # (packages, as the window lists them)
         if os.path.exists(z):
             shutil.copy(z, os.path.join(listing, 'rosters', 'packed-' + os.path.basename(z)))
+    if os.path.exists(THIRTY_TWO + '.zip'):                              # (one beside the game, not in rosters/: found by Files)
+        shutil.copy(THIRTY_TWO + '.zip', os.path.join(listing, 'beside.zip'))
     os.makedirs(os.path.join(listing, 'rosters', 'broken'))              # (one that will not read: left out, and said)
     open(os.path.join(listing, 'rosters', 'broken', 'teams.csv'), 'w').write('team\n')
     args += ['--listed', os.path.relpath(listing, ROOT), 'thirty-two']
