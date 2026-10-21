@@ -8,22 +8,54 @@ by hand in C and checked against the original, frame by frame, until the two can
 apart. The same one-timers, the same diving saves, the same organ, the same Gretzky. Smooth 60
 frames a second, without the cartridge's slowdown.
 
-And things the cartridge never had: **save in the middle of a game and load it back (eight slots
-in the menu), and hold F4 to rewind** the goal you just gave up. Hold F6 to fast-forward, slow the
-replay of that one-timer down, step through it a frame at a time, and press F12 to keep it.
-Scored a beauty? **F10 saves the last 20 seconds** as a GIF to share.
+And things the cartridge never had:
 
-Bring your own cartridge dump and you're on the ice in a minute (what to install first is
-under [Build](#build)):
+- **Rollback netplay.** Two to four machines over the internet or a LAN, up to four players with
+  EA's 4 Way Play, and rollback so no one waits on anyone's connection. Host from the menu, and
+  the others join. Linux, Windows and Mac all play each other.
+- **Your favourite ROM hack's rosters, playable and editable.** Give it a hack made on the 32-team
+  template (NHL 2026 94 Edition, NHL 94 2025, the 30th Anniversary Championship Teams and the like)
+  and it takes the lot: teams, players, ratings, lines, playoff draws, colours and jerseys, logos,
+  banners, centre ice, player photos, title screens and rinks. Out come CSV files a spreadsheet
+  opens and PNGs any paint program edits. Change anything and play it.
+- **Rosters of your own**, up to 32 teams, started from the cartridge's or a hack's, packed into
+  one zip to send to a friend.
+- **Game rules of your own**: the weight bug fixed, plus/minus, more period lengths, skating speed,
+  shot power, how far the puck slides, tiring, penalties, hot and cold streaks, a wide rink view,
+  and presets. **Classic**, the default, is the original exactly.
+- **Save states**: eight slots with a picture each, the Autosave when you quit, and hold F4 to
+  rewind the goal you just gave up.
+- **All of it online.** The host's rosters and rules go to every machine, so no one else needs a
+  copy. Seasons go online in a save state: anyone saves one, and the host loads it for everyone.
+
+Hold F6 to fast-forward, slow the replay of that one-timer down, step through it a frame at a
+time, and press F12 to keep it. Scored a beauty? **F10 saves the last 20 seconds** as a GIF to
+share.
+
+## Download
+
+[The latest release](https://github.com/1nputs/ninety-four/releases/latest) has builds ready to
+run:
+
+- **Linux** (x86-64, glibc 2.34 or newer): `ninety-four-X-linux-x86_64.tar.gz`. It needs SDL2
+  (`sudo apt install libsdl2-2.0-0` on Debian and Ubuntu).
+- **Windows** (10 or newer, 64-bit): `ninety-four-X-windows-x86_64.zip`, with `SDL2.dll` inside.
+- **macOS** (11 or newer, Apple Silicon or Intel): `ninety-four-X-macos-universal.zip`, one app.
+  It is not signed by a registered Apple developer, so the first time, Control-click it and choose
+  Open (its README says more).
+
+Unpack it anywhere and run it. The first time, it asks for your ROM in a file browser and
+remembers it: bring your own dump of the 1 MB retail cartridge (US/Europe). For online play,
+every machine needs the same release.
+
+Or build it from source and you're on the ice in a minute (what to install first is under
+[Build](#build)):
 
 ```
 git clone --recursive https://github.com/1nputs/ninety-four.git && cd ninety-four
 make nhl94
-./build/nhl94          # the first time, it asks for your ROM: the 1 MB retail cartridge (US/Europe)
+./build/nhl94          # the first time, it asks for your ROM (or give it with --rom FILE)
 ```
-
-The first time, pick your ROM in the game's file browser (or give it with `--rom FILE`); it is
-remembered after that.
 
 | | Player 1 | Player 2 |
 |---|---|---|
@@ -76,8 +108,7 @@ Esc (or a controller's Back button) opens it; arrows and Enter, or the d-pad, A 
 - **Game rules**: how the game plays (below).
 - **Online play**: two to four machines, any players at each (below).
 - **Options** and **Keys**: fast-forward speed, the FPS counter, and every key of the pads and
-  the
-  controls (pick one and press the new key, with Shift, Ctrl or Alt if you like).
+  the controls (pick one and press the new key, with Shift, Ctrl or Alt if you like).
 
 All of it is kept in `settings.ini`, in the folder you run the game from, beside its saves; you
 can edit it while the game is closed. The macOS app opened from the Finder keeps them in
@@ -208,8 +239,8 @@ run `git submodule update --init`. `make nhl94` builds it too. Besides that you 
 C++), `make`, `pkg-config` and SDL2. The game builds with Clang as well and plays bit for bit
 the same: `make golden-cross` builds it and pulseman with Clang (`XCC=` and `XCXX=` name it, or
 `ZIG=path/to/zig` takes Zig's) and checks its golden runs against the GCC build's (Clang 22 here:
-every run identical). The builds made and tested here use GCC. Your saves and states go to `out/`
-in this repository.
+every run identical). The builds made and tested here use GCC. Your saves go to `out/` in this
+repository, and your states to `states/`.
 
 **Linux** (built and tested here, Debian 13, GCC 14):
 
@@ -221,9 +252,9 @@ make nhl94
 ./build/nhl94 --rom "/path/to/NHL 94.gen"
 ```
 
-**macOS** (cross-built here with Zig's Clang for Apple Silicon and Intel, not yet run on a Mac).
-To build it there, install GCC from [Homebrew](https://brew.sh) and name it (Apple's `gcc` is
-really Clang):
+**macOS** (the download is cross-built here with Zig's Clang for Apple Silicon and Intel, and
+played on a Mac, online too; building on a Mac itself is not yet tried). To build it there,
+install GCC from [Homebrew](https://brew.sh) and name it (Apple's `gcc` is really Clang):
 
 ```
 brew install gcc sdl2 pkg-config
@@ -250,9 +281,10 @@ tell us what it said.
 (`tools/release.sh`, which says what it needs: MinGW-w64, Zig, SDL2's macOS framework, llvm-lipo,
 rcodesign):
 `ninety-four-X-linux-x86_64.tar.gz`, `ninety-four-X-windows-x86_64.zip` and
-`ninety-four-X-macos-universal.zip`, a `ninety-four.app` for macOS 11 or newer.
+`ninety-four-X-macos-universal.zip`, a `ninety-four.app` for macOS 11 or newer, signed ad hoc as
+a whole under its bundle identifier, so macOS can ask it for the local network.
 
-## For agents: where this stands (19 October 2026)
+## For agents: where this stands (21 October 2026)
 
 - **What it is.** A hand-written C reimplementation of NHL '94 (Genesis, US/Europe retail, SHA-1
   `7b1489ab501258133bf03e5f0892b77d04312580`). `src/` has one C file per asm module of the
@@ -289,7 +321,8 @@ rcodesign):
   resuming at the game loop's wait as a state does; the window's Online play page, or `--host`,
   `--join`, `--peer`; the host's rosters and rules sent; two to four machines, any players at
   each, up to four; the host's reset, and states: anyone's saved, the host's loaded for
-  everyone). In pulseman: the console's state as a value, a client-owned clock
+  everyone). The downloads (`make release`, `tools/release.sh`: Linux, Windows, a universal macOS
+  app). In pulseman: the console's state as a value, a client-owned clock
   with line-by-line drawing and an H-interrupt hook, a bus map, FM cores and models chosen at run
   time, a trace recorder, PNG and zip, the client's option pages, and vsync.
 - **Native state** (the owner's direction): the game's state is native structs (the 68000's
@@ -355,6 +388,7 @@ From the least ambitious to the most.
 - [x] Rosters art as PNGs to draw over: logos, banners, centre ice, photos, and the art every team shares (title screens, rinks, sprites, fonts ...)
 - [x] A Rosters page: choose the rosters, and see its files, teams, best players and teams
 - [x] Vsync: no tearing
+- [x] Downloads for Linux, Windows and macOS (one app for Apple Silicon and Intel)
 - [ ] Skip the EA screen, boot straight into a game
 - [x] Colour options; scanlines, CRT mask, composite dither blending
 - [ ] IPS and BPS patches, soft-patching, the ROM check as a toggle for data hacks

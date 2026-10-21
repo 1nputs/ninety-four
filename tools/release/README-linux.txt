@@ -81,8 +81,7 @@ F11 records until pressed again, as GIFs (exact colours, 30 frames a second, no 
 Capture page sets the replay's length and a GIF's size.
 
 Everything is kept in settings.ini, beside the program in the folder you run it from, with the
-saves (an "out" folder), save slots ("states"), screenshots and videos. On a Mac, hold Fn for the
-function keys.
+saves (an "out" folder), save slots ("states"), screenshots and videos.
 
 The licences of the code inside are in "licenses": ninety-four (MIT), pulseman (MIT), Nuked-OPN2
 (LGPL-2.1), ymfm (BSD-3), MMPX (MIT), xBR (MIT). The source of everything is at the address above

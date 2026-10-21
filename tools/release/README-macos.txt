@@ -104,4 +104,4 @@ The licences of the code inside are in "licenses": ninety-four (MIT), pulseman (
 the address above and at https://github.com/1nputs/pulseman.
 
 macOS: 11 (Big Sur) or newer, on Apple Silicon or Intel (one universal app, SDL2 inside it). It is
-built with Zig's Clang on Linux and has not been run on a Mac yet: please report what you find.
+built with Zig's Clang on Linux and signed there ad hoc (not by a registered Apple developer).
